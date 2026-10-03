@@ -8,7 +8,9 @@ import { buttonVariants } from 'fumadocs-ui/components/ui/button';
 
 export default function Layout({ children }: LayoutProps<'/docs'>) {
   return (
-    <DocsLayout tree={source.getPageTree()} {...baseOptions()}>
+    // Nav links live in the top bar on the home page; repeating them in the
+    // docs sidebar only adds noise above the tree.
+    <DocsLayout tree={source.getPageTree()} {...baseOptions()} links={[]}>
       <AISearch>
         <AISearchPanel />
         <AISearchTrigger

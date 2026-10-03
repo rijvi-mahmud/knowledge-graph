@@ -1,0 +1,36 @@
+---
+title: Cursor
+description: A project rule that pulls the spec into the agent's context.
+---
+
+## Add a project rule
+
+Project rules live in `.cursor/rules/` and must use the `.mdc` extension. A
+plain `.md` file there is ignored.
+
+```md title=".cursor/rules/appointment-spec.mdc"
+---
+description: Appointment domain spec. Booking, cancellation and dental scheduling rules.
+globs: src/scheduling/**
+alwaysApply: false
+---
+
+Scheduling code implements @specs/appointment.md.
+
+- Follow its business rules exactly and cite their ids in commits.
+- If a behaviour is not in the spec, it is unspecified. Ask instead of inventing it.
+```
+
+`@specs/appointment.md` includes the [vendored spec](/docs/agentic#vendor-the-spec-dont-link-it)
+in the rule's context.
+
+## How the rule is applied
+
+| Frontmatter | Applied |
+|---|---|
+| `alwaysApply: true` | In every chat |
+| `globs` set | When matching files are in context |
+| `description` only | When the agent judges it relevant |
+| None of these | Only when you @-mention the rule |
+
+Cursor also reads [AGENTS.md](/docs/agentic/agents-md) as a simpler alternative.

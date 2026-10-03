@@ -1,13 +1,74 @@
 ---
-title: Hello World
-description: Your first document
+title: Introduction
+description: A versioned specification of the domain knowledge most software teams rebuild from scratch.
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+Most product requirements are not novel. A team building patient scheduling and
+a team building advisor scheduling will independently derive the same booking
+lifecycle, the same status transitions, the same reminder logic — and each will
+spend weeks doing it, arriving at subtly different answers to questions that
+have a settled answer.
 
-## What is Next?
+This knowledge base specifies that shared ground once, per domain concept, and
+keeps it versioned.
+
+## What a module contains
+
+Each module is a complete specification of one domain concept: its data model,
+the rules that govern it, the workflows it participates in, its API surface,
+the events it emits, and the services it depends on. Rules carry their
+rationale, and significant decisions are recorded alongside the alternatives
+that were rejected.
+
+That last part matters more than it sounds. The reason behind a constraint is
+usually the first thing lost when knowledge moves between people, and it is the
+thing you most need when deciding whether a constraint still applies.
+
+## Core, industries and domains
+
+Knowledge is specified at three levels, each building on the one above.
+
+- **Core** describes a concept in industry-neutral terms. The booking lifecycle
+  is identical whether the participants are a patient and a clinician or a
+  client and an advisor.
+- **Industries** such as healthcare and finance add the obligations every
+  application in that industry shares: consent and payer eligibility in one,
+  client verification and audit in the other.
+- **Domains** such as dental, mental health or revenue cycle management add
+  what only that kind of application needs, and the concepts that exist nowhere
+  else.
+
+Each level declares only what it adds. A page shows its own additions merged
+with everything it inherits, and labels each rule with the level it comes from,
+so a dental team reads one complete specification instead of three partial
+ones, and still knows which rules are universal.
+
+## Reading this as a machine
+
+Every page is also served as structured markdown. `/llms.txt` indexes the
+knowledge base, `/llms-full.txt` returns all of it, and any page's spec is
+available by appending its content route — for example
+[the Appointment module as markdown](/llms.mdx/docs/core/appointment/content.md).
+
+An assistant loading those routes gets the full specification, not a summary of
+the prose.
+
+## Start here
 
 <Cards>
-  <Card title="Learn more about Next.js" href="https://nextjs.org/docs" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card
+    title="Appointment"
+    href="/docs/core/appointment"
+    description="The scheduling lifecycle, specified in industry-neutral terms."
+  />
+  <Card
+    title="Clinical appointments"
+    href="/docs/healthcare/appointment"
+    description="Consent, payer eligibility and the handoff into a clinical record."
+  />
+  <Card
+    title="Advisory appointments"
+    href="/docs/finance/appointment"
+    description="Client verification, advisor licensing and compliance overrides."
+  />
 </Cards>

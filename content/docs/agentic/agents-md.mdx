@@ -1,0 +1,28 @@
+---
+title: AGENTS.md
+description: One file most coding agents read. Start here if your team uses more than one tool.
+---
+
+[AGENTS.md](https://agents.md/) is an open format for agent instructions. Codex,
+Cursor, GitHub Copilot, Gemini CLI, Windsurf, Zed, Aider and many more read it,
+and Claude Code reads it when the repository has no `CLAUDE.md`.
+
+## Point it at the spec
+
+[Vendor the spec](/docs/agentic#vendor-the-spec-dont-link-it) into `specs/`,
+then add a section like this:
+
+```md title="AGENTS.md"
+## Domain specs
+
+Before changing scheduling code, read `specs/appointment.md`.
+
+- Follow its business rules exactly and cite their ids (for example BR-4) in commits.
+- If a behaviour is not in the spec, it is unspecified. Ask instead of inventing it.
+```
+
+## Monorepos
+
+Put an `AGENTS.md` in each package that needs a different spec. The file
+closest to the code being edited wins, and a direct instruction in chat
+overrides both.
