@@ -65,6 +65,6 @@ without the AGPL obligations are available from the copyright holder.
 
 ### Contributing
 
-Contributions require a signed Contributor License Agreement, so the project
-can stay dual-licensed. Please open an issue before sending a pull request.
+Contributions require a signed [Contributor License Agreement](./CLA.md), so
+the project can stay dual-licensed. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
