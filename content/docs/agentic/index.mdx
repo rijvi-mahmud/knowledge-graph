@@ -1,0 +1,61 @@
+---
+title: Overview
+description: Give your coding assistant the spec instead of letting it guess.
+---
+
+Every page here is also plain markdown, merged with everything it inherits. Put
+that file in front of your assistant and it builds against real rules, not
+plausible ones.
+
+## Three endpoints
+
+| URL | Returns | Use it for |
+|---|---|---|
+| `/llms.txt` | An index of every page | Letting an agent discover what exists |
+| `/llms-full.txt` | Every page in one file | One-off research. Too large to keep in context |
+| `/llms.mdx/docs/<page>/content.md` | One page, merged with its parents | Building a feature |
+
+`/llms.txt` follows the [llms.txt proposal](https://llmstxt.org/).
+`/llms-full.txt` is a common convention, not part of that proposal.
+
+## Vendor the spec, don't link it
+
+Instruction files (`AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot
+instructions) load files from your repository, not URLs. Download the page you
+build against:
+
+```bash title="Terminal"
+export KG_URL=https://your-knowledge-graph-host   # this site's address
+mkdir -p specs
+curl -fsSL "$KG_URL/llms.mdx/docs/healthcare/dental/appointment/content.md" \
+  -o specs/appointment.md
+```
+
+A vendored spec is versioned with your code, reviewed in pull requests, and
+gives the same answer on every run. Re-run the command to update it; the
+`version` line at the top of the file tells you what you have.
+
+## What your assistant is told
+
+Every spec opens with the same reading guide, so the rules for using it travel
+with the file:
+
+- It is the complete spec for the page, with inherited items merged in.
+- Anything not listed is unspecified: ask or record an open question, never invent.
+- Ids such as `BR-4` are stable and should be cited in code, tests and commits.
+- Tags such as `[core]` show where an item comes from; `overrides` marks a replacement.
+
+## Start here
+
+<Cards>
+  <Card title="Use it in your project" href="/docs/agentic/use-in-your-project" description="Six steps from finding your spec to an agent that builds and reviews against it." />
+</Cards>
+
+## Pick your tool
+
+<Cards>
+  <Card title="AGENTS.md" href="/docs/agentic/agents-md" description="One file most coding agents read." />
+  <Card title="Claude Code" href="/docs/agentic/claude-code" description="CLAUDE.md imports and path-scoped rules." />
+  <Card title="Cursor" href="/docs/agentic/cursor" description="A project rule that pulls in the spec." />
+  <Card title="GitHub Copilot" href="/docs/agentic/github-copilot" description="Repository and path-specific instructions." />
+</Cards>

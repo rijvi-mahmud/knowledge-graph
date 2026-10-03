@@ -1,0 +1,31 @@
+---
+title: Healthcare
+description: Rules every healthcare application shares, and the domains built on them.
+---
+
+Every healthcare application handles protected health information, works with
+payers, and needs a patient's consent before care is recorded. Those
+obligations do not change between an EHR, a dental practice system or a billing
+platform, so they are specified once here and inherited by every domain below.
+
+## Shared across healthcare
+
+<Cards>
+  <Card
+    title="Clinical appointments"
+    href="/docs/healthcare/appointment"
+    description="Consent, payer eligibility and the handoff into a clinical record."
+  />
+</Cards>
+
+## Domains
+
+Each domain covers patients, appointments and the rest from its own purpose,
+and adds the modules that exist only in that kind of application.
+
+| Domain | Builds on the shared layer with | Status |
+|---|---|---|
+| EHR | Encounters, clinical notes | Not yet specified |
+| [Dental](/docs/healthcare/dental) | Treatment plans, chair scheduling, recall | In progress |
+| Mental health | Recurring sessions, therapy notes | Not yet specified |
+| RCM | Claims, denials, remittance | Not yet specified |

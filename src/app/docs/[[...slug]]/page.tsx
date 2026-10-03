@@ -1,4 +1,4 @@
-import { getPageImageUrl, getPageMarkdownUrl, source } from '@/lib/source';
+import { getPageImageUrl, getPageMarkdownUrl, getResolvedSpec, source } from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
@@ -12,6 +12,8 @@ import { getMDXComponents } from '@/components/mdx';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { gitConfig } from '@/lib/shared';
+import { ModuleSpec, specToc } from '@/components/module-spec';
+import { SiteFooter } from '@/components/site-footer';
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const params = await props.params;
@@ -20,10 +22,22 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
+  const spec = getResolvedSpec(page);
+
+  // The spec renders outside MDX, so its headings are appended to the TOC by
+  // hand: an entry for the spec, then each group with its sections nested.
+  const specEntries = specToc(spec);
+  const toc = [
+    ...page.data.toc,
+    ...(specEntries.length > 0
+      ? [{ title: 'Specification', url: '#specification', depth: 2 }]
+      : []),
+    ...specEntries,
+  ];
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
-      <DocsTitle>{page.data.title}</DocsTitle>
+    <DocsPage toc={toc} full={page.data.full}>
+      <DocsTitle className="font-display tracking-tight">{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
@@ -39,7 +53,9 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
             a: createRelativeLink(source, page),
           })}
         />
+        <ModuleSpec data={spec} />
       </DocsBody>
+      <SiteFooter />
     </DocsPage>
   );
 }
