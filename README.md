@@ -1,4 +1,7 @@
-# .
+# Knowledge Graph
+
+Versioned domain requirements that inherit: core, industry, domain. Readable by
+people, loadable by AI.
 
 This is a Next.js application generated with
 [Create Fumadocs](https://github.com/fuma-nama/fumadocs).
@@ -43,3 +46,25 @@ resources:
   features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 - [Fumadocs](https://fumadocs.dev) - learn about Fumadocs
+
+## License
+
+Code and content are licensed separately:
+
+| What | License | File |
+|---|---|---|
+| Code (everything outside `content/`) | [GNU AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) | [`LICENSE`](./LICENSE) |
+| Knowledge content (`content/`) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | [`content/LICENSE`](./content/LICENSE) |
+
+You may use, modify and share both, including commercially, under those terms.
+If you run a modified version of the code as a network service, the AGPL
+requires you to offer your changes under the same license. Commercial licenses
+without the AGPL obligations are available from the copyright holder.
+
+"Knowledge Graph", its name and its logo are not licensed under either license.
+
+### Contributing
+
+Contributions require a signed Contributor License Agreement, so the project
+can stay dual-licensed. Please open an issue before sending a pull request.
+
