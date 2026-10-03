@@ -276,8 +276,6 @@ scaffold's own pages fail validation.
 
 ## Known TODO
 
-- `gitConfig` in `src/lib/shared.ts` still points at `fuma-nama/fumadocs`, so
-  the GitHub link and every "Edit on GitHub" URL are wrong.
 - Only one module exists (`appointment`). The schema has not been stress-tested
   against a second, structurally different concept.
 - No validator yet for cross-references (e.g. an endpoint raising an error code

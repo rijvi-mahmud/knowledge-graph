@@ -1,8 +1,8 @@
 <!--
   Based on the Harmony Individual Contributor License Agreement
   (HA-CLA-I-ANY) Version 1.0, www.harmonyagreements.org.
-  TODO before accepting outside contributions: replace [COUNTRY] in 6.1 with
-  the governing-law jurisdiction, and have the agreement reviewed.
+  Have the agreement reviewed by a lawyer before accepting outside
+  contributions.
 -->
 
 # Contributor License Agreement
@@ -180,7 +180,7 @@ CLAIM IS BASED.
 6. Miscellaneous
 
 6.1 This Agreement will be governed by and construed in
-accordance with the laws of [COUNTRY] excluding its conflicts
+accordance with the laws of Bangladesh excluding its conflicts
 of law provisions. Under certain circumstances, the
 governing law in this section might be superseded by the
 United Nations Convention on Contracts for the
