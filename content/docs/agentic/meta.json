@@ -1,0 +1,12 @@
+{
+  "title": "Agentic development",
+  "icon": "Bot",
+  "pages": [
+    "index",
+    "use-in-your-project",
+    "agents-md",
+    "claude-code",
+    "cursor",
+    "github-copilot"
+  ]
+}

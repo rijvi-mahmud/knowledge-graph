@@ -1,0 +1,101 @@
+---
+title: Use it in your project
+description: From finding your spec to an agent that builds, tests and reviews against it.
+---
+
+The whole workflow is six steps. Steps 1 to 3 take a few minutes and happen
+once per module. The rest is how you work from then on.
+
+## 1. Find the deepest page that matches your product
+
+Pick the most specific page for what you are building. It already contains
+everything above it.
+
+| You are building | Use |
+|---|---|
+| A generic booking feature | [Core: Appointment](/docs/core/appointment) |
+| Any healthcare product | [Healthcare: Clinical appointments](/docs/healthcare/appointment) |
+| A dental practice system | [Dental: Dental appointments](/docs/healthcare/dental/appointment) |
+
+## 2. Put the spec in your repository
+
+```bash title="Terminal"
+export KG_URL=https://your-knowledge-graph-host   # this site's address
+mkdir -p specs
+curl -fsSL "$KG_URL/llms.mdx/docs/healthcare/dental/appointment/content.md" \
+  -o specs/appointment.md
+git add specs/appointment.md && git commit -m "Add appointment spec"
+```
+
+The file is the merged spec: every inherited rule, field, endpoint and error,
+each tagged with the layer it came from. Commit it so every teammate and every
+agent reads the same version.
+
+## 3. Tell your agent it exists
+
+Add one section to your agent instructions. `AGENTS.md` works for most tools:
+
+```md title="AGENTS.md"
+## Domain specs
+
+Scheduling code implements `specs/appointment.md`.
+
+- Follow its business rules exactly and cite their ids (for example BR-4) in code comments, tests and commits.
+- If a behaviour is not in the spec, it is unspecified. Ask instead of inventing it.
+```
+
+Tool-specific setups: [Claude Code](/docs/agentic/claude-code),
+[Cursor](/docs/agentic/cursor), [GitHub Copilot](/docs/agentic/github-copilot).
+
+## 4. Build against rule ids
+
+Ids are what make the spec usable by an agent. Refer to them directly:
+
+```text title="Prompts that work"
+Implement BR-4 and BR-D1 from specs/appointment.md in src/scheduling.
+
+List every business rule in specs/appointment.md that src/scheduling does not
+enforce yet. Cite the rule id and the file where it should live.
+
+Review this diff against specs/appointment.md. For each violation, cite the
+rule id and explain the failure it allows.
+```
+
+## 5. Turn acceptance criteria into tests
+
+Every acceptance criterion is written as Given / When / Then, which maps
+directly onto a test:
+
+```text title="Prompt"
+Write one test per acceptance criterion in specs/appointment.md (AC-1 to AC-D6).
+Name each test after its id. Do not add behaviour the criteria do not state.
+```
+
+## 6. Add your own rules without editing the spec
+
+Private company layers are not supported by this site yet. Until they are, keep
+your additions next to the spec in a file you own, using the same id style:
+
+```md title="specs/appointment.company.md"
+## Business rules
+
+**BR-ACME-1** Same-day emergency slots are held until 10:00, then released.
+- Why: most emergency calls arrive before 10:00.
+
+**BR-4** (overrides the spec) Hygienists may not be double-booked.
+- Why: our hygiene chairs have no assistant cover.
+```
+
+```md title="AGENTS.md"
+Where `specs/appointment.company.md` repeats an id from `specs/appointment.md`,
+the company file wins.
+```
+
+Re-using an id overrides the rule, exactly as layers do on this site. New ids
+add rules.
+
+## Keep it current
+
+Re-run the `curl` command from step 2 and review the diff like any other
+change. The `version` line at the top and the **Version history** section at
+the bottom of the file show what moved.
