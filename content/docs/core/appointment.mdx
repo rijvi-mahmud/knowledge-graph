@@ -1,0 +1,500 @@
+---
+title: Appointment
+description: The scheduling lifecycle - booking, rescheduling, cancellation and reminders - specified in industry-neutral terms.
+module: appointment
+version: 0.1.0
+status: stable
+
+purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
+scope:
+  - Create, reschedule, cancel and complete a slot
+  - Own the status lifecycle and its legal transitions
+  - Schedule reminders relative to start time
+  - Emit lifecycle events other modules react to
+nonGoals:
+  - Owning participant identity - that belongs to the Identity module
+  - Owning payment or billing - that belongs to the Billing module
+  - Owning what happens *during* the appointment (clinical notes, meeting minutes)
+  - Calendar availability computation - Appointment asks Calendar, it does not compute
+
+actors:
+  - name: Requester
+    description: Party who initiates the booking. May be a participant or acting on their behalf.
+  - name: Participant
+    description: Party expected to attend. At least two participants exist on every appointment.
+  - name: Scheduler
+    description: Operator with elevated rights to book, move or cancel on behalf of others.
+  - name: System
+    description: Automated actor that fires reminders and expires stale bookings.
+
+glossary:
+  - term: Slot
+    definition: A bounded start/end time range on a calendar that an appointment reserves.
+  - term: No-show
+    definition: An appointment whose start time has passed with no completion recorded.
+  - term: Reminder offset
+    definition: Duration before start_time at which a reminder is dispatched.
+
+concepts:
+  - name: Appointment
+    description: A reserved time slot between two or more participants, with a status lifecycle.
+  - name: Reminder
+    description: A scheduled notification derived from the appointment, not independently bookable.
+  - name: Reschedule
+    description: A time change that preserves appointment identity and history rather than creating a new record.
+
+dataModel:
+  - name: id
+    type: string
+    required: true
+    description: Stable identifier, immutable for the life of the appointment.
+  - name: participants
+    type: string[]
+    required: true
+    description: Identity ids of the parties involved.
+    constraints: minimum 2 entries
+  - name: start_time
+    type: datetime
+    required: true
+    constraints: must be before end_time
+  - name: end_time
+    type: datetime
+    required: true
+    constraints: must be after start_time
+  - name: status
+    type: enum
+    required: true
+    description: Current lifecycle state.
+    constraints: booked | rescheduled | cancelled | completed | no_show
+  - name: location
+    type: string
+    required: false
+    description: Physical address or virtual meeting reference.
+  - name: reminder_offset
+    type: duration
+    required: false
+    description: How long before start_time the reminder fires.
+    constraints: defaults to 24h, must be shorter than the lead time to start_time
+  - name: notes
+    type: string
+    required: false
+  - name: created_at
+    type: datetime
+    required: true
+  - name: cancelled_reason
+    type: string
+    required: false
+    constraints: required when status = cancelled
+
+relationships:
+  - type: belongs_to
+    target: calendar
+    note: every appointment sits on exactly one calendar
+  - type: has_many
+    target: reminder
+  - type: requires
+    target: identity
+    note: every participant id must resolve to an identity
+  - type: can_trigger
+    target: 'event:appointment.reminder_due'
+  - type: requires_permission
+    target: appointment.write
+
+businessRules:
+  - id: BR-1
+    text: An appointment must have at least two participants.
+    rationale: A single-party slot is a calendar block, not an appointment - keeping them distinct stops the module absorbing calendar concerns.
+  - id: BR-2
+    text: Cancelling never deletes the record, it only sets status = cancelled.
+    rationale: Downstream modules (billing, audit, analytics) hold references to the appointment id and break on hard delete.
+  - id: BR-3
+    text: Rescheduling preserves the appointment id and appends to its history rather than creating a new appointment.
+    rationale: Attendance and no-show statistics must follow the appointment across time changes.
+  - id: BR-4
+    text: An appointment cannot be booked into a slot that overlaps an existing active appointment for the same participant.
+    rationale: Double booking is a data-integrity failure, not a user preference - it must be enforced server-side.
+  - id: BR-5
+    text: Once status is completed or cancelled, the appointment is terminal and cannot transition further.
+    rationale: Terminal states let downstream consumers treat the record as immutable and safely cache it.
+
+validations:
+  - field: start_time
+    rule: must be strictly before end_time
+    error: APPOINTMENT_INVALID_TIME_RANGE
+  - field: start_time
+    rule: must be in the future at creation time
+    error: APPOINTMENT_START_IN_PAST
+  - field: participants
+    rule: at least 2 entries, all resolvable identity ids, no duplicates
+    error: APPOINTMENT_INVALID_PARTICIPANTS
+  - field: reminder_offset
+    rule: must be positive and shorter than the interval from now to start_time
+    error: APPOINTMENT_INVALID_REMINDER_OFFSET
+  - field: cancelled_reason
+    rule: required when transitioning to cancelled
+    error: APPOINTMENT_CANCEL_REASON_REQUIRED
+
+stateMachine:
+  initial: booked
+  states:
+    - booked
+    - rescheduled
+    - cancelled
+    - completed
+    - no_show
+  transitions:
+    - from: booked
+      to: rescheduled
+      trigger: reschedule
+      guard: new slot is free and in the future
+    - from: rescheduled
+      to: booked
+      trigger: confirm
+    - from: booked
+      to: cancelled
+      trigger: cancel
+      guard: cancelled_reason provided
+    - from: rescheduled
+      to: cancelled
+      trigger: cancel
+      guard: cancelled_reason provided
+    - from: booked
+      to: completed
+      trigger: complete
+      guard: start_time has passed
+    - from: booked
+      to: no_show
+      trigger: expire
+      guard: end_time has passed with no completion
+
+workflows:
+  - name: Book an appointment
+    trigger: Requester submits a booking request
+    actor: Requester
+    steps:
+      - Validate the requested time range and participants
+      - Ask Calendar whether the slot is free for every participant
+      - Persist the appointment with status = booked
+      - Schedule a reminder at start_time minus reminder_offset
+      - Emit appointment.booked
+    outcome: Appointment exists in status booked and a reminder is scheduled.
+  - name: Reschedule an appointment
+    trigger: Requester or Scheduler proposes a new time
+    actor: Scheduler
+    steps:
+      - Verify the appointment is not in a terminal state
+      - Validate and check availability of the new slot
+      - Update start_time/end_time, set status = rescheduled
+      - Cancel the old reminder and schedule a new one
+      - Emit appointment.rescheduled
+    outcome: Same appointment id now points at the new slot.
+  - name: Cancel an appointment
+    trigger: Requester, Scheduler or an upstream policy cancels
+    actor: Requester
+    steps:
+      - Verify the appointment is not already terminal
+      - Record cancelled_reason and set status = cancelled
+      - Cancel any pending reminder
+      - Emit appointment.cancelled
+    outcome: Appointment retained with status cancelled, reminders suppressed.
+  - name: Dispatch reminder
+    trigger: Scheduled reminder time is reached
+    actor: System
+    steps:
+      - Re-check the appointment is still active
+      - Emit appointment.reminder_due
+      - Hand off to Notification for delivery
+    outcome: Participants are notified ahead of the appointment.
+
+functionalRequirements:
+  - id: FR-1
+    text: The service must let an authorised actor create an appointment for two or more participants.
+    priority: must
+  - id: FR-2
+    text: The service must reject a booking whose slot overlaps an active appointment for any participant.
+    priority: must
+  - id: FR-3
+    text: The service must allow only the transitions declared in the state machine and reject all others.
+    priority: must
+  - id: FR-4
+    text: The service must schedule a reminder at start_time minus reminder_offset and cancel it when the appointment leaves an active state.
+    priority: must
+  - id: FR-5
+    text: The service must retain cancelled appointments and expose them to reads.
+    priority: must
+  - id: FR-6
+    text: The service must emit a lifecycle event for every status change.
+    priority: must
+  - id: FR-7
+    text: The service should mark appointments no_show automatically once end_time passes without completion.
+    priority: should
+
+nonFunctionalRequirements:
+  - category: performance
+    text: Booking write path completes under 300ms p95, excluding upstream availability check.
+  - category: availability
+    text: Read paths remain available when downstream consumers are unavailable; downstream outages never block a booking.
+  - category: scalability
+    text: Reminder scheduling must handle appointments booked months ahead without holding in-process timers.
+  - category: observability
+    text: Every status transition emits a structured audit entry carrying actor, previous state and new state.
+  - category: security
+    text: A participant may read only appointments they take part in unless they hold the scheduler role.
+  - category: maintainability
+    text: Industry-specific behaviour must be additive - core must remain deployable with no industry layer present.
+
+acceptanceCriteria:
+  - id: AC-1
+    given: a requester with appointment.write and two valid participants
+    when: they book a free future slot
+    then: an appointment is created with status booked and appointment.booked is emitted
+  - id: AC-2
+    given: an existing active appointment for a participant
+    when: another booking is attempted overlapping that slot for the same participant
+    then: the request fails with APPOINTMENT_SLOT_TAKEN and nothing is persisted
+  - id: AC-3
+    given: an appointment in status completed
+    when: a cancel is attempted
+    then: the request fails with APPOINTMENT_TERMINAL_STATE and the record is unchanged
+  - id: AC-4
+    given: an appointment with a pending reminder
+    when: it is cancelled
+    then: the reminder is withdrawn and no reminder_due event is emitted
+  - id: AC-5
+    given: an appointment whose end_time has passed without completion
+    when: the expiry job runs
+    then: status becomes no_show and appointment.no_show is emitted
+
+api:
+  - method: POST
+    path: /appointments
+    description: Create an appointment in status booked.
+    request: participants[], start_time, end_time, location?, reminder_offset?, notes?
+    response: the created appointment
+    errors:
+      - APPOINTMENT_INVALID_TIME_RANGE
+      - APPOINTMENT_START_IN_PAST
+      - APPOINTMENT_INVALID_PARTICIPANTS
+      - APPOINTMENT_SLOT_TAKEN
+  - method: GET
+    path: /appointments/{id}
+    description: Fetch a single appointment including its current status.
+    response: the appointment
+    errors:
+      - APPOINTMENT_NOT_FOUND
+  - method: GET
+    path: /appointments
+    description: List appointments filtered by participant, status or time window.
+    request: participant_id?, status?, from?, to?, cursor?
+    response: paginated appointments
+  - method: PATCH
+    path: /appointments/{id}/reschedule
+    description: Move the appointment to a new slot, preserving its id.
+    request: start_time, end_time
+    response: the updated appointment
+    errors:
+      - APPOINTMENT_TERMINAL_STATE
+      - APPOINTMENT_SLOT_TAKEN
+      - APPOINTMENT_INVALID_TIME_RANGE
+  - method: POST
+    path: /appointments/{id}/cancel
+    description: Soft-cancel the appointment.
+    request: cancelled_reason
+    response: the updated appointment
+    errors:
+      - APPOINTMENT_TERMINAL_STATE
+      - APPOINTMENT_CANCEL_REASON_REQUIRED
+  - method: POST
+    path: /appointments/{id}/complete
+    description: Mark the appointment completed after it has taken place.
+    response: the updated appointment
+    errors:
+      - APPOINTMENT_TERMINAL_STATE
+      - APPOINTMENT_NOT_YET_STARTED
+
+events:
+  - name: appointment.booked
+    description: A new appointment was created.
+    payload:
+      - appointment_id
+      - participants
+      - start_time
+      - end_time
+  - name: appointment.rescheduled
+    description: An existing appointment moved to a new slot.
+    payload:
+      - appointment_id
+      - previous_start_time
+      - start_time
+      - end_time
+  - name: appointment.cancelled
+    description: An appointment was soft-cancelled.
+    payload:
+      - appointment_id
+      - cancelled_reason
+      - cancelled_by
+  - name: appointment.completed
+    description: An appointment took place and was closed out.
+    payload:
+      - appointment_id
+      - completed_at
+  - name: appointment.no_show
+    description: An appointment lapsed without completion.
+    payload:
+      - appointment_id
+  - name: appointment.reminder_due
+    description: A scheduled reminder reached its dispatch time.
+    payload:
+      - appointment_id
+      - participants
+      - start_time
+
+permissions:
+  - name: appointment.read
+    description: Read appointments the caller participates in.
+  - name: appointment.write
+    description: Create, reschedule and cancel own appointments.
+  - name: appointment.manage
+    description: Act on any appointment regardless of participation (scheduler role).
+
+errors:
+  - code: APPOINTMENT_NOT_FOUND
+    http: 404
+    message: No appointment exists with the given id.
+  - code: APPOINTMENT_INVALID_TIME_RANGE
+    http: 422
+    message: start_time must be strictly before end_time.
+  - code: APPOINTMENT_START_IN_PAST
+    http: 422
+    message: An appointment cannot be created in the past.
+  - code: APPOINTMENT_INVALID_PARTICIPANTS
+    http: 422
+    message: At least two distinct, resolvable participants are required.
+  - code: APPOINTMENT_INVALID_REMINDER_OFFSET
+    http: 422
+    message: reminder_offset must be positive and fall before start_time.
+  - code: APPOINTMENT_SLOT_TAKEN
+    http: 409
+    message: The requested slot overlaps an active appointment for a participant.
+  - code: APPOINTMENT_TERMINAL_STATE
+    http: 409
+    message: The appointment is completed or cancelled and can no longer change.
+  - code: APPOINTMENT_CANCEL_REASON_REQUIRED
+    http: 422
+    message: cancelled_reason is required when cancelling.
+  - code: APPOINTMENT_NOT_YET_STARTED
+    http: 409
+    message: An appointment cannot be completed before its start time.
+
+dependencies:
+  - service: calendar-service
+    direction: upstream
+    reason: check slot availability for every participant before booking
+    criticality: hard
+  - service: identity-service
+    direction: upstream
+    reason: resolve and authorise participant ids
+    criticality: hard
+  - service: notification-service
+    direction: upstream
+    reason: deliver reminders once reminder_due is emitted
+    criticality: soft
+  - service: scheduler-service
+    direction: upstream
+    reason: durable timers for reminders and no-show expiry
+    criticality: soft
+
+decisions:
+  - id: ADR-1
+    decision: Cancellation is a soft state change, never a delete.
+    rationale: Downstream modules keep foreign references to appointment ids; hard delete breaks billing and audit trails.
+    alternatives: Hard delete with a tombstone table - rejected as it duplicates state and complicates reads.
+    date: '2026-01-15'
+  - id: ADR-2
+    decision: Rescheduling mutates the existing appointment instead of creating a successor record.
+    rationale: Attendance history and no-show statistics must follow one identity across time changes.
+    alternatives: Cancel-and-rebook - rejected because it inflates cancellation metrics and loses continuity.
+    date: '2026-01-15'
+  - id: ADR-3
+    decision: Reminders are delegated to a durable scheduler rather than in-process timers.
+    rationale: Appointments are booked months ahead; in-process timers do not survive deploys or restarts.
+    alternatives: Cron sweep over the table - viable but adds polling latency and load at scale.
+    date: '2026-01-20'
+  - id: ADR-4
+    decision: Availability is asked of Calendar rather than computed inside Appointment.
+    rationale: Keeps Appointment free of working-hours, holiday and resource rules that legitimately differ per deployment.
+    date: '2026-02-02'
+
+openQuestions:
+  - Should recurring appointments be modelled here or as a separate Recurrence module that emits individual appointments?
+  - Is no_show a status or a separate attendance record? Current model treats it as terminal status.
+  - Should overlap detection be per participant or per resource (room, device) as well?
+
+changelog:
+  - version: 0.1.0
+    date: '2026-02-10'
+    changes:
+      - Initial core specification extracted from healthcare, fintech and productivity implementations.
+    breaking: false
+---
+
+## What this module covers
+
+An appointment reserves a block of time between two or more participants. The
+lifecycle around that reservation — validating a range, confirming availability,
+holding the slot, reminding the participants, closing it out — is the same
+whether the participants are a patient and a clinician, a client and an advisor,
+or two colleagues.
+
+What varies by industry is what must be true *before* a slot can be held and
+what happens *after* it closes. Those obligations live in the industry layers, not
+here.
+
+## Boundaries
+
+Appointment owns when people meet. It does not own who they are, whether they
+can pay, what was discussed, or when they are free.
+
+The last of those is the boundary worth drawing attention to. Working hours,
+holidays, resource conflicts and room capacity legitimately differ between
+deployments, and folding them into the booking lifecycle would make the
+lifecycle itself deployment-specific. Appointment asks Calendar whether a slot
+is free rather than deciding for itself, which keeps that variance in one place.
+
+## Terminal states are permanent
+
+Once an appointment is completed or cancelled it never changes again. Consumers
+can therefore treat those records as immutable and cache them without
+invalidation. Cancellation is a status change rather than a delete for the same
+reason: billing, audit and analytics all hold references to the appointment id,
+and removing the row breaks them.
+
+## Industry layers
+
+Each industry layer adds only what its industry requires; everything else is
+inherited from this specification unchanged.
+
+- [Clinical appointments](/docs/healthcare/appointment) — consent, payer eligibility, and the handoff into an encounter record
+- [Advisory appointments](/docs/finance/appointment) — client verification, advisor licensing, and compliance overrides
+- [General scheduling](/docs/productivity/appointment) — uses this specification unchanged
+
+## How the industry layers diverge
+
+Both regulated layers attach an external check to a booking, and they resolve
+it in opposite directions. The contrast is worth understanding before extending
+this module to a new industry:
+
+| | Clinical eligibility | Advisory verification |
+|---|---|---|
+| Runs | after booking, asynchronously | before booking, synchronously |
+| On failure | flags billing, the booking stands | the booking is rejected |
+| On outage | degrades to pending | fails closed |
+
+The divergence is not technical. It follows from what failure costs. Refusing to
+schedule a patient because a payer's API was slow is a worse outcome than a
+delayed claim, while an advice session booked for an unverified client is a
+reportable breach that cannot be corrected afterwards.
+
+A new industry layer should be derived the same way: identify the checks the
+industry requires, then decide their timing by asking which failure is more
+expensive to absorb.

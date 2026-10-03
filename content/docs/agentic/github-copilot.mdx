@@ -1,0 +1,34 @@
+---
+title: GitHub Copilot
+description: Repository-wide or path-specific instructions that point Copilot at the spec.
+---
+
+## Repository-wide
+
+```md title=".github/copilot-instructions.md"
+## Domain specs
+
+Scheduling code implements `specs/appointment.md`. Follow its business rules
+exactly and cite their ids. If a behaviour is not in the spec, it is
+unspecified: ask instead of inventing it.
+```
+
+Used by Copilot Chat, Copilot code review and the Copilot cloud agent.
+
+## Only for matching files
+
+```md title=".github/instructions/appointment.instructions.md"
+---
+applyTo: "src/scheduling/**"
+---
+
+This code implements `specs/appointment.md`. Follow its rules and cite rule ids.
+```
+
+Path-specific instructions are currently used by the cloud agent and code
+review on GitHub.com.
+
+## Already have AGENTS.md?
+
+Copilot also reads [AGENTS.md](/docs/agentic/agents-md); the file nearest the
+edited code takes precedence.
