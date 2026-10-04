@@ -1,34 +1,47 @@
 ---
 title: GitHub Copilot
-description: Repository-wide or path-specific instructions that point Copilot at the spec.
+description: Repository-wide instructions for how to use the specs, path-specific ones for which spec applies.
 ---
 
-## Repository-wide
+## Repository-wide: the instruction block
+
+Copilot reads `.github/copilot-instructions.md` for every request in the
+repository. Paste the
+[instruction block](/docs/agentic/agents-md#the-instruction-block) there:
 
 ```md title=".github/copilot-instructions.md"
-## Domain specs
-
-Scheduling code implements `specs/appointment.md`. Follow its business rules
-exactly and cite their ids. If a behaviour is not in the spec, it is
-unspecified: ask instead of inventing it.
+<paste the instruction block from the AGENTS.md page here>
 ```
 
-Used by Copilot Chat, Copilot code review and the Copilot cloud agent.
+Copilot also reads `AGENTS.md`. If you already keep the instruction block
+there, you do not need to copy it.
 
-## Only for matching files
+## Path-specific: which spec applies
 
-```md title=".github/instructions/appointment.instructions.md"
+Files in `.github/instructions/` ending in `.instructions.md` apply only to
+paths matching `applyTo`. Add one per module:
+
+```md title=".github/instructions/spec-appointment.instructions.md"
 ---
 applyTo: "src/scheduling/**"
 ---
 
-This code implements `specs/appointment.md`. Follow its rules and cite rule ids.
+Code under src/scheduling implements the appointment module. Read
+specs/appointment.md before changing it, and follow the domain specs
+instructions for this repository.
 ```
 
-Path-specific instructions are currently used by the cloud agent and code
-review on GitHub.com.
+Copilot does not inline the spec from an instruction file; the instruction
+tells it to open `specs/appointment.md`, which it can do in agent mode, in
+code review and as the cloud agent.
 
-## Already have AGENTS.md?
+## Review pull requests against the specs
 
-Copilot also reads [AGENTS.md](/docs/agentic/agents-md); the file nearest the
-edited code takes precedence.
+Copilot code review uses the same instruction files. With the setup above, ask
+for a review on a pull request and it checks the change against the rules for
+the paths it touches. Asking explicitly sharpens the result:
+
+```text title="Pull request comment or chat prompt"
+Review this change against specs/. Cite the rule id for every violation, and
+list behaviour the change adds that the spec does not specify.
+```
