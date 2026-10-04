@@ -3,6 +3,15 @@
 Versioned domain requirements that inherit: core, industry, domain. Readable by
 people, loadable by AI.
 
+**Live site:** https://knowledge-graph-ecru.vercel.app
+
+| For | URL |
+|---|---|
+| Reading the docs | https://knowledge-graph-ecru.vercel.app/docs |
+| Index for AI assistants | https://knowledge-graph-ecru.vercel.app/llms.txt |
+| One page as markdown | Add `.md` to any docs URL, e.g. https://knowledge-graph-ecru.vercel.app/docs/core/appointment.md |
+| Using it with a coding agent | https://knowledge-graph-ecru.vercel.app/docs/agentic |
+
 This is a Next.js application generated with
 [Create Fumadocs](https://github.com/fuma-nama/fumadocs).
 
@@ -17,6 +26,13 @@ yarn dev
 ```
 
 Open http://localhost:3000 with your browser to see the result.
+
+### Environment variables
+
+| Variable | Needed for |
+|---|---|
+| `NEXT_PUBLIC_SITE_URL` | The address the docs print in URLs and examples. Set it when self-hosting; on Vercel it defaults to the project's production domain, and locally to `http://localhost:3000`. |
+| `OPENROUTER_API_KEY` | The "Ask AI" chat. Optional `OPENROUTER_MODEL` picks the model. |
 
 ## Explore
 
