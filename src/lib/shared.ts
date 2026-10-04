@@ -21,3 +21,6 @@ export const siteUrl = (
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : 'http://localhost:3000')
 ).replace(/\/+$/, '');
+
+/** Hostname of siteUrl, without port, for domain allowlists such as WebFetch(domain:...). */
+export const siteHost = new URL(siteUrl).hostname;

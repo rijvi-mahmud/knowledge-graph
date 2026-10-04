@@ -1,101 +1,132 @@
 ---
-title: AGENTS.md
-description: One instruction block that teaches any coding agent how to use the Knowledge Graph's specs. Most tools read it.
+title: How agents use the Knowledge Graph
+description: How a coding agent finds the right page for your project, what a spec contains, and why each instruction in the AGENTS.md section is there.
 ---
 
-[AGENTS.md](https://agents.md/) is an open format for agent instructions.
-Codex, Cursor, GitHub Copilot, Gemini CLI, Windsurf, Zed, Aider and many more
-read it, and Claude Code can import it. If your team uses more than one tool,
-this is the one file to maintain.
+The [Quickstart](/docs/agentic#quickstart) section in `AGENTS.md` tells your
+agent where the Knowledge Graph is, how to find the page a task needs, and how
+to follow it. This page explains what the agent does with those instructions,
+so you can predict its behaviour and adjust the section if you need to.
 
-## The instruction block
+## Finding the right page
 
-Paste this into `AGENTS.md` once. It describes the Knowledge Graph and how to
-work with it, not any one module, so it stays the same as you add specs. It
-assumes the layout from [Use it in your project](/docs/agentic/use-in-your-project):
-specs in `specs/`, listed in `specs/sources.txt`.
+The Knowledge Graph is layered. **Core** pages describe a concept in
+industry-neutral terms. **Industry** pages, such as healthcare, add what every
+application in that industry needs. **Domain** pages, such as dental, add what
+only that kind of application needs. Each page shows its own items merged with
+everything it inherits.
+
+For a dental practice system working on appointments, the agent:
+
+1. Reads `%SITE_URL%/llms.txt` and finds the healthcare industry.
+2. Fetches the healthcare overview and sees that dental is a specified domain.
+3. Fetches `%SITE_URL%/docs/healthcare/dental/appointment.md`, which already
+   includes the core and healthcare rules.
+
+If the dental domain had no appointments page, the agent would use the
+healthcare page instead, and the core page if the project weren't in a covered
+industry. It never needs two pages for the same concept.
+
+The agent records the industry and domain under **Project context** in
+`AGENTS.md`, so later sessions skip the first two steps.
+
+## How a spec is structured
+
+Each module page opens with its module, layers, version and status, then a
+short guide on how to read it. The rest is grouped into rules and behaviour,
+data, interface, requirements, terms and history:
+
+```md title="healthcare/dental/appointment.md (excerpt)"
+- module: appointment
+- layer: core > healthcare > dental
+- version: 0.1.0
+- status: draft
+
+**BR-4** A patient cannot be double-booked, and an operatory cannot be unless
+the practice allows overlap. ... _[dental (overrides core)]_
+  - Why: A dentist runs several chairs while assistants and hygienists work ...
+**BR-H1** An appointment cannot transition to completed unless
+consent_status = granted. _[healthcare]_
+```
+
+The same conventions apply to every module:
+
+| In the spec | Meaning |
+|---|---|
+| `BR-`, `FR-`, `AC-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria and decisions. Ids are stable, so code, tests and commits can cite them. |
+| `[core]`, `[healthcare]`, `[dental]` | The layer an item comes from. `core` items apply to every industry. |
+| `overrides core` | A more specific layer replaced the item with the same id. Only the replacement applies. |
+| `Why:` | The reason for a rule or decision, usually the failure it prevents. |
+| `Considered:` | Alternatives a decision rejected. |
+| Open questions | Behaviour that hasn't been decided yet. |
+| `status` | `draft` specs can still change. `stable` specs change only through a new version. |
+
+## What each instruction prevents
+
+| Instruction | Without it, an agent may |
+|---|---|
+| Use the most specific page | Build from the core page and miss industry rules such as consent or eligibility |
+| Fetch before changing code | Work from a stale memory of a spec that has since changed |
+| Unspecified means ask | Fill a deliberate gap with a confident default. Specs leave behaviour open where practice varies between companies. |
+| Open questions are undecided | Pick an answer the domain hasn't settled |
+| Items are merged and tagged by layer | Read a `[core]` rule next to a `[dental]` override as a conflict, or "fix" the override back to the core behaviour |
+| Cite ids with the spec version | Make changes nobody can trace back to a requirement or to the version it was built against |
+| Read `Why:` first | Simplify away a rule that prevents a costly failure |
+| Respect `Considered:` | Reintroduce an approach a decision already rejected |
+| Report conflicts | Silently rewrite working code, or silently ignore the spec |
+
+## Project context and project rules
+
+The last two parts of the section belong to your project. After the agent
+fills them in, they look like this:
 
 ```md title="AGENTS.md"
-## Domain specs
+### Project context
 
-This project builds against domain specifications from the Knowledge Graph,
-an open, versioned specification of domain requirements. They live in
-`specs/`, one file per module (for example `specs/appointment.md`).
-`specs/sources.txt` records which Knowledge Graph page each file came from.
+- Industry: healthcare
+- Domain: dental
 
-### What a spec file is
+### Project rules
 
-- The complete requirements for one module in this product's industry and
-  domain. Rules from the general layer (core), the industry layer and the
-  domain layer are already merged into the one file.
-- Each item is tagged with the layer it comes from, such as [core],
-  [healthcare] or [dental]. "overrides core" means a deeper layer replaced the
-  item with the same id; only the replacement applies.
-- Ids are stable: BR- business rules, FR- functional requirements, AC-
-  acceptance criteria, ADR- decisions. Error codes such as
-  APPOINTMENT_NOT_FOUND are part of the API contract.
-- "Why:" gives the reason for a rule or decision. "Considered:" lists
-  alternatives that were rejected.
+Rules listed here override the Knowledge Graph. An id that exists in the spec
+replaces that item; a new id adds a rule.
 
-### When to read one
-
-Before writing, changing or reviewing code for a module that has a spec, read
-that spec, starting with its "How to read this spec" section. Do not rely on a
-summary or on memory of an earlier version.
-
-### How to follow it
-
-1. Treat business rules, validations, the state machine, permissions and
-   error codes as requirements. Implement them exactly.
-2. If a behaviour is not in the spec, it is unspecified. Ask, or list it as an
-   open question in your summary. Never invent it.
-3. If the spec lists the behaviour under "Open questions", it is undecided.
-   Ask before choosing an answer.
-4. Cite ids in a comment next to the code that enforces them, in test names,
-   and in commit messages (for example "Enforce BR-4: block patient
-   double-booking").
-5. Read a rule's "Why:" before relaxing or working around it. If you still
-   think it should change, say so and cite the id. Do not change it silently.
-6. Do not reintroduce an alternative a decision lists under "Considered:"
-   without saying which ADR you are going against.
-7. Where `specs/<module>.company.md` exists, it is this company's layer. An
-   id it repeats replaces the spec's item with that id; new ids add rules.
-8. When existing code contradicts the spec, report the conflict with the id.
-   Do not silently change either side.
-9. A spec with "status: draft" may still change. Flag code that depends on a
-   draft rule in your summary.
-
-### Never
-
-- Edit files in `specs/` other than `*.company.md`. They are regenerated by
-  `scripts/sync-specs.sh`, and edits are lost.
-- Load a spec for a module this task does not touch. Each file is large.
+- **BR-4** Hygienists may not be double-booked. Why: Our hygiene chairs have no
+  assistant cover.
+- **BR-ACME-1** Same-day emergency slots are held until 10:00, then released.
+  Why: Most emergency calls arrive before 10:00.
 ```
 
-## Why each line is there
+Project rules work the same way layers do in the Knowledge Graph: reusing an
+id replaces the rule, and a new id adds one. Give each rule a reason, so the
+next person or agent knows whether it still applies.
 
-- **"Merged" and the layer tags.** Without them, an agent seeing a `[core]`
-  rule next to a `[dental]` rule may assume they conflict, or "fix" an
-  override back to the core behaviour.
-- **Unspecified means ask.** The single most valuable instruction. Specs are
-  deliberately silent where practice varies; a confident invented default is
-  worse than a question.
-- **Cite ids.** Makes every change traceable to a requirement, and lets
-  reviewers and later agents find all code for a rule.
-- **Read "Why:" first.** Rules that look arbitrary usually prevent a specific,
-  expensive failure. The reason is what stops an agent "simplifying" them away.
-- **Don't edit `specs/`.** Agents like to fix things in place. A spec edit
-  disappears on the next sync and leaves code that matches neither version.
+## Use in a monorepo
 
-## Monorepos
+Keep the section in the root `AGENTS.md`. If packages belong to different
+domains, add a short `AGENTS.md` to each one that sets its context:
 
-Put a short `AGENTS.md` in each package that builds against a different spec,
-and keep the instruction block in the root file:
-
-```md title="packages/scheduling/AGENTS.md"
-This package implements `specs/appointment.md`. Follow the domain specs
-section of the root AGENTS.md.
+```md title="packages/billing/AGENTS.md"
+Follow the "Knowledge Graph" section of the root AGENTS.md. For code in this
+package, the domain is revenue cycle management.
 ```
 
-Most tools use the `AGENTS.md` closest to the file being edited, and a direct
-instruction in chat overrides both.
+Cursor, GitHub Copilot and Claude Code use the `AGENTS.md` nearest to the file
+being edited. A direct instruction in chat overrides it.
+
+## Markdown endpoints
+
+| URL | Returns |
+|---|---|
+| `/llms.txt` | How agents should use the Knowledge Graph, then every page with a markdown link and description |
+| `/docs/<page>.md` | One page as markdown, merged with everything it inherits |
+| `/llms-full.txt` | Every page in one file. Useful for research, too large to keep in context |
+
+Requests to any docs URL with an `Accept: text/markdown` header also return
+markdown. `/llms.txt` follows the [llms.txt proposal](https://llmstxt.org/);
+`/llms-full.txt` is a common convention, not part of the proposal.
+
+## Related
+
+- [Agentic development](/docs/agentic): The `AGENTS.md` section to copy
+- [Work with your agent](/docs/agentic/use-in-your-project): Prompts for building, testing and reviewing against rule ids

@@ -32,13 +32,24 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `content/docs/<industry>/` | Industry: `index.mdx` overview, `<module>.mdx` industry layers, `<domain>/` folders. |
 | `src/lib/spec-inherit.ts` | Resolves a page's `extends` chain into one merged spec tagged with provenance. |
 | `src/lib/spec-sections.ts` | Reference sections and their 6 groups, in reading order. Shared by both renderers. |
-| `content/docs/agentic/` | Agentic development: using the graph in a project end to end, plus AGENTS.md, Claude Code, Cursor and Copilot setup. |
+| `content/docs/agentic/` | Agentic development: the copy-paste `AGENTS.md` section, how agents navigate and read specs, prompts, and Claude Code, Cursor and Copilot notes. |
+| `src/app/llms.txt/route.ts` | Agent entry point: a "How agents should use" guide, then every page as an absolute `.md` link. |
 | `src/components/module-spec.tsx` | Renders frontmatter to HTML for humans. |
 | `src/lib/spec-markdown.ts` | Renders the same frontmatter to Markdown for AI. |
 | `src/lib/source.ts` | `getLLMText()` — joins spec markdown + prose for `llms.txt` routes. |
 | `src/proxy.ts` | Serves markdown for `/docs/<page>.md` and `Accept: text/markdown`. Must stay in `src/`, or Next.js skips it. |
 | `src/lib/shared.ts` | `siteUrl`: this deployment's address, from `NEXT_PUBLIC_SITE_URL`, else Vercel's production domain, else localhost. |
-| `src/lib/remark-site-url.ts` | Replaces `%SITE_URL%` in MDX at compile time, in the HTML and in the AI markdown. |
+| `src/lib/remark-site-url.ts` | Replaces `%SITE_URL%` (https URL) and `%SITE_HOST%` (hostname, for allowlists) in MDX at compile time, in the HTML and in the AI markdown. Changing it needs a dev server restart. |
+
+### How projects use the Knowledge Graph
+
+There is no CLI, MCP server, skill or download. A user copies one section into
+their project's `AGENTS.md` (the Quickstart on `content/docs/agentic/index.mdx`)
+and the agent does the rest with its own web fetch or search tools: it works
+out the project's industry and domain, starts at `/llms.txt`, and fetches the
+most specific page as `/docs/<page>.md` when a task needs it. Keep that section
+project-agnostic and module-agnostic, so it works pasted unedited. Don't
+document vendoring specs or per-module setup.
 
 ### Never hardcode the site address in content
 
@@ -208,10 +219,44 @@ Industry and domain pages link only up their own inheritance chain.
 
 References are fine; forcing an irrelevant industry or domain on a reader is not.
 
-### Headings are claims, not labels
+### Headings are claims, not labels (domain pages)
 
 `Consent gates completion, not booking` — not `What this layer adds`. A reader
-skimming headings should absorb the actual content.
+skimming headings should absorb the actual content. This applies to module
+narrative. Guide pages use task headings instead (see below).
+
+### Guide pages follow the Mastra docs style
+
+Pages that tell the reader how to do something (`content/docs/agentic/`, and
+any future setup or contributor guides) follow [Mastra's docs](https://mastra.ai/docs),
+which the user chose as the model. The user found the earlier versions of these
+pages correct but not written like an expert technical writer.
+
+- **Title** is a short noun or task: `Agent instructions`, `Set up a project`.
+- **Open** with one or two sentences saying what the thing is and what it does,
+  then what this page covers. No rhetorical hooks ("Plausible is the problem").
+- **`When to use X`** early on, including when to use something else instead.
+- **`Quickstart`** with the smallest working example, when the page has one.
+- **Headings** are tasks in sentence case: `Download the specs`,
+  `Load a spec for matching files`, `Verify the setup`.
+- **One page, one job** ([Diátaxis](https://diataxis.fr/)): steps, reference
+  tables and explanation each live in one place. Link instead of repeating.
+- **Steps**: condition before instruction ("To update specs, run ..."), one
+  action per step, the result straight after it. Show expected output.
+- **Introduce every code block** with a sentence ending in a colon; follow it
+  with one or two sentences on what happens.
+- **Voice**: second person, active, contractions (`don't`, `it's`). No "simply",
+  "just", "easy", "please note", exclamation marks or figurative language.
+  Recommend directly: "We recommend X because Y."
+- **Callouts** are rare and start `> **Note:**`, `> **Tip:**` or
+  `> **Warning:**`.
+- **Never a placeholder** the reader has to fill from another page
+  (`<paste the block here>`). Show the content, or link to the section.
+- **Tool-specific pages** end their setup with
+  `[More info on X in <tool>](vendor docs)`, verified against those docs.
+- **End** with `## Next steps` (a Goal | Start here table) and/or `## Related`
+  (link, colon, one-line description).
+- Pages read by agents may open with a `**For AI agents:**` paragraph.
 
 ### Argue from consequence
 

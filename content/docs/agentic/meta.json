@@ -3,8 +3,8 @@
   "icon": "Bot",
   "pages": [
     "index",
-    "use-in-your-project",
     "agents-md",
+    "use-in-your-project",
     "claude-code",
     "cursor",
     "github-copilot"

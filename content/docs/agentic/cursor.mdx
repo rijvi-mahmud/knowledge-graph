@@ -1,57 +1,45 @@
 ---
 title: Cursor
-description: One always-on rule for the instructions, one scoped rule per spec.
+description: Cursor reads the Knowledge Graph section in AGENTS.md automatically. Check that it does.
 ---
 
-Cursor reads `AGENTS.md` from the project root. If you have added the
-[instruction block](/docs/agentic/agents-md#the-instruction-block) there, the
-agent already knows how to use the specs; skip to
-[loading each spec](#load-each-spec-only-where-it-applies).
+Cursor reads `AGENTS.md` from your project root and subdirectories, so the
+[Knowledge Graph section](/docs/agentic#quickstart) needs no extra setup.
+Cursor's agent uses its web tool to fetch Knowledge Graph pages when a task
+needs them.
 
-## Project rules
+[More info on AGENTS.md and rules in Cursor](https://cursor.com/docs/context/rules)
 
-Project rules live in `.cursor/rules/` and must use the `.mdc` extension. A
-plain `.md` file there is ignored. Frontmatter decides when a rule applies:
+## Verify the setup
 
-| Frontmatter | Applied |
-|---|---|
-| `alwaysApply: true` | In every chat |
-| `globs` set | When matching files are in context |
-| `description` only | When the agent judges it relevant |
-| None of these | Only when you @-mention the rule |
+Open the agent and ask:
 
-## Load the instructions every time
+```text title="Prompt"
+Which Knowledge Graph pages apply to this project?
+```
 
-Without `AGENTS.md`, put the instruction block in an always-applied rule:
+The agent fetches `%SITE_URL%/llms.txt`, fills in **Project context** in
+`AGENTS.md`, and lists the pages it would use. If it answers without fetching
+anything, check that `AGENTS.md` is at the project root and contains the
+section.
 
-```md title=".cursor/rules/domain-specs.mdc"
+## Use a project rule instead of AGENTS.md
+
+If your project doesn't use `AGENTS.md`, create
+`.cursor/rules/knowledge-graph.mdc` and paste the section below this
+frontmatter:
+
+```md title=".cursor/rules/knowledge-graph.mdc"
 ---
-description: How to use the Knowledge Graph domain specs in specs/.
+description: How to find and follow Knowledge Graph domain specs.
 alwaysApply: true
 ---
-
-<paste the instruction block from the AGENTS.md page here>
 ```
 
-## Load each spec only where it applies
+Project rules must use the `.mdc` extension. Cursor ignores `.md` files in
+`.cursor/rules/`.
 
-Add one rule per module. `@specs/appointment.md` attaches the file to the
-rule's context, so the spec loads only when matching code does:
+## Related
 
-```md title=".cursor/rules/spec-appointment.mdc"
----
-description: Appointment module spec - booking, rescheduling, cancellation, reminders.
-globs: src/scheduling/**
-alwaysApply: false
----
-
-Code under src/scheduling implements the appointment module.
-
-@specs/appointment.md
-```
-
-## Check it is working
-
-Open a file under the matching path and ask the agent which business rules
-apply to it. It should answer with ids from the spec. If it does not, check
-that the rule's `globs` matches the file and that the file uses `.mdc`.
+- [Agentic development](/docs/agentic): The `AGENTS.md` section to copy
+- [Work with your agent](/docs/agentic/use-in-your-project): Prompts for building, testing and reviewing against rule ids
