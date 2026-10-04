@@ -9,3 +9,15 @@ export const gitConfig = {
   repo: 'knowledge-graph',
   branch: 'main',
 };
+
+/**
+ * Public address of this deployment, used wherever docs show a full URL.
+ * Set NEXT_PUBLIC_SITE_URL for a custom domain or a self-hosted copy; on
+ * Vercel the project's production domain is provided automatically.
+ */
+export const siteUrl = (
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : 'http://localhost:3000')
+).replace(/\/+$/, '');

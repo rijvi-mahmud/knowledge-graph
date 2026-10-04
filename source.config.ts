@@ -1,6 +1,7 @@
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { z } from 'zod';
+import { remarkSiteUrl } from './src/lib/remark-site-url';
 
 /**
  * Knowledge-graph frontmatter schema.
@@ -257,6 +258,6 @@ export const docs = defineDocs({
 
 export default defineConfig({
   mdxOptions: {
-    // MDX options
+    remarkPlugins: [remarkSiteUrl],
   },
 });
