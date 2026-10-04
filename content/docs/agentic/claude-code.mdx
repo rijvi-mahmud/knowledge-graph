@@ -1,81 +1,58 @@
 ---
 title: Claude Code
-description: Load the instructions every session, and each spec only when Claude works on the matching code.
+description: Make sure Claude Code loads the Knowledge Graph section and can fetch pages without asking each time.
 ---
 
-The setup has two parts with different costs. The
-[instruction block](/docs/agentic/agents-md#the-instruction-block) is short and
-should load every session. Specs are around 10,000 tokens each and should load
-only when Claude touches the module they describe.
+Claude Code works with the [Knowledge Graph section](/docs/agentic#quickstart)
+in `AGENTS.md`. This page covers how Claude Code loads that file and how to
+let it fetch Knowledge Graph pages without a prompt each time.
 
-## Load the instructions in CLAUDE.md
+## Load AGENTS.md
 
-`CLAUDE.md` can import other files with `@path`, relative to the file that
-contains the import. Import `AGENTS.md` so one file serves every tool:
+Claude Code reads `AGENTS.md` when your project has no `CLAUDE.md`. If you
+have a `CLAUDE.md`, import `AGENTS.md` from it:
 
 ```md title="CLAUDE.md"
 @AGENTS.md
 ```
 
-If you do not use `AGENTS.md`, paste the instruction block into `CLAUDE.md`
-directly.
+Reading `AGENTS.md` without an import requires Claude Code v2.1.277 or later.
+On earlier versions, use the import.
 
-## Load each spec only where it applies
+[More info on CLAUDE.md and AGENTS.md in Claude Code](https://code.claude.com/docs/en/memory)
 
-A rule in `.claude/rules/` with a `paths` field loads only when Claude reads or
-edits a matching file. Add one per module, pointing at the code that
-implements it:
+## Allow fetching Knowledge Graph pages
 
-```md title=".claude/rules/spec-appointment.md"
----
-paths:
-  - "src/scheduling/**"
----
+By default, Claude Code asks before it fetches a web page from a new domain. To
+allow the Knowledge Graph for everyone on the project, add a permission rule to
+`.claude/settings.json`:
 
-Code under src/scheduling implements the appointment module. Read
-specs/appointment.md before changing it, and follow the domain specs section
-of AGENTS.md.
+```json title=".claude/settings.json"
+{
+  "permissions": {
+    "allow": ["WebFetch(domain:%SITE_HOST%)"]
+  }
+}
 ```
 
-For a small project that builds against one or two modules, importing the
-specs straight into `CLAUDE.md` is simpler, at the cost of loading them every
-session:
+Commit the file so teammates get the same rule. Answering **Yes, and don't
+ask again** at the prompt has the same effect for your own sessions.
 
-```md title="CLAUDE.md"
-@AGENTS.md
-@specs/appointment.md
-```
+[More info on permissions in Claude Code](https://code.claude.com/docs/en/permissions)
 
-## Review a change against the specs
+## Verify the setup
 
-A skill packages a repeatable task Claude can run on request (`/spec-review`)
-or on its own when the description matches:
-
-```md title=".claude/skills/spec-review/SKILL.md"
----
-name: spec-review
-description: Review the current diff against the domain specs in specs/. Use when asked to check a change against requirements or rule ids.
----
-
-1. Run `git diff` (or the diff the user names) and list the modules it touches.
-2. For each module, read its file in specs/ and specs/<module>.company.md if
-   it exists.
-3. Report, citing ids:
-   - rules, validations or state transitions the change breaks
-   - behaviour the change adds that the spec does not specify
-   - acceptance criteria with no matching test
-   - error codes that differ from the spec
-4. Do not edit code. End with the open questions the change depends on.
-```
-
-## Check it is working
-
-Start a session and ask:
+Start a session and run `/context`. `AGENTS.md` appears under **Memory
+files**. Then ask:
 
 ```text title="Prompt"
-Which domain specs does this project use, and what does a [core] tag mean?
+Which Knowledge Graph pages apply to this project?
 ```
 
-Claude should name the files in `specs/` and explain layer tags without
-reading this site. If it cannot, the instruction block is not loaded; run
-`/memory` to see which instruction files are in context.
+Claude fetches `%SITE_URL%/llms.txt`, fills in **Project context** in
+`AGENTS.md`, and lists the pages it would use.
+
+## Related
+
+- [Agentic development](/docs/agentic): The `AGENTS.md` section to copy
+- [Work with your agent](/docs/agentic/use-in-your-project): Prompts for building, testing and reviewing against rule ids

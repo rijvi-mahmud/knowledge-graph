@@ -1,47 +1,52 @@
 ---
 title: GitHub Copilot
-description: Repository-wide instructions for how to use the specs, path-specific ones for which spec applies.
+description: Copilot reads the Knowledge Graph section in AGENTS.md. Allow the Knowledge Graph through the firewall for the cloud agent and code review.
 ---
 
-## Repository-wide: the instruction block
+GitHub Copilot reads `AGENTS.md`, so the
+[Knowledge Graph section](/docs/agentic#quickstart) needs no extra setup in
+your repository. On GitHub.com, Copilot cloud agent and Copilot code review run
+behind a firewall that you need to open for the Knowledge Graph.
 
-Copilot reads `.github/copilot-instructions.md` for every request in the
-repository. Paste the
-[instruction block](/docs/agentic/agents-md#the-instruction-block) there:
+## Allow the Knowledge Graph through the firewall
 
-```md title=".github/copilot-instructions.md"
-<paste the instruction block from the AGENTS.md page here>
+Copilot cloud agent and Copilot code review can only reach allowlisted
+addresses. To add the Knowledge Graph:
+
+1. In your repository, open **Settings**.
+2. In the sidebar, under **Code, planning, and automation**, click **Copilot**,
+   then **Internet access**.
+3. Click **Custom allowlist**.
+4. Enter `%SITE_URL%` and click **Add rule**.
+5. Click **Save changes**.
+
+If you can't add rules, an organization owner needs to set **Allow repository
+custom rules** to **Enabled**.
+
+[More info on the Copilot firewall](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-firewall)
+
+## Use repository instructions instead of AGENTS.md
+
+If your repository doesn't use `AGENTS.md`, paste the section into
+`.github/copilot-instructions.md`. Copilot applies that file to every request
+in the repository.
+
+[More info on custom instructions for GitHub Copilot](https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions)
+
+## Verify the setup
+
+Assign Copilot cloud agent an issue with this description:
+
+```text title="Issue"
+Find the Knowledge Graph pages that apply to this project, and fill in
+Project context in AGENTS.md.
 ```
 
-Copilot also reads `AGENTS.md`. If you already keep the instruction block
-there, you do not need to copy it.
+Copilot fetches `%SITE_URL%/llms.txt`, opens a pull request that fills in
+**Project context**, and lists the pages in its description. If it reports a
+blocked request, check the firewall allowlist.
 
-## Path-specific: which spec applies
+## Related
 
-Files in `.github/instructions/` ending in `.instructions.md` apply only to
-paths matching `applyTo`. Add one per module:
-
-```md title=".github/instructions/spec-appointment.instructions.md"
----
-applyTo: "src/scheduling/**"
----
-
-Code under src/scheduling implements the appointment module. Read
-specs/appointment.md before changing it, and follow the domain specs
-instructions for this repository.
-```
-
-Copilot does not inline the spec from an instruction file; the instruction
-tells it to open `specs/appointment.md`, which it can do in agent mode, in
-code review and as the cloud agent.
-
-## Review pull requests against the specs
-
-Copilot code review uses the same instruction files. With the setup above, ask
-for a review on a pull request and it checks the change against the rules for
-the paths it touches. Asking explicitly sharpens the result:
-
-```text title="Pull request comment or chat prompt"
-Review this change against specs/. Cite the rule id for every violation, and
-list behaviour the change adds that the spec does not specify.
-```
+- [Agentic development](/docs/agentic): The `AGENTS.md` section to copy
+- [Work with your agent](/docs/agentic/use-in-your-project): Prompts for building, testing and reviewing against rule ids
