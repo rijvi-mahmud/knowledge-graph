@@ -4,6 +4,10 @@ Open-source, versioned specification of the domain knowledge software teams
 rebuild on every project. Not a framework, not code generation, not a SaaS —
 knowledge, structured so both engineers and AI assistants read the same source.
 
+Production: https://knowledge-graph-ecru.vercel.app (Vercel). Pushes to `main`
+deploy to production; every PR gets a preview build, which sits behind Vercel
+deployment protection (fetch it with `vercel curl`, not plain `curl`).
+
 ## The premise
 
 Roughly 80% of domain requirements repeat across companies in the same industry.
@@ -32,6 +36,16 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `src/components/module-spec.tsx` | Renders frontmatter to HTML for humans. |
 | `src/lib/spec-markdown.ts` | Renders the same frontmatter to Markdown for AI. |
 | `src/lib/source.ts` | `getLLMText()` — joins spec markdown + prose for `llms.txt` routes. |
+| `src/proxy.ts` | Serves markdown for `/docs/<page>.md` and `Accept: text/markdown`. Must stay in `src/`, or Next.js skips it. |
+| `src/lib/shared.ts` | `siteUrl`: this deployment's address, from `NEXT_PUBLIC_SITE_URL`, else Vercel's production domain, else localhost. |
+| `src/lib/remark-site-url.ts` | Replaces `%SITE_URL%` in MDX at compile time, in the HTML and in the AI markdown. |
+
+### Never hardcode the site address in content
+
+Write `%SITE_URL%` wherever a doc shows a full URL to this site (prose, links,
+code blocks), never `https://knowledge-graph-ecru.vercel.app`. A self-hosted
+copy then documents its own address. Root-relative links (`/docs/...`) need no
+token.
 
 ### Frontmatter is the source of truth
 
