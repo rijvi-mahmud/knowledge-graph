@@ -1,30 +1,17 @@
 ---
 title: Cursor
-description: A project rule that pulls the spec into the agent's context.
+description: One always-on rule for the instructions, one scoped rule per spec.
 ---
 
-## Add a project rule
+Cursor reads `AGENTS.md` from the project root. If you have added the
+[instruction block](/docs/agentic/agents-md#the-instruction-block) there, the
+agent already knows how to use the specs; skip to
+[loading each spec](#load-each-spec-only-where-it-applies).
+
+## Project rules
 
 Project rules live in `.cursor/rules/` and must use the `.mdc` extension. A
-plain `.md` file there is ignored.
-
-```md title=".cursor/rules/appointment-spec.mdc"
----
-description: Appointment domain spec. Booking, cancellation and dental scheduling rules.
-globs: src/scheduling/**
-alwaysApply: false
----
-
-Scheduling code implements @specs/appointment.md.
-
-- Follow its business rules exactly and cite their ids in commits.
-- If a behaviour is not in the spec, it is unspecified. Ask instead of inventing it.
-```
-
-`@specs/appointment.md` includes the [vendored spec](/docs/agentic#vendor-the-spec-dont-link-it)
-in the rule's context.
-
-## How the rule is applied
+plain `.md` file there is ignored. Frontmatter decides when a rule applies:
 
 | Frontmatter | Applied |
 |---|---|
@@ -33,4 +20,38 @@ in the rule's context.
 | `description` only | When the agent judges it relevant |
 | None of these | Only when you @-mention the rule |
 
-Cursor also reads [AGENTS.md](/docs/agentic/agents-md) as a simpler alternative.
+## Load the instructions every time
+
+Without `AGENTS.md`, put the instruction block in an always-applied rule:
+
+```md title=".cursor/rules/domain-specs.mdc"
+---
+description: How to use the Knowledge Graph domain specs in specs/.
+alwaysApply: true
+---
+
+<paste the instruction block from the AGENTS.md page here>
+```
+
+## Load each spec only where it applies
+
+Add one rule per module. `@specs/appointment.md` attaches the file to the
+rule's context, so the spec loads only when matching code does:
+
+```md title=".cursor/rules/spec-appointment.mdc"
+---
+description: Appointment module spec - booking, rescheduling, cancellation, reminders.
+globs: src/scheduling/**
+alwaysApply: false
+---
+
+Code under src/scheduling implements the appointment module.
+
+@specs/appointment.md
+```
+
+## Check it is working
+
+Open a file under the matching path and ask the agent which business rules
+apply to it. It should answer with ids from the spec. If it does not, check
+that the rule's `globs` matches the file and that the file uses `.mdc`.

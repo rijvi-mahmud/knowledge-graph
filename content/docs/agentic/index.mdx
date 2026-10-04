@@ -1,61 +1,128 @@
 ---
 title: Overview
-description: Give your coding assistant the spec instead of letting it guess.
+description: Give your coding assistant the Knowledge Graph's specs, and teach it how to read them.
 ---
 
-Every page here is also plain markdown, merged with everything it inherits. Put
-that file in front of your assistant and it builds against real rules, not
-plausible ones.
+A coding assistant asked to build cancellation, reminders or consent checks
+will write something plausible. Plausible is the problem: it will not know that
+a cancelled appointment is terminal, that consent gates completion rather than
+booking, or why. The Knowledge Graph already specifies those rules, with their
+reasons. This section shows how to put them in front of your assistant and how
+to tell it what the specs mean.
 
-## Three endpoints
+## What your assistant gets
+
+Every page on this site is also served as plain markdown. For a spec page, that
+markdown is the **merged** spec: the page's own additions plus everything it
+inherits, in one file.
+
+A dental team does not load three files (core, healthcare, dental) and work out
+which rule wins. It loads `healthcare/dental/appointment` and gets every rule
+that applies to a dental practice, each tagged with the layer it came from:
+
+```md title="specs/appointment.md (excerpt)"
+- module: appointment
+- layer: core > healthcare > dental
+- version: 0.1.0
+- status: draft
+
+**BR-4** A patient cannot be double-booked, and an operatory cannot be unless
+the practice allows overlap. ... _[dental (overrides core)]_
+  - Why: A dentist runs several chairs while assistants and hygienists work ...
+**BR-5** Once status is completed or cancelled, the appointment is terminal
+and cannot transition further. _[core]_
+**BR-H1** An appointment cannot transition to completed unless
+consent_status = granted. _[healthcare]_
+```
+
+## Specs are written to be read by machines
+
+The same conventions hold for every module, so one set of agent instructions
+covers all of them.
+
+| In the spec | What it tells the assistant |
+|---|---|
+| Ids: `BR-` rules, `FR-` requirements, `AC-` acceptance criteria, `ADR-` decisions | Stable handles. Cite them in code, tests and commits; refer to them in prompts. |
+| Error codes such as `APPOINTMENT_NOT_FOUND` | Part of the API contract. Use them verbatim. |
+| Layer tags: `[core]`, `[healthcare]`, `[dental]` | Where a rule comes from. Universal rules are tagged `core`. |
+| `overrides core` | A deeper layer replaced the parent rule with the same id. Only the replacement applies. |
+| `Why:` under a rule or decision | The failure the rule prevents. Read it before relaxing the rule. |
+| `Considered:` under a decision | Alternatives already rejected. Do not reintroduce them silently. |
+| Open questions | Known unknowns. Behaviour here is not decided. |
+| `status: draft` or `stable` | Whether rules may still change. |
+
+Above all: **anything not listed is unspecified.** Each spec opens with a "How
+to read this spec" guide that says so, and your instructions should repeat it.
+An assistant that fills gaps with invented behaviour is the failure this
+project exists to prevent.
+
+## Vendor the specs, don't link them
+
+Instruction files (`AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot
+instructions) load files from your repository, not URLs. So the recommended
+setup is to download the specs you build against into a `specs/` folder and
+commit them:
+
+- **Reviewed.** A spec update arrives as a diff in a pull request, not as a
+  silent change in agent behaviour.
+- **Reproducible.** Every teammate and every agent run reads the same version.
+- **Offline.** No network call, no rate limits, no dependency on this site
+  being up.
+
+[Use it in your project](/docs/agentic/use-in-your-project) walks through the
+setup, including a script that keeps the folder in sync.
+
+## Endpoints
 
 | URL | Returns | Use it for |
 |---|---|---|
-| `/llms.txt` | An index of every page | Letting an agent discover what exists |
+| `/llms.txt` | Index of every page with its description | Finding the page for your product |
+| `/llms.mdx/docs/<page>/content.md` | One page as markdown, merged with its parents | Vendoring into `specs/` |
+| `/docs/<page>.md` | The same markdown, at a shorter address | Pasting a link into chat |
 | `/llms-full.txt` | Every page in one file | One-off research. Too large to keep in context |
-| `/llms.mdx/docs/<page>/content.md` | One page, merged with its parents | Building a feature |
+
+`<page>` is the page's path after `/docs/`. The dental appointment spec at
+`/docs/healthcare/dental/appointment` is served at
+`/llms.mdx/docs/healthcare/dental/appointment/content.md`. Links in
+`/llms.txt` point at the HTML pages; add `.md` to any of them, or request it
+with an `Accept: text/markdown` header, to get markdown.
 
 `/llms.txt` follows the [llms.txt proposal](https://llmstxt.org/).
 `/llms-full.txt` is a common convention, not part of that proposal.
 
-## Vendor the spec, don't link it
+### Which address to use
 
-Instruction files (`AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot
-instructions) load files from your repository, not URLs. Download the page you
-build against:
+This site is served at [%SITE_URL%](%SITE_URL%), so the dental appointment
+spec is at:
 
-```bash title="Terminal"
-export KG_URL=https://your-knowledge-graph-host   # this site's address
-mkdir -p specs
-curl -fsSL "$KG_URL/llms.mdx/docs/healthcare/dental/appointment/content.md" \
-  -o specs/appointment.md
+```text
+%SITE_URL%/llms.mdx/docs/healthcare/dental/appointment/content.md
 ```
 
-A vendored spec is versioned with your code, reviewed in pull requests, and
-gives the same answer on every run. Re-run the command to update it; the
-`version` line at the top of the file tells you what you have.
+To pin a release or work offline, run your own copy. Set
+`NEXT_PUBLIC_SITE_URL` to its public address, and every URL in these docs,
+including the sync script's default, points at your copy:
 
-## What your assistant is told
+```bash title="Terminal"
+git clone https://github.com/rijvi-mahmud/knowledge-graph
+cd knowledge-graph
+pnpm install
+pnpm dev                               # serves http://localhost:3000
+```
 
-Every spec opens with the same reading guide, so the rules for using it travel
-with the file:
+### Live access
 
-- It is the complete spec for the page, with inherited items merged in.
-- Anything not listed is unspecified: ask or record an open question, never invent.
-- Ids such as `BR-4` are stable and should be cited in code, tests and commits.
-- Tags such as `[core]` show where an item comes from; `overrides` marks a replacement.
+Assistants with a web-fetch tool can read `/llms.txt` and individual pages
+directly, which is useful for exploring which modules exist. Do not rely on it
+for building: results change when the site changes, and nothing records which
+version the code was written against. There is no MCP server yet.
 
-## Start here
-
-<Cards>
-  <Card title="Use it in your project" href="/docs/agentic/use-in-your-project" description="Six steps from finding your spec to an agent that builds and reviews against it." />
-</Cards>
-
-## Pick your tool
+## Next
 
 <Cards>
-  <Card title="AGENTS.md" href="/docs/agentic/agents-md" description="One file most coding agents read." />
-  <Card title="Claude Code" href="/docs/agentic/claude-code" description="CLAUDE.md imports and path-scoped rules." />
-  <Card title="Cursor" href="/docs/agentic/cursor" description="A project rule that pulls in the spec." />
+  <Card title="Use it in your project" href="/docs/agentic/use-in-your-project" description="Pick your specs, vendor them, wire up your agent, build against ids." />
+  <Card title="AGENTS.md" href="/docs/agentic/agents-md" description="The instruction block that teaches an agent to use the specs. Works with most tools." />
+  <Card title="Claude Code" href="/docs/agentic/claude-code" description="CLAUDE.md imports, path-scoped rules and a review skill." />
+  <Card title="Cursor" href="/docs/agentic/cursor" description="Project rules that load the instructions and the right spec." />
   <Card title="GitHub Copilot" href="/docs/agentic/github-copilot" description="Repository and path-specific instructions." />
 </Cards>
