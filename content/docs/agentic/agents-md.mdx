@@ -21,10 +21,10 @@ For a hospital EHR working on appointments, the agent:
 1. Reads `%SITE_URL%/llms.txt` and finds the healthcare industry.
 2. Fetches the healthcare overview and sees that EHR is one of its domains.
 3. Fetches the EHR appointments page, which already includes the core and
-   healthcare rules.
+   healthcare appointment rules.
 
 If the EHR domain has no appointments page yet, the agent uses the healthcare
-page instead, and the core page (`%SITE_URL%/docs/core/appointment.md`) if
+page instead, and the core Appointment page (`%SITE_URL%/docs/core/appointment.md`) if
 there's no healthcare page either. It never needs two pages for the same
 concept.
 
@@ -68,7 +68,7 @@ The same conventions apply to every module:
 
 | Instruction | Without it, an agent may |
 |---|---|
-| Use the most specific page | Build from the core page and miss industry rules such as consent or eligibility |
+| Use the most specific page | Build from the module's core page and miss industry rules such as consent or eligibility |
 | Fetch before changing code | Work from a stale memory of a spec that has since changed |
 | Unspecified means ask | Fill a deliberate gap with a confident default. Specs leave behaviour open where practice varies between companies. |
 | Open questions are undecided | Pick an answer the domain hasn't settled |

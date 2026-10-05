@@ -6,7 +6,7 @@ version: 0.1.0
 status: draft
 industry: healthcare
 extends: core/appointment
-purpose: 'Add what every healthcare application needs on top of the core appointment: patients and practitioners, check-in with identity verification, protected health data, communication patients can rely on, and the medical record an appointment becomes part of. Works in the United States and the European Union.'
+purpose: 'Add what every healthcare application needs on top of the core Appointment specification: patients and practitioners, check-in with identity verification, protected health data, communication patients can rely on, and the medical record an appointment becomes part of. Works in the United States and the European Union.'
 scope:
 - Patients, practitioners and personal representatives as participants
 - Check-in with patient identity verification
@@ -125,7 +125,7 @@ businessRules:
   text: Check-in is allowed from check_in_window before the start until the end.
   rationale: Checking in much earlier would mark someone as present who has not arrived for this appointment.
 - id: BR-11
-  text: A request to erase a patient's appointment data is refused while record_retention applies, because the appointment and its history are part of the medical record. When retention ends, personal fields are erased as in core.
+  text: A request to erase a patient's appointment data is refused while record_retention applies, because the appointment and its history are part of the medical record. When retention ends, personal fields are erased as the core Appointment specification describes.
   rationale: HIPAA gives no right to erasure, and US hospitals must keep records for at least 5 years (42 CFR 482.24(b)(1)), longer in many states. In the EU, GDPR Article 17(3)(c) lets health data be kept for care under Article 9(2)(h). Erasing on request would break the record.
 validations:
 - field: participants
@@ -661,7 +661,7 @@ dependencies:
 ---
 
 A clinical appointment is still an appointment: everything in the
-[core specification](/docs/core/appointment) applies. This layer adds what
+[core Appointment specification](/docs/core/appointment) applies. This layer adds what
 changes when the participants are a patient and a practitioner and the data is
 health information.
 

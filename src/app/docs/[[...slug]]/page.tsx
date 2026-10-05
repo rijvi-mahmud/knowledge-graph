@@ -20,6 +20,7 @@ import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { gitConfig } from '@/lib/shared';
 import { ModuleSpec, specToc } from '@/components/module-spec';
+import { OpenTarget } from '@/components/open-target';
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const params = await props.params;
@@ -68,6 +69,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
           />
         )}
         <ModuleSpec data={spec} section={section} baseUrl={baseUrl} />
+        <OpenTarget />
       </DocsBody>
     </DocsPage>
   );

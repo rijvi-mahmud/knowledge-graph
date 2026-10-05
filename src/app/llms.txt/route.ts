@@ -13,7 +13,7 @@ const guide = `# ${appName}
 ## How agents should use the ${appName}
 
 - Work out the project's industry and domain (for example healthcare > ehr) before choosing a page.
-- For each domain concept a task touches, use the deepest page that matches the project: the domain page, otherwise the industry page, otherwise the core page. A deeper page already includes everything above it.
+- For each domain concept a task touches, use the deepest page that matches the project: the domain page, otherwise the industry page, otherwise the module's core page. A deeper page already includes everything above it.
 - Industry overview pages list the domains in that industry and which ones are specified yet.
 - A module page's markdown is its complete spec. The pages listed under it (Rules & behaviour, Data, Interface, Requirements, Verification, Terms & history) are parts of the same spec, for when you need only one.
 - Every link below is markdown. Add \`.md\` to any other docs URL, such as \`${siteUrl}/docs/core/appointment.md\`, for the same.

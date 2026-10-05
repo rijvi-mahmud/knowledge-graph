@@ -8,6 +8,7 @@
  * - a duplicate id within one page's own list, or two operations on one endpoint
  * - an id in a `verifies` or `covers` list that doesn't exist
  * - an error code returned by an operation or validation but not defined
+ * - an id mentioned in the page (outside its changelog) that doesn't exist
  * - an em or en dash anywhere in the page
  *
  * Warnings (exit code 0, or 1 with --strict):
@@ -22,6 +23,7 @@ import { parse } from 'yaml';
 import { docs } from '../source.config';
 import { resolveSpec, type SpecNode } from '@/lib/spec-inherit';
 import type { ModuleSpecData } from '@/components/module-spec';
+import { SPEC_ID } from '@/lib/spec-ids';
 
 const root = join(import.meta.dirname, '..', 'content', 'docs');
 const strict = process.argv.includes('--strict');
@@ -41,6 +43,7 @@ const schema = (docs as unknown as { docs: { schema: { safeParse: (v: unknown) =
   .schema;
 const nodes = new Map<string, SpecNode>();
 const own = new Map<string, ModuleSpecData>(); // each page's own data, before inheritance
+const rawText = new Map<string, string>(); // each page's frontmatter (minus changelog) and body
 
 for (const file of mdxFiles(root)) {
   const path = relative(root, file).replace(/\.mdx$/, '');
@@ -70,6 +73,9 @@ for (const file of mdxFiles(root)) {
   const data = result.data as ModuleSpecData & { title: string };
   if (!data.module) continue;
   own.set(path, data);
+  // The changelog may mention ids that were removed, so it is not checked.
+  const { changelog: _history, ...rest } = frontmatter as Record<string, unknown>;
+  rawText.set(path, JSON.stringify(rest) + '\n' + raw.slice(match[0].length));
   nodes.set(path, { path, title: data.title, url: `/docs/${path}`, data });
 }
 
@@ -119,6 +125,12 @@ for (const node of all) {
       ((spec as Record<string, { id: string }[] | undefined>)[list] ?? []).map((i) => i.id),
     ),
   );
+  // Every id mentioned anywhere in the page, outside its changelog, must exist:
+  // each one is rendered as a link to its item.
+  const mentioned = new Set([...(rawText.get(where) ?? '').matchAll(SPEC_ID)].map((m) => m[0]));
+  for (const id of mentioned)
+    if (!known.has(id)) errors.push(`${where}: mentions ${id}, which doesn't exist`);
+
   for (const a of spec.acceptanceCriteria ?? [])
     for (const id of a.verifies ?? [])
       if (!known.has(id)) errors.push(`${where}: ${a.id} verifies ${id}, which doesn't exist`);

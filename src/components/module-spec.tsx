@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { cloneElement, Fragment, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { specIdHref, splitIds } from '@/lib/spec-ids';
 import {
   SPEC_GROUPS,
   SPEC_SECTIONS,
@@ -639,7 +640,7 @@ const Label = ({ children }: { children: ReactNode }) => (
 );
 
 /** A compact reference table, styled like the other lists. */
-function Grid({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
+function Grid({ head, rows, rowIds }: { head: ReactNode[]; rows: ReactNode[][]; rowIds?: string[] }) {
   return (
     <div className="not-prose mt-3 overflow-x-auto">
       <table className="w-full border-collapse text-sm">
@@ -654,7 +655,7 @@ function Grid({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
         </thead>
         <tbody className="divide-y divide-fd-border">
           {rows.map((r, i) => (
-            <tr key={i} className="align-top">
+            <tr key={i} id={rowIds?.[i]?.toLowerCase()} className="scroll-m-24 align-top">
               {r.map((c, j) => (
                 <td key={j} className="px-3 py-2 leading-relaxed">
                   {c}
@@ -698,6 +699,38 @@ const NonNormative = () => (
   </p>
 );
 
+/**
+ * Turns every id (BR-4, FR-E2, ADR-11, ...) in rendered text into a link to its
+ * item. Walks strings, arrays and element children; leaves links and the
+ * text of other elements' props (keys, refs) alone.
+ */
+function linkIds(node: ReactNode, baseUrl: string): ReactNode {
+  if (typeof node === 'string') {
+    const parts = splitIds(node);
+    if (parts.length === 1 && !parts[0].id) return node;
+    return parts.map((part, i) => {
+      const href = part.id ? specIdHref(baseUrl, part.text) : undefined;
+      return href ? (
+        <Link key={i} href={href} className="font-code text-[0.9em] text-fd-primary hover:underline">
+          {part.text}
+        </Link>
+      ) : (
+        <Fragment key={i}>{part.text}</Fragment>
+      );
+    });
+  }
+  if (Array.isArray(node)) return node.map((n, i) => <Fragment key={i}>{linkIds(n, baseUrl)}</Fragment>);
+  if (isValidElement(node)) {
+    const el = node as ReactElement<{ children?: ReactNode }>;
+    if (el.type === 'a' || el.type === Link || el.props.children === undefined) return el;
+    return cloneElement(el, undefined, linkIds(el.props.children, baseUrl));
+  }
+  return node;
+}
+
+/** Item fields that hold prose, where ids are linked. Keys and refs are not. */
+const PROSE_FIELDS = ['text', 'detail', 'body', 'note', 'def', 'steps', 'description', 'message', 'rule', 'outcome', 'trigger', 'reason', 'contract'] as const;
+
 // --- the spec --------------------------------------------------------------
 
 export function ModuleSpec({
@@ -731,10 +764,21 @@ export function ModuleSpec({
   const order = [...(data.lineage?.basedOn.map((l) => l.layer) ?? []), own];
 
   /** Splits a section into "From core / From healthcare / Added in dental". */
+  const link = (n: ReactNode) => linkIds(n, baseUrl);
   const grouped = <T extends { from?: Provenance }>(
-    items: T[],
+    rawItems: T[],
     render: (subset: T[]) => ReactNode,
   ) => {
+    // Link ids in every prose field before rendering.
+    const items = rawItems.map((item) => {
+      const out = { ...item } as Record<string, unknown>;
+      for (const f of PROSE_FIELDS) {
+        const v = out[f];
+        if (typeof v === 'string' || isValidElement(v)) out[f] = link(v as ReactNode);
+        else if (Array.isArray(v) && v.every((x) => typeof x === 'string')) out[f] = v.map((x) => link(x));
+      }
+      return out as T;
+    });
     if (!layered || !items.some((i) => i.from)) return render(items);
     return order.map((layer) => {
       const subset = items.filter((i) => (i.from?.layer ?? 'core') === layer);
@@ -1232,6 +1276,7 @@ export function ModuleSpec({
     performance: (
       <Grid
         head={['Id', 'Indicator', 'Target', 'Measured as']}
+        rowIds={(data.performanceTargets ?? []).map((t) => t.id)}
         rows={(data.performanceTargets ?? []).map((t) => [
           <code key="i">{t.id}</code>,
           t.indicator,
@@ -1324,7 +1369,7 @@ export function ModuleSpec({
                 .map((r) => (
                   <li key={r.action}>
                     <Label>{r.action}:</Label>
-                    {r.note}
+                    {link(r.note)}
                   </li>
                 ))}
             </ul>
@@ -1395,7 +1440,7 @@ export function ModuleSpec({
           <code key="t">{st.type}</code>,
           st.default ? <code key="d">{st.default}</code> : 'none',
           <span key="x">
-            {st.description} {origin(st)}
+            {link(st.description)} {origin(st)}
           </span>,
         ])}
       />
@@ -1431,10 +1476,10 @@ export function ModuleSpec({
         <Grid
           head={['Id', 'Statement', 'Verified by']}
           rows={traceRows(data).map((r) => [
-            <code key="i">{r.id}</code>,
+            <span key="i">{link(r.id)}</span>,
             r.text,
             r.verifiedBy.length > 0 ? (
-              <code key="v">{r.verifiedBy.join(', ')}</code>
+              <span key="v">{link(r.verifiedBy.join(', '))}</span>
             ) : (
               <span key="v" className="text-fd-muted-foreground">
                 Not verified yet
@@ -1546,7 +1591,7 @@ export function ModuleSpec({
             >
               ?
             </span>
-            {q}
+            {link(q)}
           </li>
         ))}
       </ul>
@@ -1567,7 +1612,7 @@ export function ModuleSpec({
             </div>
             <ul className="mt-1.5 list-disc pl-5 text-sm leading-relaxed">
               {c.changes.map((change) => (
-                <li key={change}>{change}</li>
+                <li key={change}>{link(change)}</li>
               ))}
             </ul>
           </li>
@@ -1687,7 +1732,8 @@ function SpecIntro({ data }: { data: ModuleSpecData }) {
           </p>
         ) : (
           <p className="mt-1.5">
-            This is a core page. Industry and domain pages build on it and add only what they need.
+            This is the core {capitalise(data.module ?? '')} specification. Industry and domain pages
+            build on it and add only what they need.
           </p>
         )}
         {lineage && lineage.extendedBy.length > 0 && (

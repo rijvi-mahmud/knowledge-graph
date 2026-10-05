@@ -94,7 +94,7 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
       'Ids such as BR-1, FR-2 and AC-3 are stable. Cite them in code, tests and commit messages.',
       layered
         ? 'Tags such as [core] or [healthcare] show which layer an item comes from. "overrides X" means it replaces the item with the same id from layer X.'
-        : 'This is a core page: nothing is inherited, and other pages build on it.',
+        : `This is the core ${data.module} specification: nothing is inherited, and industry and domain pages build on it.`,
     ]),
   );
 

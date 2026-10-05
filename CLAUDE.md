@@ -208,6 +208,19 @@ Sidebar: one plain tree with folder icons (set via `icon` in `meta.json`). No
 root tabs, no separators, no nav links repeated in the docs sidebar. The user
 found those confusing.
 
+### Every id is a link, and every reference is specific
+
+- Any id in a module page (BR-4, FR-E2, AC-3, EC-1, ADR-11, CON-2, AS-1, DG-1,
+  PERF-4, RISK-2, REF-5) links to its item, in the prose
+  (`remark-spec-ids.ts`) and in the spec pages (`linkIds` in
+  `module-spec.tsx`). The prefix-to-section map lives only in
+  `src/lib/spec-ids.ts`. A new id prefix must be added there.
+- `pnpm check:specs` fails if a page mentions an id that doesn't exist
+  (changelogs excepted, since they mention removed ids).
+- Never say "core" alone for a module. Core will hold many modules, so write
+  "the core Appointment specification" or link the page. "The module's core
+  page" is fine in general guidance.
+
 ### Each module is its own bounded context
 
 A module specifies only its own job. When it needs another module, it states
@@ -378,7 +391,7 @@ Never `Appointment - Healthcare`. That names the page after the knowledge base's
 internal layering. Use domain-native language the practitioner already uses:
 
 - `Clinical appointments` (healthcare)
-- `Outpatient appointments` (EHR)
+- `Hospital appointments` (EHR)
 
 An engineer scanning a sidebar must recognise their page instantly and ignore
 the rest.

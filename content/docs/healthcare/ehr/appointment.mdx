@@ -1,23 +1,25 @@
 ---
-title: Outpatient appointments
-description: 'Hospital outpatient scheduling: departments and rooms, referrals, walk-ins, overbooking and the handoff to an encounter.'
+title: Hospital appointments
+description: 'Hospital scheduling for outpatients and admitted patients: departments and rooms, referrals, walk-ins, overbooking, and the link to the patient''s encounter.'
 module: appointment
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 domain: ehr
 extends: healthcare/appointment
-purpose: 'Add what a hospital EHR needs for outpatient clinics: departments and rooms, referral rules, walk-ins, overbooking, and opening an encounter when the patient checks in.'
+purpose: 'Add what a hospital EHR needs for scheduling: outpatient visits and services booked for admitted patients, departments and rooms, referral rules, walk-ins, overbooking, and the link between each appointment and the patient''s encounter.'
 scope:
+- Outpatient appointments, and appointments for admitted patients during their stay
 - Departments (clinics) and rooms as part of a booking
 - Referral-required departments
-- Walk-in patients
-- Overbooking practitioners where a clinic allows it
-- Opening and linking an encounter at check-in
+- Walk-in outpatients
+- Overbooking practitioners where a department allows it
+- Linking each appointment to the right encounter
+- Reviewing an admitted patient's future appointments when they are discharged
 - A department's daily worklist
 nonGoals:
-- Inpatient admission, beds and transfers. They belong to the Admission, discharge and transfer module.
-- The encounter itself. The Encounter module owns it; this layer only links it.
+- Admissions, beds, transfers and discharge, including planned admissions. They belong to the Admission, discharge and transfer module.
+- The encounter itself. The Encounter module owns it; this layer only links to it.
 actors:
 - name: Clinic manager
   description: Sets a department's scheduling rules, such as overbooking and referral requirements.
@@ -31,7 +33,15 @@ assumptions:
 - id: AS-E3
   text: Departments and rooms are owned by the Organization module. This module only refers to them by id.
   rationale: Opening a clinic or renaming a room is not a scheduling decision.
+- id: AS-E4
+  text: The Admission, discharge and transfer module knows whether a patient has an active stay, and announces discharges.
+  rationale: Admitting and discharging patients is its job; this module only needs the answer and the event.
 dataModel:
+- name: care_setting
+  type: enum
+  required: true
+  description: Whether the appointment is for an outpatient or for an admitted patient during their stay.
+  constraints: outpatient | inpatient
 - name: department_id
   type: string
   required: true
@@ -47,32 +57,45 @@ dataModel:
 - name: encounter_id
   type: string
   required: false
-  description: The encounter opened at check-in.
-  constraints: set after check-in
+  description: 'The encounter this appointment belongs to: the one opened at check-in for an outpatient, or the patient''s stay for an inpatient.'
+  constraints: set at check-in for outpatients, at booking for inpatients
 - name: walk_in
   type: boolean
   required: false
-  description: Whether the patient arrived without an appointment.
+  description: Whether an outpatient arrived without an appointment.
 - name: overbooked
   type: boolean
   required: false
   description: Whether this appointment overlaps the practitioner's other appointments under BR-4.
+- name: needs_review
+  type: boolean
+  required: false
+  description: Set when the patient is discharged with this inpatient appointment still in the future.
 businessRules:
 - id: BR-4
   text: A patient cannot have two active appointments whose slots overlap. A practitioner can, only when their department has allow_overbooking on, and with no more than max_overbooked_per_slot appointments overlapping one slot. Slots are half-open.
   rationale: Clinics overbook to make up for no-shows, which research finds range from 3% to 80% between clinics, and no single overbooking policy fits them all. A patient, though, can only be in one place.
 - id: BR-E1
   text: A room cannot hold two active appointments whose slots overlap.
-  rationale: Two patients cannot be examined in one room at once. Core leaves resources to the layers that need them (ADR-11).
+  rationale: Two patients cannot be examined in one room at once. The core Appointment specification leaves resources to the layers that need them (ADR-11).
 - id: BR-E2
-  text: Check-in opens an encounter, and the appointment records its encounter_id. An appointment that was checked in completes only once its encounter exists.
+  text: For an outpatient appointment, check-in opens an encounter and the appointment records its encounter_id. A checked-in outpatient appointment completes only once its encounter exists.
   rationale: In FHIR, the appointment is fulfilled and linked to the newly created encounter at check-in. The encounter is where care is documented.
 - id: BR-E3
   text: A department with referral_required on accepts a booking only with a valid referral.
   rationale: Specialist clinics often see only referred patients, so the referral is checked before the slot is taken.
 - id: BR-E4
-  text: A walk-in patient gets an appointment that starts now, marked walk_in, and is checked in straight away.
+  text: An outpatient walk-in gets an appointment that starts now, marked walk_in, and is checked in straight away.
   rationale: Every visit needs an appointment to link its encounter and keep statistics complete.
+- id: BR-E5
+  text: 'An appointment for an admitted patient is inpatient and belongs to the patient''s current stay: it records the stay''s encounter_id at booking, and check-in opens no new encounter.'
+  rationale: HL7 separates inpatient (IMP) from ambulatory (AMB) encounters. Care given during a stay, such as an MRI or theatre slot, is documented on that stay.
+- id: BR-E6
+  text: An inpatient appointment can be booked only while the patient has an active stay.
+  rationale: Without a stay, there is no inpatient encounter to belong to, and the patient may not be in the building.
+- id: BR-E7
+  text: When a patient is discharged, each of their inpatient appointments still in the future is flagged needs_review. A Scheduler then cancels it or changes it to outpatient.
+  rationale: These appointments assumed the patient was on a ward. Some are still needed after discharge, such as follow-up imaging, so neither cancelling nor keeping them silently is safe.
 validations:
 - field: department_id
   rule: Organization confirms the department exists
@@ -80,6 +103,9 @@ validations:
 - field: referral_id
   rule: required and valid when the department has referral_required on
   error: APPOINTMENT_REFERRAL_REQUIRED
+- field: care_setting
+  rule: inpatient only while the patient has an active stay
+  error: APPOINTMENT_NO_ACTIVE_STAY
 workflows:
 - name: Register a walk-in
   trigger: A patient arrives without an appointment
@@ -97,6 +123,23 @@ workflows:
   - Record encounter_id and increase revision
   - Emit appointment.encounter_linked
   outcome: The appointment and its encounter point to each other.
+- name: Book for an admitted patient
+  trigger: A ward or department books a service for an inpatient, such as an MRI
+  actor: Scheduler
+  steps:
+  - Ask Admission, discharge and transfer for the patient's active stay
+  - Book the appointment as inpatient, with the stay's encounter_id
+  - Apply the usual overlap, room and overbooking rules
+  - Emit appointment.booked
+  outcome: The appointment is part of the patient's stay.
+- name: Review after discharge
+  trigger: Admission, discharge and transfer announces that a patient was discharged
+  actor: System
+  steps:
+  - Find the patient's inpatient appointments still in the future
+  - Flag each one needs_review and increase its revision
+  - Emit appointment.review_needed for each
+  outcome: A Scheduler decides each one, and none is lost or kept by accident.
 edgeCases:
 - id: EC-E1
   situation: A clinic with allow_overbooking on and max_overbooked_per_slot 2 books a third patient into one slot of the same practitioner.
@@ -128,6 +171,24 @@ edgeCases:
   covers:
   - BR-E2
   - AC-E5
+- id: EC-E6
+  situation: A ward books an MRI for an admitted patient.
+  behaviour: The appointment is inpatient and linked to the patient's stay; check-in at radiology opens no new encounter.
+  covers:
+  - BR-E5
+  - AC-E8
+- id: EC-E7
+  situation: Someone books an inpatient appointment for a patient who was discharged yesterday.
+  behaviour: Rejected with APPOINTMENT_NO_ACTIVE_STAY.
+  covers:
+  - BR-E6
+  - AC-E9
+- id: EC-E8
+  situation: A patient is discharged with a physiotherapy session booked for next week.
+  behaviour: The session is flagged needs_review, and a Scheduler changes it to outpatient or cancels it.
+  covers:
+  - BR-E7
+  - AC-E10
 functionalRequirements:
 - id: FR-E1
   text: The service must book appointments into a department and, optionally, a room.
@@ -149,6 +210,14 @@ functionalRequirements:
   text: The service must list a department's appointments for a day, in time order, with each patient's status.
   priority: must
   verification: test
+- id: FR-E6
+  text: The service must book appointments for admitted patients, linked to their current stay.
+  priority: must
+  verification: test
+- id: FR-E7
+  text: The service must flag a discharged patient's future inpatient appointments for review, and let a Scheduler change one to outpatient.
+  priority: must
+  verification: test
 operations:
 - name: Book an appointment
   actor: Requester
@@ -156,7 +225,7 @@ operations:
   method: POST
   path: /appointments
   success: 201
-  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language and acting representative, department, and optional room and referral
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language and acting representative, care setting (outpatient or inpatient), department, and optional room and referral
   output: the appointment, pending or booked
   errors:
   - APPOINTMENT_INVALID_TIME_RANGE
@@ -178,6 +247,7 @@ operations:
   - APPOINTMENT_REFERRAL_REQUIRED
   - APPOINTMENT_LOCATION_TAKEN
   - APPOINTMENT_OVERBOOKING_LIMIT
+  - APPOINTMENT_NO_ACTIVE_STAY
 - name: Reschedule an appointment
   actor: Requester
   description: Move the appointment to a new slot, keeping its id. Accepts a retry key.
@@ -235,7 +305,7 @@ operations:
   method: GET
   path: /departments/{id}/appointments
   success: 200
-  input: department id, date, optional practitioner and status
+  input: department id, date, and optional practitioner, status, care setting and needs_review
   output: appointments in time order with their status
   errors:
   - APPOINTMENT_INVALID_DEPARTMENT
@@ -249,12 +319,30 @@ operations:
   output: the department rules
   errors:
   - APPOINTMENT_INVALID_DEPARTMENT
+- name: Change to outpatient
+  actor: Scheduler
+  description: Change a flagged inpatient appointment to outpatient after discharge.
+  method: POST
+  path: /appointments/{id}/change-to-outpatient
+  success: 200
+  input: appointment id, revision
+  output: the outpatient appointment
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_TERMINAL_STATE
+  - APPOINTMENT_REVISION_CONFLICT
+  - APPOINTMENT_NOT_INPATIENT
 events:
 - name: appointment.encounter_linked
   description: The encounter opened at check-in was linked.
   payload:
   - appointment_id
   - encounter_id
+  - revision
+- name: appointment.review_needed
+  description: A discharged patient still has this inpatient appointment in the future.
+  payload:
+  - appointment_id
   - revision
 dependencies:
 - service: organization-service
@@ -278,6 +366,13 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: is this referral valid for this patient and department?'
+- service: adt-service
+  direction: upstream
+  reason: owns admissions and discharges
+  criticality: hard
+  contract:
+  - 'Asks: does this patient have an active stay, and what is its encounter id?'
+  - 'Receives: the patient was discharged'
 accessMatrix:
 - action: Register a walk-in
   roles:
@@ -289,6 +384,11 @@ accessMatrix:
     Front desk: none
     Clinic manager: any
   permission: appointment.configure
+- action: Change to outpatient
+  roles:
+    Front desk: any
+    Clinic manager: any
+  permission: appointment.manage
 permissions:
 - name: appointment.configure
   description: Change a department's scheduling rules.
@@ -305,6 +405,12 @@ errors:
 - code: APPOINTMENT_OVERBOOKING_LIMIT
   http: 409
   message: The practitioner already has the most appointments the department allows in that slot.
+- code: APPOINTMENT_NO_ACTIVE_STAY
+  http: 409
+  message: The patient has no active stay, so an inpatient appointment cannot be booked.
+- code: APPOINTMENT_NOT_INPATIENT
+  http: 409
+  message: Only an inpatient appointment can be changed to outpatient.
 settings:
 - name: allow_overbooking
   type: boolean per department
@@ -365,6 +471,26 @@ acceptanceCriteria:
   then: all 12 are returned in time order with their status
   verifies:
   - FR-E5
+- id: AC-E8
+  given: an admitted patient with an active stay
+  when: an MRI is booked for them as inpatient and they are checked in at radiology
+  then: the appointment carries the stay's encounter_id from booking, and check-in opens no new encounter
+  verifies:
+  - BR-E5
+  - FR-E6
+- id: AC-E9
+  given: a patient discharged yesterday
+  when: an inpatient appointment is booked for them
+  then: the request fails with APPOINTMENT_NO_ACTIVE_STAY
+  verifies:
+  - BR-E6
+- id: AC-E10
+  given: a patient with an inpatient physiotherapy session next week
+  when: they are discharged
+  then: the session is flagged needs_review, appointment.review_needed is emitted, and a Scheduler can change it to outpatient
+  verifies:
+  - BR-E7
+  - FR-E7
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit, and it never applies to patients.
@@ -374,6 +500,15 @@ decisions:
 - id: ADR-E2
   decision: The Encounter module opens the encounter; this layer only links it.
   rationale: Keeps the clinical record in one place, as FHIR separates Appointment from Encounter.
+  date: '2026-10-05'
+- id: ADR-E3
+  decision: Planned admissions are booked in the Admission, discharge and transfer module, not here.
+  rationale: What is booked is a bed and an admission date, which is that module's job. This module schedules services, including ones during a stay.
+  date: '2026-10-05'
+- id: ADR-E4
+  decision: On discharge, future inpatient appointments are flagged for review rather than cancelled.
+  rationale: Some are still needed as outpatient appointments. A person decides; nothing is lost silently.
+  alternatives: Cancel them automatically. Rejected because follow-up care can be lost without anyone noticing.
   date: '2026-10-05'
 references:
 - id: REF-E1
@@ -388,17 +523,51 @@ references:
 - id: REF-E4
   title: An overbooking scheduling model for outpatient appointments in a multi-provider clinic
   url: https://www.sciencedirect.com/science/article/pii/S2211692315000181
+- id: REF-E5
+  title: HL7 v3 ActCode, encounter classes (AMB, IMP, EMER, ...)
+  url: https://terminology.hl7.org/CodeSystem-v3-ActCode.html
+- id: REF-E6
+  title: Medicare, inpatient or outpatient hospital status
+  url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
 changelog:
+- version: 0.2.0
+  date: '2026-10-05'
+  breaking: false
+  changes:
+  - Renamed to Hospital appointments, covering admitted patients as well as outpatients (care_setting).
+  - Inpatient appointments belong to the patient's stay (BR-E5), need an active stay (BR-E6), and are flagged for review on discharge (BR-E7).
 - version: 0.1.0
   date: '2026-10-05'
   breaking: false
   changes:
   - First EHR outpatient layer.
+glossary:
+- term: Outpatient
+  definition: A patient who receives care without being formally admitted, even if they stay overnight (Medicare). HL7 class AMB.
+- term: Inpatient
+  definition: A patient formally admitted to the hospital with a doctor's order, with a stay (HL7 class IMP).
+- term: Stay
+  definition: An inpatient's admission, recorded as one encounter from admission to discharge.
 ---
+Hospital appointments build on the
+[clinical appointment rules](/docs/healthcare/appointment), which build on the
+[core Appointment specification](/docs/core/appointment). This layer adds how a
+hospital schedules care, for outpatients and for patients who are admitted.
 
-Outpatient appointments inherit the [clinical appointment](/docs/healthcare/appointment)
-rules, which inherit the [core](/docs/core/appointment). This layer adds how a
-hospital's clinics run their day.
+## Outpatient or inpatient decides which encounter the appointment belongs to
+
+An outpatient comes in for the appointment and leaves; Medicare counts them as
+an outpatient even if they stay overnight. Their check-in opens a new
+encounter (BR-E2). An admitted patient already has one encounter for their
+whole stay, so an MRI or theatre slot booked for them belongs to that stay and
+opens nothing new (BR-E5).
+
+## Discharge doesn't silently cancel what was booked
+
+When a patient goes home with an inpatient appointment still ahead, such as
+physiotherapy next week, the appointment is flagged for review (BR-E7). A
+Scheduler then changes it to outpatient or cancels it. Booking the admission
+itself belongs to the Admission, discharge and transfer module.
 
 ## A clinic can overbook a doctor, never a patient
 
@@ -408,12 +577,5 @@ overbook and by how much (BR-4). A patient can still only be in one place.
 
 ## The room is booked as well as the doctor
 
-Two patients cannot share an examination room at the same time (BR-E1), so a
+Two patients can't share an examination room at the same time (BR-E1), so a
 booking can name a room and the room is checked like a participant.
-
-## Check-in opens the clinical record
-
-When the patient checks in, the Encounter module opens an encounter and the
-appointment links to it (BR-E2). From then on, care is documented on the
-encounter. A walk-in patient gets the same: an appointment that starts now,
-checked in straight away (BR-E4).
