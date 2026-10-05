@@ -85,6 +85,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `src/lib/source.ts` | `getLLMText()` joins spec markdown + prose for `llms.txt` routes. |
 | `src/proxy.ts` | Serves markdown for `/docs/<page>.md` and `Accept: text/markdown`. Must stay in `src/`, or Next.js skips it. |
 | `src/lib/shared.ts` | `siteUrl`: this deployment's address, from `NEXT_PUBLIC_SITE_URL`, else Vercel's production domain, else localhost. |
+| `scripts/check-specs.ts` | `pnpm check:specs`: validates every module page (schema, inheritance, ids, error codes, dashes, verification coverage). |
 | `src/lib/remark-site-url.ts` | Replaces `%SITE_URL%` (https URL) and `%SITE_HOST%` (hostname, for allowlists) in MDX at compile time, in the HTML and in the AI markdown. Changing it needs a dev server restart. |
 
 ### How projects use the Knowledge Graph
@@ -276,10 +277,12 @@ module and layer.
      meant as text (`'0'`). An unquoted colon in a description broke the build
      once.
 6. **Validate** before reporting done:
-   - Every module page parses against the schema, and inheritance resolves for
-     each layer.
-   - Every id in a `verifies` or `covers` list exists.
-   - The traceability matrix of the finished page has no "not verified" rows.
+   - `pnpm check:specs` reports no errors, and no warning for the page you
+     finished. It checks every module page: the schema, inheritance chains,
+     duplicate ids, `verifies` and `covers` ids that don't exist, error codes
+     raised but not defined, em and en dashes, and rules, requirements and
+     constraints that no acceptance criterion verifies (warnings;
+     `--strict` makes them errors).
    - `pnpm exec tsc --noEmit` passes.
    - The module page, a few section pages and their `.md` render on the dev
      server. Use the user's running server; if none is running, validate
@@ -501,14 +504,13 @@ scaffold's own pages fail validation.
   still have unverified items in the traceability matrix (healthcare 8,
   dental 19, finance 10 as of 0.6.0 of core). Follow
   [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
-- The validation in step 6 is run by hand. A `scripts/check-specs.ts` that
-  does it (schema, dangling ids, unverified items) would make it repeatable
-  and could run in CI.
+- `pnpm check:specs` isn't run in CI yet. Running it with `--strict` on every
+  pull request would stop unverified items from coming back.
 
 - Only one module exists (`appointment`). The schema has not been stress-tested
   against a second, structurally different concept.
-- No validator yet for cross-references (e.g. an endpoint raising an error code
-  absent from `errors`, or a dependency naming a service with no page).
+- `pnpm check:specs` validates ids and error codes, but not dependencies that
+  name a service with no page.
 - Company-layer overrides are designed for but not implemented. No merge or
   precedence semantics exist yet for a private 20% layer on top of a public
   module.

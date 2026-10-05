@@ -9,39 +9,42 @@
     "start": "next start",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "check:specs": "tsx scripts/check-specs.ts"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.37",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
+    "ai": "^7.0.34",
+    "class-variance-authority": "^0.7.1",
     "cnfast": "^0.0.8",
+    "flexsearch": "^0.8.212",
     "fumadocs-core": "16.12.1",
     "fumadocs-mdx": "15.2.0",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.12.1",
+    "hast-util-to-jsx-runtime": "^2.3.6",
     "lucide-react": "^1.25.0",
     "next": "16.2.11",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "flexsearch": "^0.8.212",
-    "@openrouter/ai-sdk-provider": "^3.0.0",
-    "ai": "^7.0.34",
-    "zod": "^4.4.3",
-    "@ai-sdk/react": "^4.0.37",
-    "class-variance-authority": "^0.7.1",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-rehype": "^11.1.2",
-    "hast-util-to-jsx-runtime": "^2.3.6",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/hast": "^3.0.5",
     "@types/mdx": "^2.0.14",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "oxlint": "^1.74.0",
     "postcss": "^8.5.21",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "oxlint": "^1.74.0",
-    "@types/hast": "^3.0.5"
+    "yaml": "^2.9.1"
   }
 }
