@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.8.0
+version: 0.9.0
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -52,11 +52,14 @@ assumptions:
 - id: AS-6
   text: Calendar cancels the active appointments on a calendar, with a reason, before it closes that calendar.
   rationale: Every appointment belongs to one calendar. A closed calendar with live appointments would leave them with nowhere to happen.
+- id: AS-7
+  text: Calendar shows booked appointments as busy and pending ones as tentatively busy, using the status in the events this module emits.
+  rationale: iCalendar defines a BUSY-TENTATIVE free/busy type for time held by tentative events, so other scheduling tools can see it without treating it as confirmed.
 glossary:
 - term: Slot
   definition: A half-open time range [start, end) that an appointment reserves. The end instant is not part of the slot.
 - term: Active appointment
-  definition: An appointment in status pending or booked. Only active appointments hold their slot.
+  definition: 'An appointment that holds its slot: booked, or pending while pending_holds_slot is on.'
 - term: No-show
   definition: An appointment that a participant did not attend, recorded after its start time.
 - term: Reminder offset
@@ -244,7 +247,7 @@ businessRules:
   text: Rescheduling keeps the appointment id and records the previous times in the appointment's history. It never creates a new appointment.
   rationale: Attendance and no-show statistics must follow one appointment across time changes. Cancel-and-rebook would count every reschedule as a cancellation.
 - id: BR-4
-  text: A participant cannot have two active appointments (pending or booked) whose slots overlap. Slots are half-open, so an appointment ending at 10:00 and one starting at 10:00 do not overlap.
+  text: A participant cannot have two active appointments whose slots overlap. Slots are half-open, so an appointment ending at 10:00 and one starting at 10:00 do not overlap.
   rationale: Double booking is a data-integrity failure, not a user preference, so it must hold under concurrent requests. Treating the end as inclusive would reject every back-to-back schedule.
 - id: BR-5
   text: 'Completed and cancelled are terminal: the appointment never changes again. A no-show can change only to completed, to correct a wrong record (BR-19).'
@@ -283,8 +286,8 @@ businessRules:
   text: An appointment can be rescheduled, updated, given new participants or cancelled only while it is active and before its end. After the end, only close-out is allowed.
   rationale: Once an appointment is over, what's left is to record what happened. Moving or cancelling it afterwards would rewrite history.
 - id: BR-17
-  text: When requires_confirmation is on, a booking starts as pending. A pending appointment holds its slot but gets no reminders. It becomes booked when confirmed, and is cancelled with the reason "not confirmed" if confirm_by passes first.
-  rationale: Cal.com holds bookings that need confirmation as pending, and iCalendar has a TENTATIVE status. Holding the slot means a confirmation never fails because someone else took it.
+  text: When requires_confirmation is on, a booking starts as pending and gets no reminders. While pending_holds_slot is on, it holds its slot. It becomes booked when confirmed, and is cancelled with the reason "not confirmed" if confirm_by passes first.
+  rationale: Cal.com holds bookings that need confirmation as pending, and iCalendar has a TENTATIVE status. Holding the slot means a confirmation never fails because someone else took it; turning it off keeps the slot open to others, at the cost that confirming can fail.
 - id: BR-18
   text: A cancellation made within late_cancellation_window before the start is marked as a late cancellation.
   rationale: Late cancellations cost a booked slot that can rarely be refilled. Industry layers use the mark, for example to charge a fee or record a code.
@@ -352,6 +355,9 @@ validations:
 - field: bulk filter
   rule: 'exactly one of: a participant with a time window, or a series'
   error: APPOINTMENT_INVALID_BULK_FILTER
+- field: bulk change
+  rule: 'exactly one of: a new time and weekday, or a shift'
+  error: APPOINTMENT_INVALID_BULK_CHANGE
 stateMachine:
   initial: booked
   states:
@@ -364,7 +370,7 @@ stateMachine:
   - from: pending
     to: booked
     trigger: confirm
-    guard: confirm_by has not passed, revision matches
+    guard: confirm_by has not passed, revision matches, and the slot is still free when pending_holds_slot is off
   - from: pending
     to: pending
     trigger: reschedule or update
@@ -519,6 +525,15 @@ workflows:
   - Set anonymised_at, increase revision and add the change to history
   - Emit appointment.anonymised for each appointment changed
   outcome: The person is no longer identifiable from their appointments, and the records still add up.
+- name: Reschedule in bulk
+  actor: Scheduler
+  trigger: A Scheduler moves many appointments at once, for example when a provider changes the day they work
+  steps:
+  - Find the active appointments that match the selection
+  - 'Work out each new slot: the new time and weekday, or the shift applied to its wall-clock times'
+  - Reschedule each one separately, as in Reschedule an appointment, with its own checks and events
+  - Return the result for each appointment, including any that could not be moved
+  outcome: Each appointment keeps its id, calendar and history, and none moves into a conflict.
 edgeCases:
 - id: EC-1
   situation: Two requests book overlapping slots for the same participant at the same moment.
@@ -737,6 +752,18 @@ edgeCases:
   behaviour: The request succeeds and changes nothing.
   covers:
   - FR-14
+- id: EC-38
+  situation: A provider's Tuesday clinic moves to Thursday, and one of the moved appointments would clash with the patient's other appointment.
+  behaviour: All the others move. The clashing one stays where it is and is reported with APPOINTMENT_SLOT_TAKEN.
+  covers:
+  - FR-24
+  - AC-49
+- id: EC-39
+  situation: pending_holds_slot is off, and someone books the slot of a pending appointment before it is confirmed.
+  behaviour: The new booking succeeds. Confirming the pending one then fails with APPOINTMENT_SLOT_TAKEN.
+  covers:
+  - BR-17
+  - AC-50
 functionalRequirements:
 - id: FR-1
   text: The service must let an authorised actor book an appointment for two or more participants.
@@ -830,6 +857,10 @@ functionalRequirements:
   text: The service must record attendance for each participant when an appointment is closed out.
   priority: must
   verification: test
+- id: FR-24
+  priority: must
+  verification: test
+  text: The service must let a Scheduler reschedule many active appointments at once, selected like a bulk cancel, either to a new time and weekday or by shifting each one by a fixed amount, checking each appointment separately and reporting the result for each.
 nonFunctionalRequirements:
 - category: availability
   text: Read paths stay available when downstream consumers are unavailable, and downstream outages never block a booking.
@@ -943,6 +974,10 @@ settings:
   type: integer
   default: '100'
   description: Most results one page can hold. Stripe uses the same 1 to 100 range for its lists.
+- name: pending_holds_slot
+  type: boolean
+  default: 'true'
+  description: Whether a pending appointment holds its slot (BR-17). Cal.com has the same switch, on by default.
 acceptanceCriteria:
 - id: AC-1
   given: a requester with appointment.write and two valid participants
@@ -1254,6 +1289,18 @@ acceptanceCriteria:
   then: appointment.cancelled carries late_cancellation = true
   verifies:
   - BR-18
+- id: AC-49
+  given: four appointments a participant has on Tuesdays, one of which would clash on Thursday
+  when: a Scheduler reschedules them in bulk with a shift of +2 days
+  then: three move to Thursday, each with its own appointment.rescheduled event, and the fourth is reported with APPOINTMENT_SLOT_TAKEN and unchanged
+  verifies:
+  - FR-24
+- id: AC-50
+  given: pending_holds_slot off and a pending appointment
+  when: another booking takes the same slot and then the pending one is confirmed
+  then: the other booking succeeds and the confirmation fails with APPOINTMENT_SLOT_TAKEN
+  verifies:
+  - BR-17
 events:
 - name: appointment.booked
   description: A new appointment was created, as pending or booked.
@@ -1354,7 +1401,7 @@ permissions:
 - name: appointment.write
   description: Book, reschedule, update and cancel appointments the caller takes part in, until self_service_cutoff. A host can also confirm and change participants.
 - name: appointment.manage
-  description: 'Act on any appointment: everything appointment.write allows, plus confirm, bulk cancel, complete, and record or correct no-shows (Scheduler role).'
+  description: 'Act on any appointment: everything appointment.write allows, plus confirm, bulk cancel and reschedule, complete, and record or correct no-shows (Scheduler role).'
 - name: appointment.erase
   description: Erase a person's personal data from their appointments. Separate from appointment.manage because erasure can't be undone.
 accessMatrix:
@@ -1412,6 +1459,13 @@ accessMatrix:
   note: Own appointments only until self_service_cutoff. System cancels when an upstream policy requires it or a pending appointment expires.
   permission: appointment.write
 - action: Cancel in bulk
+  roles:
+    Requester: none
+    Participant: none
+    Scheduler: any
+    System: none
+  permission: appointment.manage
+- action: Reschedule in bulk
   roles:
     Requester: none
     Participant: none
@@ -1575,6 +1629,9 @@ errors:
 - code: APPOINTMENT_HOST_REQUIRED
   http: 409
   message: The appointment's last host can't be removed. Add another host first.
+- code: APPOINTMENT_INVALID_BULK_CHANGE
+  http: 422
+  message: Give either a new time and weekday, or a shift. Not both, and not neither.
 dependencies:
 - service: calendar-service
   direction: upstream
@@ -1633,9 +1690,9 @@ decisions:
   alternatives: One appointment with a recurrence rule, as iCalendar does with RRULE. Rejected because changing or cancelling one occurrence then needs exceptions throughout this lifecycle.
   date: '2026-10-05'
 - id: ADR-9
-  decision: A pending appointment holds its slot.
-  rationale: If it didn't, confirmation could fail because someone booked the slot meanwhile, which is worse than holding a slot that may expire.
-  alternatives: Hold nothing until confirmed. Rejected for the reason above.
+  decision: A pending appointment holds its slot by default, and a deployment can turn that off (pending_holds_slot).
+  rationale: If it holds nothing, confirmation can fail because someone booked the slot meanwhile. Some businesses prefer to keep slots open until they accept, so Cal.com makes this a switch, and so does this module.
+  alternatives: Always hold, or never hold. Rejected because practice differs between businesses.
   date: '2026-10-05'
 - id: ADR-10
   decision: Attendance is recorded per participant; the appointment status still says how it ended.
@@ -1691,9 +1748,7 @@ risks:
   risk: Free-text notes collect sensitive data the deployment didn't plan for.
   impact: Data protection obligations the deployment isn't meeting.
   mitigation: Classify notes as the most sensitive category the deployment handles (Privacy and retention), and erase them with other personal fields.
-openQuestions:
-- Should a pending appointment also show as busy in the participants' calendars, or only block overlaps in this module?
-- Should moving many appointments at once (bulk reschedule) be supported, as well as bulk cancel?
+openQuestions: []
 references:
 - id: REF-1
   title: ISO/IEC/IEEE 29148:2018, Requirements engineering
@@ -1794,7 +1849,19 @@ references:
   title: ISO/IEC/IEEE 29148, characteristics of individual requirements
   url: https://www.modernrequirements.com/blogs/iso-29148-explained/
   note: Necessary, implementation free, unambiguous, singular, feasible, verifiable and more.
+- id: REF-32
+  title: Cal.com, require confirmation for bookings
+  url: https://cal.com/help/event-types/how-to-requires
+- id: REF-33
+  title: Acuity Scheduling, booking appointments for clients (bulk reschedule)
+  url: https://help.acuityscheduling.com/hc/en-us/articles/16676870828685-Booking-appointments-for-clients
 changelog:
+- version: 0.9.0
+  date: '2026-10-05'
+  breaking: false
+  changes:
+  - Resolved both open questions. A pending appointment holds its slot unless pending_holds_slot is off (ADR-9), and Calendar shows it as tentatively busy (AS-7).
+  - 'Added Reschedule in bulk: by a new time and weekday, or by a shift, each appointment checked separately (FR-24).'
 - version: 0.8.0
   date: '2026-10-05'
   breaking: false
@@ -1917,6 +1984,7 @@ operations:
   - APPOINTMENT_NOT_FOUND
   - APPOINTMENT_NOT_PENDING
   - APPOINTMENT_REVISION_CONFLICT
+  - APPOINTMENT_SLOT_TAKEN
 - name: Reschedule an appointment
   actor: Requester
   description: Move the appointment to a new slot, keeping its id. Accepts a retry key.
@@ -2012,6 +2080,18 @@ operations:
   - APPOINTMENT_CANCEL_REASON_REQUIRED
   - APPOINTMENT_INVALID_TIME_RANGE
   - APPOINTMENT_INVALID_BULK_FILTER
+- name: Reschedule in bulk
+  actor: Scheduler
+  description: Move many appointments at once. Each one is checked and moved separately, keeping its id and calendar.
+  method: POST
+  path: /appointments/bulk-reschedule
+  success: 200
+  input: the selection (a participant with a time window, or a series from a given time), and either a new time and weekday or a shift such as +2 days or -30 minutes
+  output: 'for each appointment: its new revision, or the error that stopped it'
+  errors:
+  - APPOINTMENT_INVALID_BULK_FILTER
+  - APPOINTMENT_INVALID_TIME_RANGE
+  - APPOINTMENT_INVALID_BULK_CHANGE
 - name: Complete an appointment
   actor: Scheduler
   description: Mark the appointment completed after it started, with attendance per participant.
