@@ -535,9 +535,9 @@ opens and closes. The user found a folder name that both links and toggles
 confusing. Every folder with an `index.mdx` lists `"index"` first in its
 `meta.json`.
 
-**Which spec folders start open.** A module folder opens by default; of its
-groups, only the first (Functions) does, and the rest start collapsed.
-Fumadocs also opens whichever folder holds the current page.
+**No sidebar folder starts open.** The user wants every folder collapsed by
+default, including the module and Functions. Fumadocs still opens whichever
+folder holds the current page.
 
 **Never run `pnpm build` while a dev server is running.** Both write to `.next`,
 and the build clobbers the dev chunks, producing misleading

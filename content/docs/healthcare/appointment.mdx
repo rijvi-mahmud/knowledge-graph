@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -15,10 +15,17 @@ scope:
 - Language assistance and virtual appointments
 - Exchange with other systems as HL7 FHIR Appointment
 - Jurisdiction settings for the United States and the European Union
+- Disability accommodations
+- A patient's right to a copy of their appointment data
+- Automated reminder texts and calls in the United States
+- Where a virtual appointment may be held
 nonGoals:
 - The clinical record of the visit itself. That belongs to the Encounter module.
 - Insurance eligibility and billing, which differ by country and payer.
 - Patient registration and identifiers. Identity owns them; this layer only uses them.
+- Charging fees for missed or late-cancelled appointments. Billing decides, using appointment.no_show and the late cancellation flag on appointment.cancelled.
+- Detecting and reporting data breaches, which belongs to the Security module.
+- Maintaining code sets. This layer only stores codes and checks them against the configured code system.
 actors:
 - name: Patient
   description: The person receiving care. A participant with the role patient.
@@ -58,11 +65,11 @@ dataModel:
 - name: service_type
   type: code
   required: false
-  description: The service to be performed, such as a cardiology consultation (FHIR Appointment.serviceType).
+  description: The service to be performed, coded with service_code_system, such as a cardiology consultation (FHIR Appointment.serviceType).
 - name: reason
   type: code or text
   required: false
-  description: Why the appointment was booked. Clinical, so it is health information (FHIR Appointment.reason).
+  description: Why the appointment was booked, coded with diagnosis_code_system. Clinical, so it is health information (FHIR Appointment.reason).
 - name: priority
   type: integer
   required: false
@@ -93,25 +100,34 @@ dataModel:
   required: false
   description: The identifier types used at check-in, such as name and date_of_birth.
   constraints: at least 2 when checked in
+- name: accommodation_needs
+  type: string[]
+  required: false
+  description: Disability accommodations the patient needs, such as a sign-language interpreter or an accessible room.
+- name: patient_location
+  type: string
+  required: false
+  description: 'Where the patient will be during a virtual appointment: a US state or an EU member state.'
+  constraints: required for virtual appointments
 businessRules:
 - id: BR-H1
   text: Every appointment has at least one participant with the role patient, and at least one with the role practitioner.
   rationale: A clinical appointment is care given to a patient by a practitioner. FHIR models both as participants of an Appointment.
 - id: BR-H2
-  text: Check-in verifies the patient's identity with at least two identifiers, such as name and date of birth. A room or location is never one of them.
-  rationale: Wrong-patient errors happen at every stage of care. The Joint Commission requires two identifiers (NPSG.01.01.01).
+  text: At check-in, the patient's identity is verified with at least two identifiers, such as name and date of birth. A room or location is never one of them.
+  rationale: The Joint Commission requires at least two identifiers when providing care, treatment and services, and never the room number (NPSG.01.01.01). WHO Patient Safety Solution 2 recommends the same before care is given. Verifying at check-in matches the visit, and everything later recorded on it, to the right person.
 - id: BR-H3
   text: 'Reminders and other messages to patients contain only what''s needed to attend: the patient''s name, the date, time and place, and the provider''s name and number. Never the reason, diagnosis or a service that reveals a condition.'
-  rationale: 'Messages are seen by others: postcards, shared voicemail, lock screens. HHS guidance allows reminders but warns against disclosing treatment or health details.'
+  rationale: HHS guidance permits reminders but says providers "should take care to limit the amount of information disclosed", for example only "name and number and other information necessary to confirm an appointment" (FAQ 198). GDPR requires data to be "limited to what is necessary" (Article 5(1)(c)). Messages reach shared phones, postcards and lock screens.
 - id: BR-H4
   text: If a patient asked to be contacted by another means or at another address, every appointment message uses it.
-  rationale: Under 45 CFR 164.522(b) providers must accommodate reasonable requests without asking why. Applying it everywhere protects patients for whom an ordinary reminder could be unsafe.
+  rationale: In the United States, providers must accommodate reasonable requests to communicate by alternative means or at alternative locations, without asking why (45 CFR 164.522(b)). In the EU, GDPR requires appropriate security and confidentiality of personal data (Article 5(1)(f)). For some patients an ordinary reminder could be unsafe.
 - id: BR-H5
-  text: A personal representative can book and manage appointments for the patient they represent. Every action they take records them as acting_representative.
-  rationale: HIPAA treats a personal representative as the patient (45 CFR 164.502(g)). Recording who acted keeps the record accurate.
+  text: A personal representative can book and manage appointments for the patient they represent, when Identity confirms they may act for the patient for this appointment. Every action they take records them as acting_representative.
+  rationale: HIPAA treats a personal representative as the patient (45 CFR 164.502(g)), but not for a minor's care the minor could consent to themselves or that a parent agreed to keep confidential (164.502(g)(3)), and state and member state law add their own rules. That is a judgment about the person, so Identity makes it and this module applies the answer.
 - id: BR-H6
   text: When a patient needs an interpreter, the appointment records the language so a qualified interpreter can be arranged at no cost to the patient.
-  rationale: US covered entities must offer qualified interpreters free of charge (45 CFR 92.201). Recording the need at booking is what makes that possible on the day.
+  rationale: In the United States, covered entities must offer qualified interpreters free of charge (45 CFR 92.201). In the EU, language assistance depends on member state law. Recording the need at booking is what makes it possible on the day, everywhere.
 - id: BR-H7
   text: Every view and every change of an appointment is logged with who, when and what.
   rationale: HIPAA requires audit controls that record activity in systems holding electronic health information (45 CFR 164.312(b)), and GDPR Article 32 requires security appropriate to the risk. Core history covers changes, not views.
@@ -127,6 +143,21 @@ businessRules:
 - id: BR-11
   text: A request to erase a patient's appointment data is refused while record_retention applies, because the appointment and its history are part of the medical record. When retention ends, personal fields are erased as the core Appointment specification describes.
   rationale: HIPAA gives no right to erasure, and US hospitals must keep records for at least 5 years (42 CFR 482.24(b)(1)), longer in many states. In the EU, GDPR Article 17(3)(c) lets health data be kept for care under Article 9(2)(h). Erasing on request would break the record.
+- id: BR-H11
+  text: When a patient needs a disability accommodation, such as a sign-language interpreter or an accessible room, the appointment records it so it can be arranged at no cost to the patient.
+  rationale: In the United States, covered entities must provide auxiliary aids and services at no cost so communication with people with disabilities is as effective as with others (45 CFR 92.202). In the EU this depends on member state law.
+- id: BR-H12
+  text: 'A patient, or their personal representative, can obtain a copy of their appointment data. The request is answered within access_request_deadline: 30 days in the United States, extendable once by 30 days with written notice; one month in the EU, extendable by two months. In the EU the first copy is free.'
+  rationale: HIPAA gives individuals the right to inspect and obtain a copy of their health information (45 CFR 164.524). GDPR gives a right of access and a free first copy (Article 15) within one month (Article 12(3)).
+- id: BR-H13
+  text: In the United States, automated reminder texts and calls go only to the number the patient provided, name the provider and how to contact them, are limited to one a day and three a week per patient, keep texts to 160 characters and calls to one minute, and offer an opt-out in every message, honoured immediately.
+  rationale: These are the conditions under which healthcare messages to mobile phones are exempt from prior consent (47 CFR 64.1200(a)(9)(iv)). Breaking any of them turns a reminder into an unlawful call or text.
+- id: BR-H14
+  text: A virtual appointment records where the patient will be. In the United States, the practitioner must be licensed or legally permitted to practise in the state where the patient is located.
+  rationale: 'HHS: providers "must ... be licensed or legally permitted to practice in the state where the patient is located". In the EU, telemedicine is considered provided in the member state where the provider is established (Directive 2011/24/EU, Article 3(d)), so the patient''s location is recorded but not checked against a licence.'
+- id: BR-H15
+  text: reason and service_type are coded with the configured code systems, and a code must be valid in the release in effect on the appointment date.
+  rationale: 'HIPAA adopts ICD-10-CM for diagnoses and HCPCS with CPT-4 for services (45 CFR 162.1002). In Europe, coding is set nationally: WHO''s ICD-11 has been the global standard since 1 January 2022, but countries are still moving from ICD-10. Codes are revised over time, so a code is checked against the release in force on the day.'
 validations:
 - field: participants
   rule: at least one participant with the role patient and one with the role practitioner
@@ -137,6 +168,15 @@ validations:
 - field: priority
   rule: an integer from 1 to 9
   error: APPOINTMENT_INVALID_PRIORITY
+- field: reason
+  rule: a code valid in diagnosis_code_system on the appointment date
+  error: APPOINTMENT_INVALID_CODE
+- field: service_type
+  rule: a code valid in service_code_system on the appointment date
+  error: APPOINTMENT_INVALID_CODE
+- field: patient_location
+  rule: in the United States, the practitioner is licensed or permitted to practise there
+  error: APPOINTMENT_PRACTITIONER_NOT_LICENSED
 stateMachine:
   initial: booked
   states:
@@ -270,6 +310,42 @@ edgeCases:
   covers:
   - BR-H10
   - AC-H8
+- id: EC-H9
+  situation: A deaf patient books an appointment.
+  behaviour: The appointment records a sign-language interpreter in accommodation_needs, and appointment.booked carries it.
+  covers:
+  - BR-H11
+  - AC-H14
+- id: EC-H10
+  situation: In the United States, a patient has three appointments this week, each with reminders.
+  behaviour: At most one reminder text or call is sent a day and three a week; the rest are skipped.
+  covers:
+  - BR-H13
+  - AC-H16
+- id: EC-H11
+  situation: A patient replies STOP to a reminder text.
+  behaviour: No further automated texts are sent to that number.
+  covers:
+  - BR-H13
+  - AC-H17
+- id: EC-H12
+  situation: A practitioner licensed only in New York is booked for a video visit with a patient in New Jersey.
+  behaviour: Rejected with APPOINTMENT_PRACTITIONER_NOT_LICENSED, unless the practitioner is permitted there.
+  covers:
+  - BR-H14
+  - AC-H18
+- id: EC-H13
+  situation: A booking uses a diagnosis code that was retired before the appointment date.
+  behaviour: Rejected with APPOINTMENT_INVALID_CODE.
+  covers:
+  - BR-H15
+  - AC-H19
+- id: EC-H14
+  situation: A parent tries to view a teenager's appointment for care the teenager consented to on their own.
+  behaviour: Identity answers that the parent may not act for this appointment, so the parent cannot see or change it.
+  covers:
+  - BR-H5
+  - AC-H20
 functionalRequirements:
 - id: FR-H1
   text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
@@ -299,6 +375,26 @@ functionalRequirements:
   text: The service must export any appointment as an HL7 FHIR R5 Appointment resource.
   priority: must
   verification: test
+- id: FR-H8
+  text: The service must record disability accommodations and include them in appointment.booked.
+  priority: must
+  verification: test
+- id: FR-H9
+  text: The service must accept requests for a copy of a patient's appointment data and track them against access_request_deadline.
+  priority: must
+  verification: test
+- id: FR-H10
+  text: In the United States, the service must apply the automated message conditions of BR-H13 to every reminder text and call.
+  priority: must
+  verification: test
+- id: FR-H11
+  text: The service must check a virtual appointment's practitioner against the patient's location where the jurisdiction requires it.
+  priority: must
+  verification: test
+- id: FR-H12
+  text: The service must validate coded reason and service_type against the configured code systems.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Only people involved in the patient's care, or with a role that needs it, can see clinical fields such as reason and service type.
@@ -322,8 +418,16 @@ settings:
   description: How long appointment data is kept as part of the medical record. At least 5 years for US hospitals (42 CFR 482.24(b)(1)); set per state or EU member state law. Required.
 - name: check_in_window
   type: duration
-  default: 2h
-  description: How long before the start a patient can check in.
+  description: How long before the start a patient can check in. No standard sets this, so each department chooses it. Required.
+- name: access_request_deadline
+  type: duration
+  description: 'How long to answer a request for a copy of appointment data. Defaults by jurisdiction: 30 days in the US (45 CFR 164.524), one month in the EU (GDPR Article 12(3)).'
+- name: diagnosis_code_system
+  type: code system
+  description: The code system for reason. ICD-10-CM in the United States (45 CFR 162.1002); set per member state in the EU, such as ICD-10 or ICD-11.
+- name: service_code_system
+  type: code system
+  description: The code system for service_type. HCPCS with CPT-4 in the United States (45 CFR 162.1002); set per member state in the EU.
 acceptanceCriteria:
 - id: AC-H1
   given: a booking with two practitioners and no patient
@@ -410,6 +514,53 @@ acceptanceCriteria:
   then: appointment data is encrypted at rest and in transit
   verifies:
   - CON-H1
+- id: AC-H14
+  given: a patient who needs a sign-language interpreter
+  when: the appointment is booked with that in accommodation_needs
+  then: appointment.booked carries the accommodation
+  verifies:
+  - BR-H11
+  - FR-H8
+- id: AC-H15
+  given: jurisdiction us
+  when: a patient requests a copy of their appointment data
+  then: the request is accepted with a due date 30 days later, and a request from someone who is neither the patient nor their representative fails with APPOINTMENT_NOT_AUTHORISED_FOR_PATIENT
+  verifies:
+  - BR-H12
+  - FR-H9
+- id: AC-H16
+  given: jurisdiction us and a patient who already received one automated reminder today
+  when: another reminder becomes due today
+  then: it is not sent as a text or call
+  verifies:
+  - BR-H13
+  - FR-H10
+- id: AC-H17
+  given: a patient who opted out of automated texts
+  when: their next reminder becomes due
+  then: no text is sent
+  verifies:
+  - BR-H13
+- id: AC-H18
+  given: jurisdiction us, a practitioner licensed only in New York, and a virtual appointment with patient_location New Jersey
+  when: it is booked
+  then: the request fails with APPOINTMENT_PRACTITIONER_NOT_LICENSED
+  verifies:
+  - BR-H14
+  - FR-H11
+- id: AC-H19
+  given: a diagnosis code not valid on the appointment date
+  when: it is used as reason
+  then: the request fails with APPOINTMENT_INVALID_CODE
+  verifies:
+  - BR-H15
+  - FR-H12
+- id: AC-H20
+  given: Identity answers that a parent may not act for their child on a given appointment
+  when: the parent tries to view or change it
+  then: the request is refused and nothing is shown or changed
+  verifies:
+  - BR-H5
 operations:
 - name: Book an appointment
   actor: Requester
@@ -417,7 +568,7 @@ operations:
   method: POST
   path: /appointments
   success: 201
-  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language and acting representative
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative
   output: the appointment, pending or booked
   errors:
   - APPOINTMENT_INVALID_TIME_RANGE
@@ -435,6 +586,8 @@ operations:
   - APPOINTMENT_IDEMPOTENCY_KEY_REUSED
   - APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
   - APPOINTMENT_INVALID_PRIORITY
+  - APPOINTMENT_INVALID_CODE
+  - APPOINTMENT_PRACTITIONER_NOT_LICENSED
 - name: Erase a participant's personal data
   actor: Scheduler
   description: Erase personal fields as BR-11 describes. Refused while record_retention applies.
@@ -491,6 +644,16 @@ operations:
   output: access log entries
   errors:
   - APPOINTMENT_NOT_FOUND
+- name: Request a copy of appointment data
+  actor: Patient
+  description: A patient or their representative asks for a copy of their appointment data. Answered within access_request_deadline.
+  method: POST
+  path: /appointment-access-requests
+  success: 202
+  input: the patient, and who is asking
+  output: accepted; the copy is delivered when ready
+  errors:
+  - APPOINTMENT_NOT_AUTHORISED_FOR_PATIENT
 events:
 - name: appointment.checked_in
   description: The patient arrived and was verified.
@@ -512,12 +675,11 @@ permissions:
 accessMatrix:
 - action: Check in
   roles:
-    Patient: If self check-in
+    Patient: none
     Practitioner: none
     Front desk: any
     Privacy officer: none
   permission: appointment.check_in
-  note: A deployment can offer self check-in, which still needs two identifiers (BR-H2).
 - action: Mark entered in error
   roles:
     Patient: none
@@ -527,12 +689,19 @@ accessMatrix:
   permission: appointment.manage
 - action: Read the access log
   roles:
-    Patient: own
+    Patient: none
     Practitioner: none
     Front desk: none
     Privacy officer: any
   permission: appointment.audit
-  note: Patients can see who accessed their own appointments.
+- action: Request a copy of appointment data
+  roles:
+    Patient: own
+    Practitioner: none
+    Front desk: none
+    Privacy officer: none
+  permission: appointment.read
+  note: A personal representative can request for the patient they represent (BR-H5).
 errors:
 - code: APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
   http: 422
@@ -549,6 +718,15 @@ errors:
 - code: APPOINTMENT_RETENTION_REQUIRED
   http: 409
   message: This data is part of the medical record and must be kept until record_retention ends.
+- code: APPOINTMENT_INVALID_CODE
+  http: 422
+  message: The code is not valid in the configured code system on the appointment date.
+- code: APPOINTMENT_PRACTITIONER_NOT_LICENSED
+  http: 422
+  message: The practitioner isn't licensed or permitted to practise where the patient will be.
+- code: APPOINTMENT_NOT_AUTHORISED_FOR_PATIENT
+  http: 403
+  message: Only the patient or their personal representative can request this.
 personalData:
 - field: reason
   category: health data
@@ -574,6 +752,14 @@ personalData:
   category: personal
   purpose: Showing who accessed health data
   retention: record_retention
+- field: accommodation_needs
+  category: health data
+  purpose: Arranging accommodations; can reveal a disability
+  retention: record_retention
+- field: patient_location
+  category: personal
+  purpose: Checking where a virtual appointment may lawfully be held
+  retention: record_retention
 risks:
 - id: RISK-H1
   risk: A reminder reveals a sensitive condition to someone else.
@@ -597,8 +783,11 @@ decisions:
   decision: One jurisdiction setting, with explicit settings for anything that varies inside a jurisdiction.
   rationale: Retention differs by US state and EU member state, so the jurisdiction alone cannot decide it.
   date: '2026-10-05'
-openQuestions:
-- How should minors' consent and confidentiality be represented, given that the rules differ by US state and EU member state?
+- id: ADR-H4
+  decision: Whether someone may act for a patient, including for minors, is Identity's decision; this module asks for each appointment.
+  rationale: The rules depend on the patient's age, the kind of care and US state or EU member state law. Deciding them here would copy another module's job.
+  date: '2026-10-06'
+openQuestions: []
 references:
 - id: REF-H1
   title: 45 CFR 160.103, HIPAA definitions
@@ -620,7 +809,8 @@ references:
   url: https://www.law.cornell.edu/cfr/text/45/92.201
 - id: REF-H7
   title: HHS FAQ 198, leaving messages and appointment reminders
-  url: https://www.hhs.gov/hipaa/for-professionals/faq/198/may-health-care-providers-leave-messages/index.html
+  url: https://web.archive.org/web/2025/https://www.hhs.gov/hipaa/for-professionals/faq/198/may-health-care-providers-leave-messages/index.html
+  note: Read from the Internet Archive; hhs.gov blocks automated access.
 - id: REF-H8
   title: GDPR Article 9, special categories of personal data
   url: https://gdpr-info.eu/art-9-gdpr/
@@ -639,7 +829,56 @@ references:
 - id: REF-H13
   title: HL7 FHIR R5, Encounter
   url: https://hl7.org/fhir/R5/encounter.html
+- id: REF-H14
+  title: WHO Patient Safety Solution 2, Patient identification
+  url: https://cdn.who.int/media/docs/default-source/patient-safety/patient-safety-solutions/ps-solution2-patient-identification.pdf
+- id: REF-H15
+  title: 45 CFR 92.202, effective communication for individuals with disabilities
+  url: https://www.law.cornell.edu/cfr/text/45/92.202
+- id: REF-H16
+  title: 45 CFR 164.524, access of individuals to protected health information
+  url: https://www.law.cornell.edu/cfr/text/45/164.524
+- id: REF-H17
+  title: GDPR Article 15, right of access
+  url: https://gdpr-info.eu/art-15-gdpr/
+- id: REF-H18
+  title: GDPR Article 12, transparent information and response deadlines
+  url: https://gdpr-info.eu/art-12-gdpr/
+- id: REF-H19
+  title: GDPR Article 5, principles (minimisation, confidentiality)
+  url: https://gdpr-info.eu/art-5-gdpr/
+- id: REF-H20
+  title: 47 CFR 64.1200, delivery restrictions (healthcare message exemption)
+  url: https://www.law.cornell.edu/cfr/text/47/64.1200
+- id: REF-H21
+  title: HHS telehealth, getting started with licensure
+  url: https://telehealth.hhs.gov/licensure/getting-started-licensure
+- id: REF-H22
+  title: Directive 2011/24/EU, patients' rights in cross-border healthcare
+  url: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32011L0024
+- id: REF-H23
+  title: 45 CFR 162.1002, medical data code sets
+  url: https://www.law.cornell.edu/cfr/text/45/162.1002
+- id: REF-H24
+  title: WHO, International Classification of Diseases (ICD-11)
+  url: https://www.who.int/standards/classifications/classification-of-diseases
+- id: REF-H25
+  title: CMS MLN Matters MM5613, charges for missed appointments (Medicare)
+  url: https://www.cms.gov/Outreach-and-Education/Medicare-Learning-Network-MLN/MLNMattersArticles/Downloads/MM5613.pdf
+  note: 'For the Billing module: Medicare allows the charge only if non-Medicare patients are charged too.'
+- id: REF-H26
+  title: NC Medicaid, provider billing of Medicaid beneficiaries
+  url: https://medicaid.ncdhhs.gov/providers-billing-beneficiaries/open
+  note: 'For the Billing module: quotes the CMS policy that Medicaid beneficiaries may not be billed for missed appointments.'
 changelog:
+- version: 0.2.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - Re-verified the HHS reminder guidance and the Joint Commission identification goal from their primary documents, and added WHO Patient Safety Solution 2 and GDPR Article 5 for the EU.
+  - 'Removed claims without a source: the 2-hour check-in default, patient self check-in, and patients reading the access log.'
+  - Added disability accommodations (BR-H11), the right to a copy of appointment data (BR-H12), US rules for automated reminders (BR-H13), where virtual appointments may be held (BR-H14), and coded reason and service type (BR-H15).
+  - Named missed-appointment fees and breach reporting as other modules' concerns.
 - version: 0.1.0
   date: '2026-10-05'
   breaking: false
@@ -656,8 +895,15 @@ dependencies:
   - 'Asks: does the caller hold this permission?'
   - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
   - 'Asks: whether the patient wants confidential communications, and where to'
-  - 'Asks: whether a person is the personal representative of a patient'
   - 'Asks: whether a person is a practitioner'
+  - 'Asks: is this practitioner licensed or permitted to practise in this US state?'
+  - 'Asks: may this person act for this patient on this appointment? (Covers minors, guardians and confidential care.)'
+- service: terminology-service
+  direction: upstream
+  reason: validates codes against code systems
+  criticality: hard
+  contract:
+  - 'Asks: is this code valid in this code system on this date?'
 ---
 
 A clinical appointment is still an appointment: everything in the

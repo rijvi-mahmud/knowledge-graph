@@ -252,7 +252,7 @@ operations:
   method: POST
   path: /appointments
   success: 201
-  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language and acting representative, care setting (outpatient or inpatient), department, and optional room and referral
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient or inpatient), department, and optional room and referral
   output: the appointment, pending or booked
   errors:
   - APPOINTMENT_INVALID_TIME_RANGE
@@ -270,6 +270,8 @@ operations:
   - APPOINTMENT_IDEMPOTENCY_KEY_REUSED
   - APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
   - APPOINTMENT_INVALID_PRIORITY
+  - APPOINTMENT_INVALID_CODE
+  - APPOINTMENT_PRACTITIONER_NOT_LICENSED
   - APPOINTMENT_INVALID_DEPARTMENT
   - APPOINTMENT_REFERRAL_REQUIRED
   - APPOINTMENT_LOCATION_TAKEN

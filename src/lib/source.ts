@@ -68,14 +68,12 @@ const withSpecPages = update(mdx)
 
       // Listing "index" makes the overview a child item instead of the folder's
       // link, so the folder only opens and closes (see sidebarIntroduction).
-      // The module opens by default so its groups show. Of the groups, only the
-      // first (usually Functions) opens; the rest start collapsed. Fumadocs
-      // still opens whichever folder holds the current page.
       // Variant pages (such as outpatient and inpatient) come right after the
-      // introduction, before the spec's groups.
+      // introduction, before the spec's groups. Every folder starts collapsed
+      // (the user's choice); Fumadocs still opens the one holding the current page.
       const variants = resolved.variants ?? [];
       out.push(
-        folder(`${dir}/meta.json`, title, ['index', ...variants.map((v) => v.id), ...groups.map((g) => g.slug!)], true),
+        folder(`${dir}/meta.json`, title, ['index', ...variants.map((v) => v.id), ...groups.map((g) => g.slug!)], false),
       );
       for (const v of variants)
         out.push({
@@ -92,8 +90,8 @@ const withSpecPages = update(mdx)
             view: { root: dir, variant: v.id },
           },
         });
-      for (const [i, g] of groups.entries()) {
-        out.push(folder(`${dir}/${g.slug}/meta.json`, g.title, [...g.sections], i === 0));
+      for (const g of groups) {
+        out.push(folder(`${dir}/${g.slug}/meta.json`, g.title, [...g.sections], false));
         for (const id of g.sections)
           out.push({
             ...file,
