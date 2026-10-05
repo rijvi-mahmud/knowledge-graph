@@ -1,0 +1,403 @@
+---
+title: Outpatient appointments
+description: 'Hospital outpatient scheduling: departments and rooms, referrals, walk-ins, overbooking and the handoff to an encounter.'
+module: appointment
+version: 0.1.0
+status: draft
+industry: healthcare
+domain: ehr
+extends: healthcare/appointment
+purpose: 'Add what a hospital EHR needs for outpatient clinics: departments and rooms, referral rules, walk-ins, overbooking, and opening an encounter when the patient checks in.'
+scope:
+- Departments (clinics) and rooms as part of a booking
+- Referral-required departments
+- Walk-in patients
+- Overbooking practitioners where a clinic allows it
+- Opening and linking an encounter at check-in
+- A department's daily worklist
+nonGoals:
+- Inpatient admission, beds and transfers. They belong to the Admission, discharge and transfer module.
+- The encounter itself. The Encounter module owns it; this layer only links it.
+actors:
+- name: Clinic manager
+  description: Sets a department's scheduling rules, such as overbooking and referral requirements.
+assumptions:
+- id: AS-E1
+  text: The Encounter module opens an encounter when it receives appointment.checked_in, and reports its id back.
+  rationale: FHIR links an encounter to the appointment that scheduled it (Encounter.appointment). The encounter is the clinical record of the visit.
+- id: AS-E2
+  text: A Referral service can confirm that a referral is valid for a department.
+  rationale: Some departments only accept referred patients (BR-E3).
+dataModel:
+- name: department_id
+  type: string
+  required: true
+  description: The clinic or department providing the service (FHIR HealthcareService).
+- name: location_id
+  type: string
+  required: false
+  description: The room, such as an examination room.
+- name: referral_id
+  type: string
+  required: false
+  description: The referral this appointment answers (FHIR Appointment.basedOn).
+- name: encounter_id
+  type: string
+  required: false
+  description: The encounter opened at check-in.
+  constraints: set after check-in
+- name: walk_in
+  type: boolean
+  required: false
+  description: Whether the patient arrived without an appointment.
+- name: overbooked
+  type: boolean
+  required: false
+  description: Whether this appointment overlaps the practitioner's other appointments under BR-4.
+businessRules:
+- id: BR-4
+  text: A patient cannot have two active appointments whose slots overlap. A practitioner can, only when their department has allow_overbooking on, and with no more than max_overbooked_per_slot appointments overlapping one slot. Slots are half-open.
+  rationale: Clinics overbook to make up for no-shows, which research finds range from 3% to 80% between clinics, and no single overbooking policy fits them all. A patient, though, can only be in one place.
+- id: BR-E1
+  text: A room cannot hold two active appointments whose slots overlap.
+  rationale: Two patients cannot be examined in one room at once. Core leaves resources to the layers that need them (ADR-11).
+- id: BR-E2
+  text: Check-in opens an encounter, and the appointment records its encounter_id. An appointment that was checked in completes only once its encounter exists.
+  rationale: In FHIR, the appointment is fulfilled and linked to the newly created encounter at check-in. The encounter is where care is documented.
+- id: BR-E3
+  text: A department with referral_required on accepts a booking only with a valid referral.
+  rationale: Specialist clinics often see only referred patients, so the referral is checked before the slot is taken.
+- id: BR-E4
+  text: A walk-in patient gets an appointment that starts now, marked walk_in, and is checked in straight away.
+  rationale: Every visit needs an appointment to link its encounter and keep statistics complete.
+validations:
+- field: department_id
+  rule: must be an existing department
+  error: APPOINTMENT_INVALID_DEPARTMENT
+- field: referral_id
+  rule: required and valid when the department has referral_required on
+  error: APPOINTMENT_REFERRAL_REQUIRED
+workflows:
+- name: Register a walk-in
+  trigger: A patient arrives without an appointment
+  actor: Front desk
+  steps:
+  - Verify the patient with two identifiers
+  - Book an appointment starting now in the department, marked walk_in
+  - Check the patient in, which opens an encounter
+  - Emit appointment.booked and appointment.checked_in
+  outcome: The patient is in the queue like any other, with an encounter to document the visit.
+- name: Link the encounter
+  trigger: The Encounter module reports the encounter it opened
+  actor: System
+  steps:
+  - Record encounter_id and increase revision
+  - Emit appointment.encounter_linked
+  outcome: The appointment and its encounter point to each other.
+edgeCases:
+- id: EC-E1
+  situation: A clinic with allow_overbooking on and max_overbooked_per_slot 2 books a third patient into one slot of the same practitioner.
+  behaviour: Rejected with APPOINTMENT_OVERBOOKING_LIMIT.
+  covers:
+  - BR-4
+  - AC-E1
+- id: EC-E2
+  situation: The same patient is booked into two clinics at overlapping times.
+  behaviour: Rejected with APPOINTMENT_SLOT_TAKEN, even where overbooking is on.
+  covers:
+  - BR-4
+  - AC-E2
+- id: EC-E3
+  situation: Two appointments are booked into the same examination room at once.
+  behaviour: Rejected with APPOINTMENT_LOCATION_TAKEN.
+  covers:
+  - BR-E1
+  - AC-E3
+- id: EC-E4
+  situation: A patient without a referral books a referral-only clinic.
+  behaviour: Rejected with APPOINTMENT_REFERRAL_REQUIRED.
+  covers:
+  - BR-E3
+  - AC-E4
+- id: EC-E5
+  situation: The Encounter module is down when a patient checks in.
+  behaviour: Check-in succeeds; the encounter is linked when Encounter reports it. The appointment cannot complete until then.
+  covers:
+  - BR-E2
+  - AC-E5
+functionalRequirements:
+- id: FR-E1
+  text: The service must book appointments into a department and, optionally, a room.
+  priority: must
+  verification: test
+- id: FR-E2
+  text: The service must let a clinic manager turn overbooking on for a department and set its limit.
+  priority: must
+  verification: test
+- id: FR-E3
+  text: The service must check referrals for departments that require them.
+  priority: must
+  verification: test
+- id: FR-E4
+  text: The service must register walk-in patients.
+  priority: must
+  verification: test
+- id: FR-E5
+  text: The service must list a department's appointments for a day, in time order, with each patient's status.
+  priority: must
+  verification: test
+operations:
+- name: Book an appointment
+  actor: Requester
+  description: Book a slot for two or more participants. Accepts a retry key.
+  method: POST
+  path: /appointments
+  success: 201
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language and acting representative, department, and optional room and referral
+  output: the appointment, pending or booked
+  errors:
+  - APPOINTMENT_INVALID_TIME_RANGE
+  - APPOINTMENT_START_IN_PAST
+  - APPOINTMENT_INVALID_LOCAL_TIME
+  - APPOINTMENT_AMBIGUOUS_LOCAL_TIME
+  - APPOINTMENT_INVALID_TIME_ZONE
+  - APPOINTMENT_INVALID_DURATION
+  - APPOINTMENT_INVALID_PARTICIPANTS
+  - APPOINTMENT_INVALID_LOCALE
+  - APPOINTMENT_INVALID_CAPACITY
+  - APPOINTMENT_INVALID_REMINDER_OFFSET
+  - APPOINTMENT_SLOT_TAKEN
+  - APPOINTMENT_AVAILABILITY_UNAVAILABLE
+  - APPOINTMENT_IDEMPOTENCY_KEY_REUSED
+  - APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
+  - APPOINTMENT_INVALID_PRIORITY
+  - APPOINTMENT_INVALID_DEPARTMENT
+  - APPOINTMENT_REFERRAL_REQUIRED
+  - APPOINTMENT_LOCATION_TAKEN
+  - APPOINTMENT_OVERBOOKING_LIMIT
+- name: Reschedule an appointment
+  actor: Requester
+  description: Move the appointment to a new slot, keeping its id. Accepts a retry key.
+  method: POST
+  path: /appointments/{id}/reschedule
+  success: 200
+  input: appointment id, revision, new start and end time, optional time zone, optional new room
+  output: the updated appointment
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_TERMINAL_STATE
+  - APPOINTMENT_ENDED
+  - APPOINTMENT_CUTOFF_PASSED
+  - APPOINTMENT_REVISION_CONFLICT
+  - APPOINTMENT_SLOT_TAKEN
+  - APPOINTMENT_INVALID_TIME_RANGE
+  - APPOINTMENT_START_IN_PAST
+  - APPOINTMENT_INVALID_LOCAL_TIME
+  - APPOINTMENT_AMBIGUOUS_LOCAL_TIME
+  - APPOINTMENT_INVALID_DURATION
+  - APPOINTMENT_AVAILABILITY_UNAVAILABLE
+  - APPOINTMENT_LOCATION_TAKEN
+  - APPOINTMENT_OVERBOOKING_LIMIT
+- name: Add a participant
+  actor: Scheduler
+  description: Add a participant, for example a guest joining a group appointment.
+  method: POST
+  path: /appointments/{id}/participants
+  success: 200
+  input: appointment id, revision, identity, role, optional time zone and locale
+  output: the updated appointment
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_TERMINAL_STATE
+  - APPOINTMENT_ENDED
+  - APPOINTMENT_REVISION_CONFLICT
+  - APPOINTMENT_FULL
+  - APPOINTMENT_SLOT_TAKEN
+  - APPOINTMENT_INVALID_PARTICIPANTS
+  - APPOINTMENT_OVERBOOKING_LIMIT
+- name: Register a walk-in
+  actor: Front desk
+  description: Book and check in a patient who arrived without an appointment.
+  method: POST
+  path: /appointments/walk-in
+  success: 201
+  input: patient, department, practitioner, identifiers verified
+  output: the checked-in appointment
+  errors:
+  - APPOINTMENT_INVALID_DEPARTMENT
+  - APPOINTMENT_IDENTITY_NOT_VERIFIED
+  - APPOINTMENT_SLOT_TAKEN
+- name: List a department's day
+  description: The department's appointments for one day, as a worklist.
+  method: GET
+  path: /departments/{id}/appointments
+  success: 200
+  input: department id, date, optional practitioner and status
+  output: appointments in time order with their status
+  errors:
+  - APPOINTMENT_INVALID_DEPARTMENT
+- name: Set department scheduling rules
+  actor: Clinic manager
+  description: Turn overbooking on or off, set its limit, and set whether a referral is required.
+  method: PATCH
+  path: /departments/{id}/scheduling-rules
+  success: 200
+  input: allow_overbooking, max_overbooked_per_slot, referral_required
+  output: the department rules
+  errors:
+  - APPOINTMENT_INVALID_DEPARTMENT
+events:
+- name: appointment.encounter_linked
+  description: The encounter opened at check-in was linked.
+  payload:
+  - appointment_id
+  - encounter_id
+  - revision
+dependencies:
+- service: encounter-service
+  direction: downstream
+  reason: opens an encounter when a patient checks in
+  criticality: soft
+- service: referral-service
+  direction: upstream
+  reason: confirms referrals for referral-only departments
+  criticality: hard
+accessMatrix:
+- action: Register a walk-in
+  roles:
+    Front desk: any
+    Clinic manager: any
+  permission: appointment.check_in
+- action: Set department scheduling rules
+  roles:
+    Front desk: none
+    Clinic manager: any
+  permission: appointment.configure
+permissions:
+- name: appointment.configure
+  description: Change a department's scheduling rules.
+errors:
+- code: APPOINTMENT_INVALID_DEPARTMENT
+  http: 422
+  message: That department doesn't exist.
+- code: APPOINTMENT_REFERRAL_REQUIRED
+  http: 422
+  message: This department needs a valid referral.
+- code: APPOINTMENT_LOCATION_TAKEN
+  http: 409
+  message: The room is already booked for part of that time.
+- code: APPOINTMENT_OVERBOOKING_LIMIT
+  http: 409
+  message: The practitioner already has the most appointments the department allows in that slot.
+settings:
+- name: allow_overbooking
+  type: boolean per department
+  default: 'false'
+  description: Whether practitioners in the department can be overbooked (BR-4).
+- name: max_overbooked_per_slot
+  type: integer per department
+  default: '2'
+  description: The most appointments one practitioner can have overlapping one slot when overbooking is on.
+- name: referral_required
+  type: boolean per department
+  default: 'false'
+  description: Whether the department accepts only referred patients (BR-E3).
+acceptanceCriteria:
+- id: AC-E1
+  given: a department with allow_overbooking on and max_overbooked_per_slot 2, and a practitioner with 2 appointments at 09:00
+  when: a third is booked for 09:00
+  then: the request fails with APPOINTMENT_OVERBOOKING_LIMIT
+  verifies:
+  - BR-4
+  - FR-E2
+- id: AC-E2
+  given: a patient booked in cardiology at 10:00, and overbooking on everywhere
+  when: the same patient is booked in radiology at 10:15
+  then: the request fails with APPOINTMENT_SLOT_TAKEN
+  verifies:
+  - BR-4
+- id: AC-E3
+  given: examination room 3 booked from 09:00 to 09:30
+  when: another appointment is booked into room 3 at 09:15
+  then: the request fails with APPOINTMENT_LOCATION_TAKEN
+  verifies:
+  - BR-E1
+  - FR-E1
+- id: AC-E4
+  given: a department with referral_required on
+  when: a booking arrives without a referral
+  then: the request fails with APPOINTMENT_REFERRAL_REQUIRED; with a valid referral it succeeds
+  verifies:
+  - BR-E3
+  - FR-E3
+- id: AC-E5
+  given: a checked-in appointment whose encounter has not been linked yet
+  when: it is completed
+  then: the request fails until the encounter is linked, then succeeds
+  verifies:
+  - BR-E2
+- id: AC-E6
+  given: a patient who arrives without an appointment
+  when: the front desk registers them as a walk-in
+  then: an appointment starting now is created, marked walk_in, and checked in
+  verifies:
+  - BR-E4
+  - FR-E4
+- id: AC-E7
+  given: a department with 12 appointments today
+  when: its day is listed
+  then: all 12 are returned in time order with their status
+  verifies:
+  - FR-E5
+decisions:
+- id: ADR-E1
+  decision: Overbooking is a per-department setting with a limit, and it never applies to patients.
+  rationale: Research on outpatient overbooking finds no general policy fits every clinic, so each department decides. A patient is never in two places.
+  alternatives: Never overbook. Rejected because clinics with high no-show rates rely on it.
+  date: '2026-10-05'
+- id: ADR-E2
+  decision: The Encounter module opens the encounter; this layer only links it.
+  rationale: Keeps the clinical record in one place, as FHIR separates Appointment from Encounter.
+  date: '2026-10-05'
+references:
+- id: REF-E1
+  title: HL7 FHIR R5, Appointment (basedOn, serviceType)
+  url: https://hl7.org/fhir/R5/appointment.html
+- id: REF-E2
+  title: HL7 FHIR R5, Encounter (appointment link)
+  url: https://hl7.org/fhir/R5/encounter.html
+- id: REF-E3
+  title: Appointment overbooking in health care clinics (LaGanga and Lawrence, Production and Operations Management)
+  url: https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1937-5956.2011.01308.x
+- id: REF-E4
+  title: An overbooking scheduling model for outpatient appointments in a multi-provider clinic
+  url: https://www.sciencedirect.com/science/article/pii/S2211692315000181
+changelog:
+- version: 0.1.0
+  date: '2026-10-05'
+  breaking: false
+  changes:
+  - First EHR outpatient layer.
+---
+
+Outpatient appointments inherit the [clinical appointment](/docs/healthcare/appointment)
+rules, which inherit the [core](/docs/core/appointment). This layer adds how a
+hospital's clinics run their day.
+
+## A clinic can overbook a doctor, never a patient
+
+Clinics lose a share of every day to no-shows, and many overbook to make up for
+it. How much depends on the clinic, so each department decides whether to
+overbook and by how much (BR-4). A patient can still only be in one place.
+
+## The room is booked as well as the doctor
+
+Two patients cannot share an examination room at the same time (BR-E1), so a
+booking can name a room and the room is checked like a participant.
+
+## Check-in opens the clinical record
+
+When the patient checks in, the Encounter module opens an encounter and the
+appointment links to it (BR-E2). From then on, care is documented on the
+encounter. A walk-in patient gets the same: an appointment that starts now,
+checked in straight away (BR-E4).

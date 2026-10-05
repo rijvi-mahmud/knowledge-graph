@@ -1,0 +1,679 @@
+---
+title: Clinical appointments
+description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
+module: appointment
+version: 0.1.0
+status: draft
+industry: healthcare
+extends: core/appointment
+purpose: 'Add what every healthcare application needs on top of the core appointment: patients and practitioners, check-in with identity verification, protected health data, communication patients can rely on, and the medical record an appointment becomes part of. Works in the United States and the European Union.'
+scope:
+- Patients, practitioners and personal representatives as participants
+- Check-in with patient identity verification
+- Reminders and messages that protect health information
+- Access logging, record retention and the limits of erasure
+- Language assistance and virtual appointments
+- Exchange with other systems as HL7 FHIR Appointment
+- Jurisdiction settings for the United States and the European Union
+nonGoals:
+- The clinical record of the visit itself. That belongs to the Encounter module.
+- Insurance eligibility and billing, which differ by country and payer.
+- Patient registration and identifiers. Identity owns them; this layer only uses them.
+actors:
+- name: Patient
+  description: The person receiving care. A participant with the role patient.
+- name: Practitioner
+  description: A clinician providing care. A participant with the role practitioner.
+- name: Personal representative
+  description: A person allowed to act for the patient, such as the parent of a minor or a legal guardian.
+- name: Front desk
+  description: Staff who check patients in. A Scheduler with the check-in permission.
+- name: Privacy officer
+  description: Reviews who accessed appointment data.
+assumptions:
+- id: AS-H1
+  text: Identity holds each patient's identifiers, such as name and date of birth, and whether they asked for confidential communications.
+  rationale: Check-in verifies against these identifiers (BR-H2), and reminders follow the communication preference (BR-H4).
+- id: AS-H2
+  text: 'The deployment has a lawful basis to process health data for care: treatment under HIPAA in the United States, and GDPR Article 9(2)(h) in the European Union.'
+  rationale: Without it, no appointment data could be held at all. The legal basis is the deployment's responsibility, not this module's.
+- id: AS-H3
+  text: The jurisdiction setting and record_retention are set with legal advice before go-live.
+  rationale: Retention and erasure rules differ by US state and EU member state. Guessing them risks both unlawful deletion and unlawful retention.
+glossary:
+- term: Active appointment
+  definition: 'An appointment that holds its slot: booked, checked in, or pending while pending_holds_slot is on.'
+- term: Protected health information
+  definition: Health information that identifies a person (HIPAA, 45 CFR 160.103). In the EU, data concerning health is a special category of personal data (GDPR Article 9).
+- term: Personal representative
+  definition: Someone the law treats as the patient for privacy purposes, such as a parent or guardian (45 CFR 164.502(g)).
+- term: Check-in
+  definition: Recording that the patient has arrived and their identity is verified.
+- term: Entered in error
+  definition: An appointment recorded by mistake. It is kept, but never counted as a real appointment.
+concepts:
+- name: Medical record
+  description: The appointment and its history are part of the patient's record, which is kept for a legal minimum period.
+dataModel:
+- name: service_type
+  type: code
+  required: false
+  description: The service to be performed, such as a cardiology consultation (FHIR Appointment.serviceType).
+- name: reason
+  type: code or text
+  required: false
+  description: Why the appointment was booked. Clinical, so it is health information (FHIR Appointment.reason).
+- name: priority
+  type: integer
+  required: false
+  description: From 1 (highest) to 9 (lowest), as in FHIR and iCalendar.
+  constraints: 1 to 9
+- name: patient_instruction
+  type: text
+  required: false
+  description: What the patient needs to know or do, such as fasting from 8 pm the night before.
+- name: virtual_service
+  type: connection details
+  required: false
+  description: How to join a virtual appointment (FHIR Appointment.virtualService).
+- name: interpreter_language
+  type: BCP 47 tag
+  required: false
+  description: The language the patient needs an interpreter for.
+- name: acting_representative
+  type: string
+  required: false
+  description: Identity id of the personal representative who booked or changed the appointment, if one did.
+- name: checked_in_at
+  type: instant
+  required: false
+  constraints: set when status = checked_in
+- name: identity_verified_with
+  type: string[]
+  required: false
+  description: The identifier types used at check-in, such as name and date_of_birth.
+  constraints: at least 2 when checked in
+businessRules:
+- id: BR-H1
+  text: Every appointment has at least one participant with the role patient, and at least one with the role practitioner.
+  rationale: A clinical appointment is care given to a patient by a practitioner. FHIR models both as participants of an Appointment.
+- id: BR-H2
+  text: Check-in verifies the patient's identity with at least two identifiers, such as name and date of birth. A room or location is never one of them.
+  rationale: Wrong-patient errors happen at every stage of care. The Joint Commission requires two identifiers (NPSG.01.01.01).
+- id: BR-H3
+  text: 'Reminders and other messages to patients contain only what''s needed to attend: the patient''s name, the date, time and place, and the provider''s name and number. Never the reason, diagnosis or a service that reveals a condition.'
+  rationale: 'Messages are seen by others: postcards, shared voicemail, lock screens. HHS guidance allows reminders but warns against disclosing treatment or health details.'
+- id: BR-H4
+  text: If a patient asked to be contacted by another means or at another address, every appointment message uses it.
+  rationale: Under 45 CFR 164.522(b) providers must accommodate reasonable requests without asking why. Applying it everywhere protects patients for whom an ordinary reminder could be unsafe.
+- id: BR-H5
+  text: A personal representative can book and manage appointments for the patient they represent. Every action they take records them as acting_representative.
+  rationale: HIPAA treats a personal representative as the patient (45 CFR 164.502(g)). Recording who acted keeps the record accurate.
+- id: BR-H6
+  text: When a patient needs an interpreter, the appointment records the language so a qualified interpreter can be arranged at no cost to the patient.
+  rationale: US covered entities must offer qualified interpreters free of charge (45 CFR 92.201). Recording the need at booking is what makes that possible on the day.
+- id: BR-H7
+  text: Every view and every change of an appointment is logged with who, when and what.
+  rationale: HIPAA requires audit controls that record activity in systems holding electronic health information (45 CFR 164.312(b)), and GDPR Article 32 requires security appropriate to the risk. Core history covers changes, not views.
+- id: BR-H8
+  text: An appointment recorded by mistake is marked entered in error. It is kept, hidden from schedules, and excluded from statistics.
+  rationale: Records are never deleted in a medical record. FHIR has the same entered-in-error status.
+- id: BR-H9
+  text: Connection details for a virtual appointment are shared only with its participants.
+  rationale: The link gives access to a session where health information is discussed.
+- id: BR-H10
+  text: Check-in is allowed from check_in_window before the start until the end.
+  rationale: Checking in much earlier would mark someone as present who has not arrived for this appointment.
+- id: BR-11
+  text: A request to erase a patient's appointment data is refused while record_retention applies, because the appointment and its history are part of the medical record. When retention ends, personal fields are erased as in core.
+  rationale: HIPAA gives no right to erasure, and US hospitals must keep records for at least 5 years (42 CFR 482.24(b)(1)), longer in many states. In the EU, GDPR Article 17(3)(c) lets health data be kept for care under Article 9(2)(h). Erasing on request would break the record.
+validations:
+- field: participants
+  rule: at least one participant with the role patient and one with the role practitioner
+  error: APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
+- field: identity_verified_with
+  rule: at least two identifier types at check-in, none of them a room or location
+  error: APPOINTMENT_IDENTITY_NOT_VERIFIED
+- field: priority
+  rule: an integer from 1 to 9
+  error: APPOINTMENT_INVALID_PRIORITY
+stateMachine:
+  initial: booked
+  states:
+  - pending
+  - booked
+  - checked_in
+  - cancelled
+  - completed
+  - no_show
+  - entered_in_error
+  transitions:
+  - from: pending
+    to: booked
+    trigger: confirm
+    guard: confirm_by has not passed, revision matches, and the slot is still free when pending_holds_slot is off
+  - from: pending
+    to: pending
+    trigger: reschedule or update
+    guard: before the end, revision matches
+  - from: pending
+    to: cancelled
+    trigger: cancel
+    guard: cancelled_reason provided, revision matches
+  - from: pending
+    to: cancelled
+    trigger: expire
+    guard: confirm_by has passed
+  - from: booked
+    to: booked
+    trigger: reschedule or update
+    guard: before the end, new slot is free and in the future, revision matches
+  - from: booked
+    to: checked_in
+    trigger: check_in
+    guard: within check_in_window before the start and before the end, identity verified with two identifiers
+  - from: booked
+    to: cancelled
+    trigger: cancel
+    guard: before the end, cancelled_reason provided, revision matches
+  - from: booked
+    to: completed
+    trigger: complete
+    guard: start_at has passed
+  - from: booked
+    to: no_show
+    trigger: record_no_show
+    guard: start_at has passed, at least one absent participant named
+  - from: checked_in
+    to: completed
+    trigger: complete
+    guard: the patient was seen
+  - from: checked_in
+    to: cancelled
+    trigger: cancel
+    guard: the patient left without being seen, with that as the reason
+  - from: pending
+    to: entered_in_error
+    trigger: mark_entered_in_error
+    guard: actor is a Scheduler
+  - from: booked
+    to: entered_in_error
+    trigger: mark_entered_in_error
+    guard: actor is a Scheduler
+  - from: no_show
+    to: completed
+    trigger: correct_attendance
+    guard: actor is a Scheduler
+workflows:
+- name: Check in
+  trigger: The patient arrives
+  actor: Front desk
+  steps:
+  - Find the appointment
+  - Verify the patient with two identifiers, such as name and date of birth
+  - Record checked_in_at and identity_verified_with, set status to checked_in and increase revision
+  - Emit appointment.checked_in
+  outcome: The patient is recorded as present and verified, ready to be seen.
+- name: Mark entered in error
+  trigger: An appointment was created by mistake, for example for the wrong patient
+  actor: Scheduler
+  steps:
+  - Set status to entered_in_error with a reason, and increase revision
+  - Withdraw pending reminders and release the slot
+  - Emit appointment.entered_in_error
+  outcome: The mistake is kept for the record but no longer affects schedules or statistics.
+edgeCases:
+- id: EC-H1
+  situation: Two patients with the same name arrive for appointments at the same time.
+  behaviour: Check-in needs a second identifier, such as date of birth, so the wrong appointment is not checked in.
+  covers:
+  - BR-H2
+  - AC-H2
+- id: EC-H2
+  situation: A reminder is sent to a phone shared by the patient's family.
+  behaviour: It says only the name, date, time, place and provider number, never the reason or service.
+  covers:
+  - BR-H3
+  - AC-H3
+- id: EC-H3
+  situation: A patient asked to be contacted only at a work address.
+  behaviour: All appointment messages go to the work address.
+  covers:
+  - BR-H4
+  - AC-H4
+- id: EC-H4
+  situation: A patient asks for their appointment history to be erased two years after a visit to a US hospital.
+  behaviour: Refused with APPOINTMENT_RETENTION_REQUIRED, because record_retention has not ended.
+  covers:
+  - BR-11
+  - AC-H5
+- id: EC-H5
+  situation: An appointment was booked for the wrong patient.
+  behaviour: It is marked entered in error, not deleted, and disappears from schedules and statistics.
+  covers:
+  - BR-H8
+  - AC-H6
+- id: EC-H6
+  situation: A checked-in patient leaves before being seen.
+  behaviour: The appointment is cancelled with the reason "left without being seen".
+  covers:
+  - FR-H1
+- id: EC-H7
+  situation: A parent books an appointment for their child.
+  behaviour: The appointment records the parent as acting_representative.
+  covers:
+  - BR-H5
+  - AC-H7
+- id: EC-H8
+  situation: A patient tries to check in two hours early with a 30-minute check_in_window.
+  behaviour: Rejected with APPOINTMENT_CHECK_IN_TOO_EARLY.
+  covers:
+  - BR-H10
+  - AC-H8
+functionalRequirements:
+- id: FR-H1
+  text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
+  priority: must
+  verification: test
+- id: FR-H2
+  text: The service must let a Scheduler mark an appointment entered in error.
+  priority: must
+  verification: test
+- id: FR-H3
+  text: The service must log every view and change of an appointment, and let a privacy officer read that log.
+  priority: must
+  verification: test
+- id: FR-H4
+  text: The service must send every appointment message through the patient's confidential communication preference when they have one.
+  priority: must
+  verification: test
+- id: FR-H5
+  text: The service must record the personal representative who acted, for every action a representative takes.
+  priority: must
+  verification: test
+- id: FR-H6
+  text: The service must record the interpreter language a patient needs, and include it in appointment.booked.
+  priority: must
+  verification: test
+- id: FR-H7
+  text: The service must export any appointment as an HL7 FHIR R5 Appointment resource.
+  priority: must
+  verification: test
+nonFunctionalRequirements:
+- category: security
+  text: Only people involved in the patient's care, or with a role that needs it, can see clinical fields such as reason and service type.
+- category: compliance
+  text: The jurisdiction setting decides which retention and communication rules apply. United States and European Union are supported.
+- category: compatibility
+  text: 'Statuses map to FHIR R5: pending to pending, booked to booked, checked_in to checked-in, completed to fulfilled, no_show to noshow, cancelled to cancelled, entered_in_error to entered-in-error.'
+constraints:
+- id: CON-H1
+  text: Appointment data is encrypted in transit and at rest.
+  rationale: GDPR Article 32 lists encryption as a security measure, and appointment data is health data.
+- id: CON-H2
+  text: The access log cannot be changed or deleted by the people it records.
+  rationale: A log its subjects can edit cannot show who accessed what.
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. Decides defaults for retention and communication rules. Required.
+- name: record_retention
+  type: duration
+  description: How long appointment data is kept as part of the medical record. At least 5 years for US hospitals (42 CFR 482.24(b)(1)); set per state or EU member state law. Required.
+- name: check_in_window
+  type: duration
+  default: 2h
+  description: How long before the start a patient can check in.
+acceptanceCriteria:
+- id: AC-H1
+  given: a booking with two practitioners and no patient
+  when: it is submitted
+  then: the request fails with APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
+  verifies:
+  - BR-H1
+- id: AC-H2
+  given: a booked appointment
+  when: the front desk checks the patient in with only their name
+  then: the request fails with APPOINTMENT_IDENTITY_NOT_VERIFIED; with name and date of birth it succeeds and appointment.checked_in is emitted
+  verifies:
+  - BR-H2
+  - FR-H1
+- id: AC-H3
+  given: an appointment whose reason is a mental health assessment
+  when: its reminder is sent
+  then: the message contains the name, date, time, place and provider number, and neither the reason nor the service type
+  verifies:
+  - BR-H3
+- id: AC-H4
+  given: a patient who asked to be contacted only at a work address
+  when: any appointment message is sent
+  then: it is sent to the work address
+  verifies:
+  - BR-H4
+  - FR-H4
+- id: AC-H5
+  given: jurisdiction us, a record_retention of 5 years, and an appointment that ended 2 years ago
+  when: the patient's appointment data is asked to be erased
+  then: the request fails with APPOINTMENT_RETENTION_REQUIRED and nothing changes
+  verifies:
+  - BR-11
+- id: AC-H6
+  given: a booked appointment created for the wrong patient
+  when: a Scheduler marks it entered in error
+  then: it keeps its record, its slot is released, its reminders are withdrawn, and it is excluded from schedules and statistics
+  verifies:
+  - BR-H8
+  - FR-H2
+- id: AC-H7
+  given: a parent who is the personal representative of a child
+  when: they book an appointment for the child
+  then: the appointment is booked and records the parent as acting_representative
+  verifies:
+  - BR-H5
+  - FR-H5
+- id: AC-H8
+  given: a 30-minute check_in_window
+  when: a patient checks in two hours before the start
+  then: the request fails with APPOINTMENT_CHECK_IN_TOO_EARLY
+  verifies:
+  - BR-H10
+- id: AC-H9
+  given: any appointment
+  when: a practitioner views it and a Scheduler changes it
+  then: the access log has one entry for each, with who, when and what, and the people logged cannot change it
+  verifies:
+  - BR-H7
+  - FR-H3
+  - CON-H2
+- id: AC-H10
+  given: a patient who needs a Spanish interpreter
+  when: the appointment is booked with interpreter_language es
+  then: appointment.booked carries interpreter_language es
+  verifies:
+  - BR-H6
+  - FR-H6
+- id: AC-H11
+  given: a checked-in appointment
+  when: it is exported
+  then: the result is a valid FHIR R5 Appointment with status checked-in
+  verifies:
+  - FR-H7
+- id: AC-H12
+  given: a virtual appointment
+  when: someone who is not a participant views it
+  then: the connection details are not included
+  verifies:
+  - BR-H9
+- id: AC-H13
+  given: any stored appointment
+  when: its storage and traffic are inspected
+  then: appointment data is encrypted at rest and in transit
+  verifies:
+  - CON-H1
+operations:
+- name: Book an appointment
+  actor: Requester
+  description: Book a slot for two or more participants. Accepts a retry key.
+  method: POST
+  path: /appointments
+  success: 201
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language and acting representative
+  output: the appointment, pending or booked
+  errors:
+  - APPOINTMENT_INVALID_TIME_RANGE
+  - APPOINTMENT_START_IN_PAST
+  - APPOINTMENT_INVALID_LOCAL_TIME
+  - APPOINTMENT_AMBIGUOUS_LOCAL_TIME
+  - APPOINTMENT_INVALID_TIME_ZONE
+  - APPOINTMENT_INVALID_DURATION
+  - APPOINTMENT_INVALID_PARTICIPANTS
+  - APPOINTMENT_INVALID_LOCALE
+  - APPOINTMENT_INVALID_CAPACITY
+  - APPOINTMENT_INVALID_REMINDER_OFFSET
+  - APPOINTMENT_SLOT_TAKEN
+  - APPOINTMENT_AVAILABILITY_UNAVAILABLE
+  - APPOINTMENT_IDEMPOTENCY_KEY_REUSED
+  - APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
+  - APPOINTMENT_INVALID_PRIORITY
+- name: Erase a participant's personal data
+  actor: Scheduler
+  description: Erase personal fields as BR-11 describes. Refused while record_retention applies.
+  method: POST
+  path: /appointment-erasures
+  success: 202
+  input: identity
+  output: accepted; the appointments changed are reported when the erasure finishes. An identity with no appointments, or already erased, changes nothing.
+  errors:
+  - APPOINTMENT_RETENTION_REQUIRED
+- name: Check in
+  actor: Front desk
+  description: Record that the patient arrived, verifying their identity.
+  method: POST
+  path: /appointments/{id}/check-in
+  success: 200
+  input: appointment id, revision, the identifiers verified
+  output: the checked-in appointment
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_TERMINAL_STATE
+  - APPOINTMENT_ENDED
+  - APPOINTMENT_REVISION_CONFLICT
+  - APPOINTMENT_IDENTITY_NOT_VERIFIED
+  - APPOINTMENT_CHECK_IN_TOO_EARLY
+- name: Mark entered in error
+  actor: Scheduler
+  description: Mark an appointment that was recorded by mistake.
+  method: POST
+  path: /appointments/{id}/entered-in-error
+  success: 200
+  input: appointment id, revision, reason
+  output: the appointment, marked entered in error
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_TERMINAL_STATE
+  - APPOINTMENT_REVISION_CONFLICT
+- name: Export as FHIR
+  description: Return the appointment as an HL7 FHIR R5 Appointment resource.
+  method: GET
+  path: /appointments/{id}/fhir
+  success: 200
+  input: appointment id
+  output: a FHIR Appointment
+  errors:
+  - APPOINTMENT_NOT_FOUND
+- name: Read the access log
+  actor: Privacy officer
+  description: List who viewed or changed an appointment, and when.
+  method: GET
+  path: /appointments/{id}/access-log
+  success: 200
+  input: appointment id, page
+  output: access log entries
+  errors:
+  - APPOINTMENT_NOT_FOUND
+events:
+- name: appointment.checked_in
+  description: The patient arrived and was verified.
+  payload:
+  - appointment_id
+  - checked_in_at
+  - revision
+- name: appointment.entered_in_error
+  description: The appointment was recorded by mistake.
+  payload:
+  - appointment_id
+  - reason
+  - revision
+permissions:
+- name: appointment.check_in
+  description: Check patients in.
+- name: appointment.audit
+  description: Read the access log of any appointment.
+accessMatrix:
+- action: Check in
+  roles:
+    Patient: If self check-in
+    Practitioner: none
+    Front desk: any
+    Privacy officer: none
+  permission: appointment.check_in
+  note: A deployment can offer self check-in, which still needs two identifiers (BR-H2).
+- action: Mark entered in error
+  roles:
+    Patient: none
+    Practitioner: none
+    Front desk: any
+    Privacy officer: none
+  permission: appointment.manage
+- action: Read the access log
+  roles:
+    Patient: own
+    Practitioner: none
+    Front desk: none
+    Privacy officer: any
+  permission: appointment.audit
+  note: Patients can see who accessed their own appointments.
+errors:
+- code: APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
+  http: 422
+  message: A clinical appointment needs at least one patient and one practitioner.
+- code: APPOINTMENT_IDENTITY_NOT_VERIFIED
+  http: 422
+  message: Verify the patient with at least two identifiers, such as name and date of birth.
+- code: APPOINTMENT_CHECK_IN_TOO_EARLY
+  http: 409
+  message: It's too early to check in for this appointment.
+- code: APPOINTMENT_INVALID_PRIORITY
+  http: 422
+  message: Priority must be from 1 to 9.
+- code: APPOINTMENT_RETENTION_REQUIRED
+  http: 409
+  message: This data is part of the medical record and must be kept until record_retention ends.
+personalData:
+- field: reason
+  category: health data
+  purpose: Why the patient is being seen
+  retention: record_retention
+- field: service_type
+  category: health data
+  purpose: The service to be performed, which can reveal a condition
+  retention: record_retention
+- field: patient_instruction
+  category: health data
+  purpose: What the patient must do before the visit
+  retention: record_retention
+- field: interpreter_language
+  category: personal
+  purpose: Arranging an interpreter
+  retention: record_retention
+- field: virtual_service
+  category: personal
+  purpose: Joining a virtual appointment
+  retention: Until the appointment ends
+- field: access log
+  category: personal
+  purpose: Showing who accessed health data
+  retention: record_retention
+risks:
+- id: RISK-H1
+  risk: A reminder reveals a sensitive condition to someone else.
+  impact: A privacy breach that can harm the patient.
+  mitigation: Reminders carry no clinical detail (BR-H3) and follow confidential preferences (BR-H4).
+- id: RISK-H2
+  risk: The wrong patient is checked in.
+  impact: Care, results and billing attached to the wrong person.
+  mitigation: Two identifiers at check-in (BR-H2).
+decisions:
+- id: ADR-H1
+  decision: Check-in is a status between booked and completed.
+  rationale: FHIR has checked-in and arrived statuses, and front desks work from the list of who is here.
+  alternatives: Record arrival only on the encounter. Rejected because scheduling needs to know who has arrived before an encounter starts.
+  date: '2026-10-05'
+- id: ADR-H2
+  decision: Retention overrides erasure (BR-11) while the medical record must be kept.
+  rationale: Both US and EU law protect the medical record from erasure on request.
+  date: '2026-10-05'
+- id: ADR-H3
+  decision: One jurisdiction setting, with explicit settings for anything that varies inside a jurisdiction.
+  rationale: Retention differs by US state and EU member state, so the jurisdiction alone cannot decide it.
+  date: '2026-10-05'
+openQuestions:
+- How should minors' consent and confidentiality be represented, given that the rules differ by US state and EU member state?
+references:
+- id: REF-H1
+  title: 45 CFR 160.103, HIPAA definitions
+  url: https://www.law.cornell.edu/cfr/text/45/160.103
+- id: REF-H2
+  title: 45 CFR 164.502, uses and disclosures (minimum necessary, personal representatives)
+  url: https://www.law.cornell.edu/cfr/text/45/164.502
+- id: REF-H3
+  title: 45 CFR 164.522, confidential communications
+  url: https://www.law.cornell.edu/cfr/text/45/164.522
+- id: REF-H4
+  title: 45 CFR 164.312, technical safeguards (audit controls)
+  url: https://www.law.cornell.edu/cfr/text/45/164.312
+- id: REF-H5
+  title: 42 CFR 482.24, hospital medical record services (retention)
+  url: https://www.law.cornell.edu/cfr/text/42/482.24
+- id: REF-H6
+  title: 45 CFR 92.201, language assistance services
+  url: https://www.law.cornell.edu/cfr/text/45/92.201
+- id: REF-H7
+  title: HHS FAQ 198, leaving messages and appointment reminders
+  url: https://www.hhs.gov/hipaa/for-professionals/faq/198/may-health-care-providers-leave-messages/index.html
+- id: REF-H8
+  title: GDPR Article 9, special categories of personal data
+  url: https://gdpr-info.eu/art-9-gdpr/
+- id: REF-H9
+  title: GDPR Article 17, right to erasure
+  url: https://gdpr-info.eu/art-17-gdpr/
+- id: REF-H10
+  title: GDPR Article 32, security of processing
+  url: https://gdpr-info.eu/art-32-gdpr/
+- id: REF-H11
+  title: The Joint Commission, National Patient Safety Goals 2026 (NPSG.01.01.01)
+  url: https://digitalassets.jointcommission.org/api/public/content/94389f1cc45940fd90d7954147cac4c4?v=339f4b95
+- id: REF-H12
+  title: HL7 FHIR R5, Appointment
+  url: https://hl7.org/fhir/R5/appointment.html
+- id: REF-H13
+  title: HL7 FHIR R5, Encounter
+  url: https://hl7.org/fhir/R5/encounter.html
+changelog:
+- version: 0.1.0
+  date: '2026-10-05'
+  breaking: false
+  changes:
+  - First healthcare layer, for the United States and the European Union.
+---
+
+A clinical appointment is still an appointment: everything in the
+[core specification](/docs/core/appointment) applies. This layer adds what
+changes when the participants are a patient and a practitioner and the data is
+health information.
+
+## The patient is verified at the desk, not assumed
+
+Check-in uses two identifiers, such as name and date of birth, never a room
+number (BR-H2). Two patients with the same name in the same waiting room is an
+ordinary day in a hospital, and checking in the wrong one attaches care and
+results to the wrong person.
+
+## A reminder says when, never why
+
+A reminder lands on a shared phone, a postcard, a lock screen. So it carries
+only what the patient needs to turn up: name, date, time, place and a number to
+call (BR-H3). If a patient asked to be contacted somewhere else, every message
+goes there (BR-H4).
+
+## The appointment is part of the medical record
+
+Appointments are not erased on request while the record must be kept (BR-11).
+US hospitals keep records for at least 5 years, and GDPR lets health data be
+kept for care. Mistakes are marked entered in error, never deleted (BR-H8), and
+every view and change is logged (BR-H7).
+
+## The United States and Europe, from one setting
+
+The `jurisdiction` setting chooses the legal regime, and `record_retention` is
+set per state or member state, with legal advice (AS-H3).

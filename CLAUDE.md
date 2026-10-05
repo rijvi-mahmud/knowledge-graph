@@ -517,9 +517,9 @@ scaffold's own pages fail validation.
 
 ## Known TODO
 
-- EHR is specified in the order of its overview's build list. Next:
-  Appointments (`healthcare/appointment` and `healthcare/ehr/appointment`),
-  then Patients. Follow
+- EHR is specified in the order of its overview's build list. Appointments
+  is done as a draft (`healthcare/appointment` 0.1.0, `healthcare/ehr/appointment`
+  0.1.0, US and EU through the `jurisdiction` setting). Next: Patients. Follow
   [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - `pnpm check:specs` isn't run in CI yet. Running it with `--strict` on every
   pull request would stop unverified items from coming back.

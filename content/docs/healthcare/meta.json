@@ -1,5 +1,9 @@
 {
   "title": "Healthcare",
   "icon": "HeartPulse",
-  "pages": ["index", "ehr"]
+  "pages": [
+    "index",
+    "appointment",
+    "ehr"
+  ]
 }
