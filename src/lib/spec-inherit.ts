@@ -55,6 +55,13 @@ const KEYS = {
   edgeCases: (i: Item) => str(i.id),
   settings: (i: Item) => str(i.name),
   technicalNotes: (i: Item) => str(i.id),
+  personalData: (i: Item) => str(i.field),
+  apiConventions: (i: Item) => str(i.topic),
+  eventEnvelope: (i: Item) => str(i.name),
+  deliveryGuarantees: (i: Item) => str(i.id),
+  performanceTargets: (i: Item) => str(i.id),
+  acronyms: (i: Item) => str(i.term),
+  risks: (i: Item) => str(i.id),
 } satisfies Partial<Record<keyof ModuleSpecData, (i: Item) => string>>;
 
 /** Frontmatter list fields that inherit down the chain. */

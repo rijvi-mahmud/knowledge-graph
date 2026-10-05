@@ -189,6 +189,45 @@ const technicalNoteSchema = z.object({
   code: z.string().optional(), // an illustrative snippet, e.g. SQL
 });
 
+// Personal data a field holds, why it's kept, and for how long.
+const personalDataSchema = z.object({
+  field: z.string(),
+  category: z.string(), // e.g. "personal", "pseudonymous", "free text"
+  purpose: z.string(),
+  retention: z.string(),
+});
+
+// One attribute of the envelope every event carries (CloudEvents).
+const envelopeSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  required: z.boolean().default(true),
+  description: z.string(),
+});
+
+// A convention every endpoint follows: authentication, errors, pagination...
+const apiConventionSchema = z.object({
+  topic: z.string(),
+  text: z.string(),
+  reference: z.string().optional(), // e.g. "RFC 9457"
+});
+
+// A measurable performance requirement: what is measured, the target, and how.
+const performanceSchema = z.object({
+  id: z.string(), // e.g. "PERF-1"
+  indicator: z.string(),
+  target: z.string(),
+  measurement: z.string(),
+});
+
+// Something that could go wrong, what it would cost, and how the spec limits it.
+const riskSchema = z.object({
+  id: z.string(), // e.g. "RISK-1"
+  risk: z.string(),
+  impact: z.string(),
+  mitigation: z.string(),
+});
+
 // A standard, regulation or source the spec relies on.
 const referenceSchema = z.object({
   id: z.string(), // e.g. "REF-1"
@@ -206,6 +245,12 @@ const nfrSchema = z.object({
     'compliance',
     'observability',
     'maintainability',
+    // The remaining ISO/IEC 25010 product quality characteristics.
+    'reliability',
+    'compatibility',
+    'usability',
+    'portability',
+    'safety',
   ]),
   text: z.string(),
 });
@@ -307,6 +352,7 @@ const graphSchema = pageSchema.extend({
   nonFunctionalRequirements: z.array(nfrSchema).default([]),
   constraints: z.array(constraintSchema).default([]),
   settings: z.array(settingSchema).default([]),
+  performanceTargets: z.array(performanceSchema).default([]),
   technicalNotes: z.array(technicalNoteSchema).default([]),
   acceptanceCriteria: z.array(acceptanceSchema).default([]),
 
@@ -315,6 +361,10 @@ const graphSchema = pageSchema.extend({
   events: z.array(eventSchema).default([]),
   permissions: z.array(permissionSchema).default([]),
   accessMatrix: z.array(accessSchema).default([]),
+  personalData: z.array(personalDataSchema).default([]),
+  apiConventions: z.array(apiConventionSchema).default([]),
+  eventEnvelope: z.array(envelopeSchema).default([]),
+  deliveryGuarantees: z.array(assumptionSchema).default([]), // same shape: id, text, rationale
   errors: z.array(errorSchema).default([]),
   dependencies: z.array(dependencySchema).default([]),
 
@@ -323,6 +373,8 @@ const graphSchema = pageSchema.extend({
   openQuestions: z.array(z.string()).default([]),
   changelog: z.array(changelogSchema).default([]),
   references: z.array(referenceSchema).default([]),
+  acronyms: z.array(glossarySchema).default([]),
+  risks: z.array(riskSchema).default([]),
 });
 
 // A domain always lives inside an industry; a domain page without one would

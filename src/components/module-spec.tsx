@@ -145,6 +145,40 @@ interface TechnicalNote extends Provenance {
   code?: string;
 }
 
+interface PersonalData extends Provenance {
+  field: string;
+  category: string;
+  purpose: string;
+  retention: string;
+}
+
+interface EnvelopeAttr extends Provenance {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+interface ApiConvention extends Provenance {
+  topic: string;
+  text: string;
+  reference?: string;
+}
+
+interface PerformanceTarget extends Provenance {
+  id: string;
+  indicator: string;
+  target: string;
+  measurement: string;
+}
+
+interface Risk extends Provenance {
+  id: string;
+  risk: string;
+  impact: string;
+  mitigation: string;
+}
+
 interface Reference extends Provenance {
   id: string;
   title: string;
@@ -245,6 +279,7 @@ export interface ModuleSpecData {
   nonFunctionalRequirements?: Nfr[];
   constraints?: Statement[];
   settings?: Setting[];
+  performanceTargets?: PerformanceTarget[];
   technicalNotes?: TechnicalNote[];
   acceptanceCriteria?: Acceptance[];
 
@@ -252,6 +287,10 @@ export interface ModuleSpecData {
   events?: EventDef[];
   permissions?: Named[];
   accessMatrix?: AccessRow[];
+  personalData?: PersonalData[];
+  apiConventions?: ApiConvention[];
+  eventEnvelope?: EnvelopeAttr[];
+  deliveryGuarantees?: Statement[];
   errors?: ErrorDef[];
   dependencies?: Dependency[];
 
@@ -259,6 +298,8 @@ export interface ModuleSpecData {
   openQuestions?: string[];
   changelog?: ChangelogEntry[];
   references?: Reference[];
+  acronyms?: GlossaryEntry[];
+  risks?: Risk[];
 }
 
 const has = (v: unknown[] | undefined): boolean => Array.isArray(v) && v.length > 0;
@@ -286,6 +327,13 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     tables: has(data.tables),
     'edge-cases': has(data.edgeCases),
     'access-matrix': has(data.accessMatrix),
+    context: has(data.dependencies),
+    'api-conventions': has(data.apiConventions),
+    'event-delivery': has(data.eventEnvelope) || has(data.deliveryGuarantees),
+    privacy: has(data.personalData),
+    performance: has(data.performanceTargets),
+    acronyms: has(data.acronyms),
+    risks: has(data.risks),
     traceability: (data.acceptanceCriteria ?? []).some((a) => has(a.verifies)),
     actors: has(data.actors),
     assumptions: has(data.assumptions),
@@ -1076,6 +1124,145 @@ export function ModuleSpec({
           </dl>
         ),
         from: a,
+      })),
+      (items) => <AccordionList origin={origin} items={items} />,
+    ),
+
+    // Drawn from the dependencies: what the module calls, and who it notifies.
+    context: (() => {
+      const deps = data.dependencies ?? [];
+      const Box = ({ d }: { d: Dependency }) => (
+        <div className="rounded-lg border border-fd-border bg-fd-card px-3 py-2">
+          <div className="font-code text-sm font-medium">{d.service}</div>
+          <div className="mt-0.5 text-xs leading-relaxed text-fd-muted-foreground">
+            {d.reason} ({d.criticality})
+          </div>
+        </div>
+      );
+      const up = deps.filter((d) => d.direction === 'upstream');
+      const down = deps.filter((d) => d.direction === 'downstream');
+      return (
+        <div className="not-prose mt-3 grid items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-fd-muted-foreground">Calls</p>
+            {up.map((d) => (
+              <Box key={d.service} d={d} />
+            ))}
+          </div>
+          <div className="rounded-xl border-2 border-fd-primary/40 bg-fd-primary/5 px-5 py-4 text-center font-medium">
+            {data.module}
+          </div>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-fd-muted-foreground">Notifies</p>
+            {down.map((d) => (
+              <Box key={d.service} d={d} />
+            ))}
+          </div>
+        </div>
+      );
+    })(),
+
+    'api-conventions': grouped(
+      (data.apiConventions ?? []).map((c) => ({
+        key: c.topic,
+        meta: c.reference ? [c.reference] : [],
+        body: c.text,
+        from: c,
+      })),
+      (items) => <ItemList origin={origin} items={items} />,
+    ),
+
+    'event-delivery': (
+      <>
+        {has(data.eventEnvelope) && (
+          <>
+            <p>Every event carries this envelope, following CloudEvents:</p>
+            <Grid
+              head={['Attribute', 'Type', 'Required', 'Description']}
+              rows={(data.eventEnvelope ?? []).map((e) => [
+                <code key="n">{e.name}</code>,
+                <code key="t">{e.type}</code>,
+                e.required ? 'yes' : 'no',
+                <span key="d">
+                  {e.description} {origin(e)}
+                </span>,
+              ])}
+            />
+          </>
+        )}
+        {has(data.deliveryGuarantees) && (
+          <AccordionList
+            origin={origin}
+            items={(data.deliveryGuarantees ?? []).map((g) => ({
+              key: g.id,
+              ref: g.id,
+              text: g.text,
+              detail: g.rationale && (
+                <>
+                  <Label>Why:</Label>
+                  {g.rationale}
+                </>
+              ),
+              from: g,
+            }))}
+          />
+        )}
+      </>
+    ),
+
+    privacy: (
+      <Grid
+        head={['Field', 'Category', 'Purpose', 'Retention']}
+        rows={(data.personalData ?? []).map((d) => [
+          <code key="f">{d.field}</code>,
+          d.category,
+          d.purpose,
+          <span key="r">
+            {d.retention} {origin(d)}
+          </span>,
+        ])}
+      />
+    ),
+
+    performance: (
+      <Grid
+        head={['Id', 'Indicator', 'Target', 'Measured as']}
+        rows={(data.performanceTargets ?? []).map((t) => [
+          <code key="i">{t.id}</code>,
+          t.indicator,
+          <span key="t" className="font-medium">
+            {t.target}
+          </span>,
+          <span key="m">
+            {t.measurement} {origin(t)}
+          </span>,
+        ])}
+      />
+    ),
+
+    acronyms: grouped(
+      (data.acronyms ?? []).map((g) => ({ term: g.term, def: g.definition, from: g })),
+      (items) => <DefinitionList origin={origin} items={items} />,
+    ),
+
+    risks: grouped(
+      (data.risks ?? []).map((r) => ({
+        key: r.id,
+        ref: r.id,
+        text: r.risk,
+        detail: (
+          <div className="flex flex-col gap-0.5">
+            <span>
+              <Label>Impact:</Label>
+              {r.impact}
+            </span>
+            <span>
+              <Label>Mitigation:</Label>
+              {r.mitigation}
+            </span>
+          </div>
+        ),
+        from: r,
       })),
       (items) => <AccordionList origin={origin} items={items} />,
     ),

@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.5.0
+version: 0.6.0
 status: stable
 
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
@@ -79,10 +79,10 @@ dataModel:
     required: true
     description: Stable identifier, immutable for the life of the appointment.
   - name: participants
-    type: 'array<{ identity_id, role, time_zone? }>'
+    type: 'array<{ identity_id, role, time_zone?, locale? }>'
     required: true
-    description: The parties involved. role is a label such as host or guest; industry layers define their own roles. time_zone is the IANA zone the participant sees times in, and defaults to the appointment's time_zone.
-    constraints: at least 2 entries; identity_id values are distinct and resolvable; each time_zone is a valid IANA name
+    description: The parties involved. role is a label such as host or guest; industry layers define their own roles. time_zone is the IANA zone the participant sees times in, and defaults to the appointment's time_zone. locale is the BCP 47 language tag for their reminders, such as de-CH, and defaults to the deployment's default_locale.
+    constraints: at least 2 entries; identity_id values are distinct and resolvable; each time_zone is a valid IANA name; each locale is a valid BCP 47 tag
   - name: start_time
     type: local datetime
     required: true
@@ -162,6 +162,10 @@ dataModel:
     required: false
     description: Identity id of the Scheduler who recorded the no-show, or system.
     constraints: set when status = no_show
+  - name: anonymised_at
+    type: instant
+    required: false
+    description: When personal fields were erased (BR-11). The appointment, its status and its times remain.
 
 relationships:
   - type: belongs_to
@@ -236,6 +240,9 @@ tables:
         type: text
         nullable: true
         note: An identity id, or system.
+      - name: anonymised_at
+        type: timestamptz
+        nullable: true
       - name: created_at
         type: timestamptz
         default: now()
@@ -274,6 +281,10 @@ tables:
         type: text
         nullable: true
         note: Display zone. Null means the appointment's time_zone.
+      - name: locale
+        type: text
+        nullable: true
+        note: BCP 47 language tag for reminders. Null means default_locale.
       - name: slot
         type: tstzrange
         note: Copy of [start_at, end_at), updated in the same transaction.
@@ -364,6 +375,34 @@ tables:
       - name: idempotency_keys_pkey
         definition: PRIMARY KEY (caller_id, key)
 
+  - name: outbox
+    description: Events waiting to be published, written in the same transaction as the change that caused them (transactional outbox).
+    columns:
+      - name: id
+        type: uuid
+        note: The event's CloudEvents id.
+      - name: type
+        type: text
+        note: Such as appointment.booked.
+      - name: subject
+        type: uuid
+        note: The appointment id.
+      - name: payload
+        type: jsonb
+      - name: created_at
+        type: timestamptz
+        default: now()
+      - name: published_at
+        type: timestamptz
+        nullable: true
+    indexes:
+      - name: outbox_unpublished
+        definition: CREATE INDEX ON outbox (created_at) WHERE published_at IS NULL
+        note: The relay reads unpublished events in order.
+    constraints:
+      - name: outbox_pkey
+        definition: PRIMARY KEY (id)
+
 businessRules:
   - id: BR-1
     text: An appointment must have at least two distinct participants.
@@ -395,6 +434,12 @@ businessRules:
   - id: BR-10
     text: A wall-clock time that doesn't exist in the reference time zone, because clocks went forward, is rejected. A wall-clock time that occurs twice, because clocks went back, must come with a UTC offset to say which one is meant; without one it's rejected.
     rationale: Guessing silently books the wrong hour. JavaScript's Temporal offers a reject option for exactly these cases, and an RFC 9557 timestamp carries the offset that removes the doubt.
+  - id: BR-11
+    text: When a participant's personal data must be erased, notes, location and cancelled_reason are cleared, identity ids are replaced with an anonymous placeholder, and anonymised_at is set. The appointment, its status and its times are kept. Data needed for a legal obligation or legal claims is kept until that need ends.
+    rationale: GDPR Article 17 gives people a right to erasure, but Article 17(3) allows keeping data needed for a legal obligation or legal claims. Clearing personal fields instead of deleting the row keeps billing and audit references intact (BR-2).
+  - id: BR-12
+    text: A reminder is never sent after the appointment has started.
+    rationale: After an outage, a scheduler can fire a backlog of overdue reminders at once. A reminder for an appointment that has already started is noise, and for a past one it's wrong.
 
 validations:
   - field: start_time
@@ -415,6 +460,9 @@ validations:
   - field: participants
     rule: each participant time_zone, when given, must be a valid IANA time zone name
     error: APPOINTMENT_INVALID_TIME_ZONE
+  - field: participants
+    rule: each participant locale, when given, must be a valid BCP 47 language tag
+    error: APPOINTMENT_INVALID_LOCALE
   - field: participants
     rule: at least 2 entries, all resolvable identity ids, no duplicates
     error: APPOINTMENT_INVALID_PARTICIPANTS
@@ -573,6 +621,22 @@ edgeCases:
     situation: The same identity is listed twice as a participant.
     behaviour: Rejected with APPOINTMENT_INVALID_PARTICIPANTS.
     covers: [BR-1]
+  - id: EC-19
+    situation: The scheduler is down for hours and recovers with a backlog of overdue reminders.
+    behaviour: Reminders for appointments that haven't started are sent. Reminders for appointments that have already started are dropped.
+    covers: [BR-12, AC-26]
+  - id: EC-20
+    situation: A participant asks for their data to be erased while a legal claim about the appointment is open.
+    behaviour: Fields needed for the claim are kept until it's resolved, then erased under BR-11.
+    covers: [BR-11]
+  - id: EC-21
+    situation: The outbox relay publishes an event, then crashes before marking it published.
+    behaviour: The event is published again after restart with the same id, and consumers discard the duplicate.
+    covers: [DG-1, FR-15]
+  - id: EC-22
+    situation: A consumer receives appointment.rescheduled at revision 3 after it already applied revision 4.
+    behaviour: The consumer ignores the older event.
+    covers: [DG-2]
 
 functionalRequirements:
   - id: FR-1
@@ -620,11 +684,19 @@ functionalRequirements:
     priority: must
     verification: test
   - id: FR-12
-    text: The service must give Notification each participant's time zone with every reminder, so the reminder shows the time in the participant's zone.
+    text: The service must give Notification each participant's time zone and locale with every reminder, so the reminder shows the time in the participant's zone and language.
     priority: must
     verification: test
   - id: FR-13
     text: The service must fail a booking or reschedule when Calendar can't be reached, instead of booking without an availability check.
+    priority: must
+    verification: test
+  - id: FR-14
+    text: The service must erase a participant's personal data on request, as BR-11 describes, and record when it did.
+    priority: must
+    verification: test
+  - id: FR-15
+    text: The service must write every event to the outbox in the same transaction as the change that caused it, and publish it only after that transaction commits.
     priority: must
     verification: test
 nonFunctionalRequirements:
@@ -640,6 +712,14 @@ nonFunctionalRequirements:
     text: The service keeps its IANA time zone database current, because time zone rules change several times a year.
   - category: maintainability
     text: Industry-specific behaviour is additive. Core stays deployable with no industry layer present.
+  - category: reliability
+    text: A booking is acknowledged only after it's committed together with its events, so no confirmed booking or event is lost.
+  - category: compatibility
+    text: Appointments map onto iCalendar (RFC 5545), so calendar clients can show them. booked maps to CONFIRMED, cancelled to CANCELLED, and revision to SEQUENCE.
+  - category: usability
+    text: Every error response says what was wrong and how to fix it, in the detail member of an RFC 9457 problem details response.
+  - category: portability
+    text: The reference schema uses PostgreSQL, but no rule depends on it. Any store that can enforce the overlap rule atomically (CON-2) can be used.
 
 constraints:
   - id: CON-1
@@ -655,6 +735,32 @@ constraints:
     text: Each appointment records the time zone database release its instants were derived with (tz_version).
     rationale: When IANA publishes a release, it identifies exactly which future appointments need their instants recomputed.
 
+performanceTargets:
+  - id: PERF-1
+    indicator: Double bookings
+    target: '0'
+    measurement: Count of pairs of active appointments that overlap for the same participant. Any non-zero value is a defect.
+  - id: PERF-2
+    indicator: Lost bookings
+    target: '0'
+    measurement: Bookings acknowledged to the caller but missing from storage or from the outbox.
+  - id: PERF-3
+    indicator: Booking latency
+    target: Set by each deployment as an SLO
+    measurement: 95th and 99th percentile time to respond to POST /appointments, excluding the Calendar availability check.
+  - id: PERF-4
+    indicator: Reminder delay
+    target: Set by each deployment as an SLO
+    measurement: 99th percentile time between a reminder's due time and appointment.reminder_due being published.
+  - id: PERF-5
+    indicator: Event publishing delay
+    target: Set by each deployment as an SLO
+    measurement: 99th percentile time between an outbox row being written and it being published.
+  - id: PERF-6
+    indicator: Read availability
+    target: Set by each deployment as an SLO
+    measurement: Share of GET requests that succeed, over a rolling 30 days.
+
 settings:
   - name: default_reminder_offsets
     type: duration[]
@@ -667,6 +773,13 @@ settings:
   - name: no_show_grace_period
     type: duration
     description: How long after start_at System waits before recording a no-show. Required when automatic_no_show is true.
+  - name: default_locale
+    type: BCP 47 tag
+    default: en
+    description: Locale used for reminders when a participant has none.
+  - name: personal_data_retention
+    type: duration
+    description: How long personal fields are kept after an appointment ends, before they're erased under BR-11. Set by each deployment to meet its legal obligations.
   - name: idempotency_key_retention
     type: duration
     default: 24h
@@ -698,6 +811,15 @@ technicalNotes:
   - id: TN-4
     title: Key reminders by revision
     text: Schedule each reminder on a durable scheduler, keyed by appointment id, revision and offset. When it fires, load the appointment and drop the reminder if the status isn't booked or the revision has moved on.
+  - id: TN-6
+    title: Publish events through a transactional outbox
+    text: Insert each event into the outbox table in the same transaction as the change. A separate relay publishes unpublished rows and then sets published_at. The relay can publish an event twice if it crashes in between, so consumers must ignore an event whose source and id they have already seen.
+    code: |
+      BEGIN;
+        UPDATE appointments SET status = 'cancelled', ... WHERE id = $1 AND status = 'booked';
+        INSERT INTO outbox (id, type, subject, payload)
+          VALUES (gen_random_uuid(), 'appointment.cancelled', $1, $2);
+      COMMIT;
   - id: TN-5
     title: Detect concurrent changes with the revision
     text: Update with the revision the client sent in the WHERE clause. If no row changes, someone else changed the appointment first, so return APPOINTMENT_REVISION_CONFLICT.
@@ -864,6 +986,32 @@ acceptanceCriteria:
     verifies:
       - CON-4
 
+  - id: AC-25
+    given: a participant with locale de-CH
+    when: their reminder becomes due
+    then: Notification receives de-CH with the reminder
+    verifies:
+      - FR-12
+  - id: AC-26
+    given: a booked appointment that started 10 minutes ago, with a reminder still pending after a scheduler outage
+    when: the scheduler recovers
+    then: the reminder is dropped and no appointment.reminder_due is published
+    verifies:
+      - BR-12
+  - id: AC-27
+    given: a completed appointment with notes and a location
+    when: the participant's personal data is erased
+    then: notes, location and cancelled_reason are empty, identity ids are replaced, anonymised_at is set, and the appointment's status and times are unchanged
+    verifies:
+      - BR-11
+      - FR-14
+  - id: AC-28
+    given: a booking whose transaction rolls back after the event was written to the outbox
+    when: the relay runs
+    then: no appointment.booked event is published
+    verifies:
+      - FR-15
+
 api:
   - method: POST
     path: /appointments
@@ -878,6 +1026,7 @@ api:
       - APPOINTMENT_AVAILABILITY_UNAVAILABLE
       - APPOINTMENT_INVALID_TIME_ZONE
       - APPOINTMENT_INVALID_PARTICIPANTS
+      - APPOINTMENT_INVALID_LOCALE
       - APPOINTMENT_INVALID_REMINDER_OFFSET
       - APPOINTMENT_SLOT_TAKEN
       - APPOINTMENT_IDEMPOTENCY_KEY_REUSED
@@ -1007,6 +1156,86 @@ accessMatrix:
   - action: Dispatch reminders
     roles: { Requester: none, Participant: none, Scheduler: none, System: any }
 
+personalData:
+  - field: participants.identity_id
+    category: pseudonymous
+    purpose: Who the appointment is with
+    retention: Life of the appointment, then replaced with a placeholder under BR-11
+  - field: participants.time_zone, participants.locale
+    category: personal
+    purpose: Showing times and reminders in the participant's zone and language
+    retention: Same as identity_id
+  - field: location
+    category: personal
+    purpose: Where to meet, which can be a home address or a private meeting link
+    retention: Until personal_data_retention has passed after end_at
+  - field: notes
+    category: free text
+    purpose: Anything the requester adds. Can contain sensitive data, so treat it as the most sensitive category the deployment handles
+    retention: Until personal_data_retention has passed after end_at
+  - field: cancelled_reason
+    category: free text
+    purpose: Why the appointment was cancelled
+    retention: Until personal_data_retention has passed after end_at
+
+apiConventions:
+  - topic: Authentication
+    text: Every request carries the caller's identity from the deployment's identity provider. Permissions are checked against that identity (Permission matrix).
+  - topic: Errors
+    text: Errors use problem details with the media type application/problem+json. status is the HTTP status, detail says how to fix the request, and a code member carries the error code, such as APPOINTMENT_SLOT_TAKEN.
+    reference: RFC 9457
+  - topic: Pagination
+    text: Lists are cursor-based. A request sends limit and an optional cursor; the response returns next_cursor until there are no more results. Results are ordered by start_at, then id, so pages stay stable while appointments change.
+  - topic: Concurrency
+    text: A reschedule sends the revision it read. A stale revision fails with APPOINTMENT_REVISION_CONFLICT.
+  - topic: Retries
+    text: Write requests accept an Idempotency-Key header. A retry with the same key returns the original result.
+  - topic: Rate limits
+    text: A caller over its limit gets 429 Too Many Requests with a Retry-After header saying when to try again.
+    reference: RFC 6585, RFC 9110
+  - topic: Times
+    text: Instants are RFC 3339 timestamps in UTC, zoned times are RFC 9557 timestamps, and time zones are IANA names (CON-1).
+  - topic: Versioning
+    text: Additive changes, such as a new optional field, don't change the version. A breaking change ships as a new major version. The old one sends a Deprecation header, and a Sunset header with the date it will stop working.
+    reference: RFC 9745, RFC 8594
+
+eventEnvelope:
+  - name: id
+    type: string
+    description: Unique per event. A retried publish keeps the same id.
+  - name: source
+    type: URI
+    description: The service that produced the event, such as /appointments.
+  - name: type
+    type: string
+    description: The event name, such as appointment.booked.
+  - name: specversion
+    type: string
+    description: The CloudEvents version, 1.0.
+  - name: subject
+    type: string
+    description: The appointment id.
+  - name: time
+    type: RFC 3339 timestamp
+    description: When the change happened.
+  - name: data
+    type: object
+    description: The payload listed for the event on the Events page.
+
+deliveryGuarantees:
+  - id: DG-1
+    text: Events are published at least once. Consumers must treat an event with a source and id they have already seen as a duplicate.
+    rationale: The outbox relay can publish an event twice if it crashes after publishing and before recording it. CloudEvents defines source plus id as the duplicate check.
+  - id: DG-2
+    text: Events for one appointment can arrive out of order. Each payload carries the appointment's revision, and consumers ignore an event whose revision is lower than one they've already applied.
+    rationale: Brokers and retries don't guarantee order. The revision gives every change to an appointment a sequence.
+  - id: DG-3
+    text: An event is published only if the change that caused it was committed.
+    rationale: Writing events in the same transaction (FR-15) means a rolled-back booking never announces itself.
+  - id: DG-4
+    text: Adding an optional field to a payload is not a breaking change. Removing or renaming one is, and ships as a new event type, such as appointment.booked.v2.
+    rationale: Consumers ignore fields they don't know, but break when a field they use disappears.
+
 errors:
   - code: APPOINTMENT_NOT_FOUND
     http: 404
@@ -1029,6 +1258,9 @@ errors:
   - code: APPOINTMENT_INVALID_TIME_ZONE
     http: 422
     message: time_zone must be a valid IANA time zone name.
+  - code: APPOINTMENT_INVALID_LOCALE
+    http: 422
+    message: Each participant locale must be a valid BCP 47 language tag, such as en-GB.
   - code: APPOINTMENT_INVALID_PARTICIPANTS
     http: 422
     message: At least two distinct, resolvable participants are required.
@@ -1108,6 +1340,50 @@ decisions:
     alternatives: Always record no-shows automatically when end_at passes. Rejected for the reasons above.
     date: '2026-10-05'
 
+acronyms:
+  - term: API
+    definition: Application programming interface
+  - term: BCP
+    definition: Best Current Practice, an IETF document series (BCP 47 defines language tags)
+  - term: GDPR
+    definition: General Data Protection Regulation (EU) 2016/679
+  - term: IANA
+    definition: Internet Assigned Numbers Authority, which publishes the time zone database
+  - term: NTP
+    definition: Network Time Protocol
+  - term: RFC
+    definition: Request for Comments, the IETF's standards series
+  - term: SLI
+    definition: Service level indicator, a measured quantity such as latency
+  - term: SLO
+    definition: Service level objective, a target for an SLI
+  - term: SRS
+    definition: Software requirements specification
+  - term: UTC
+    definition: Coordinated Universal Time
+
+risks:
+  - id: RISK-1
+    risk: The time zone database falls behind a government's rule change.
+    impact: Future appointments in that zone show and remind at the wrong hour.
+    mitigation: Keep the database current and recompute affected appointments using tz_version (CON-4, EC-9).
+  - id: RISK-2
+    risk: A bulk import or admin script writes appointments without the overlap check.
+    impact: Double bookings that the application would have rejected.
+    mitigation: Enforce the rule in the database with an exclusion constraint, not only in application code (CON-2, TN-1).
+  - id: RISK-3
+    risk: A scheduler outage builds a backlog of reminders.
+    impact: Late or pointless reminders sent all at once when it recovers.
+    mitigation: Drop reminders for appointments that have started (BR-12), and alert on reminder delay (PERF-4).
+  - id: RISK-4
+    risk: Erasure requests conflict with retention needed for billing, audit or legal claims.
+    impact: Either unlawful retention or broken records.
+    mitigation: Erase personal fields but keep the record (BR-11), and set personal_data_retention with legal advice.
+  - id: RISK-5
+    risk: Free-text notes collect sensitive data the deployment didn't plan for.
+    impact: Data protection obligations the deployment isn't meeting.
+    mitigation: Classify notes as the most sensitive category the deployment handles (Privacy and retention), and erase them with other personal fields.
+
 openQuestions:
   - Should recurring appointments be modelled here, or as a separate Recurrence module that books individual appointments? iCalendar models a series as one event with a recurrence rule (RRULE).
   - Should core include a pending state for slots held while awaiting confirmation or payment? Cal.com holds bookings that need confirmation as pending, and iCalendar has a TENTATIVE status; Calendly's standard flow books immediately.
@@ -1160,12 +1436,54 @@ references:
   - id: REF-13
     title: Optimizing number and timing of appointment reminders, a randomized trial
     url: https://www.ajmc.com/view/optimizing-number-and-timing-of-appointment-reminders-a-randomized-trial
+  - id: REF-15
+    title: ISO/IEC 25010, Product quality model
+    url: https://iso25000.com/index.php/en/iso-25000-standards/iso-25010
+  - id: REF-16
+    title: GDPR Article 17, Right to erasure
+    url: https://gdpr-info.eu/art-17-gdpr/
+  - id: REF-17
+    title: CloudEvents specification
+    url: https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md
+  - id: REF-18
+    title: Transactional outbox pattern
+    url: https://microservices.io/patterns/data/transactional-outbox.html
+  - id: REF-19
+    title: RFC 9457, Problem Details for HTTP APIs
+    url: https://www.rfc-editor.org/rfc/rfc9457
+  - id: REF-20
+    title: RFC 6585, Additional HTTP Status Codes (429)
+    url: https://www.rfc-editor.org/rfc/rfc6585
+  - id: REF-21
+    title: RFC 9110, HTTP Semantics (Retry-After)
+    url: https://www.rfc-editor.org/rfc/rfc9110
+  - id: REF-22
+    title: RFC 9745, The Deprecation HTTP Response Header Field
+    url: https://www.rfc-editor.org/rfc/rfc9745
+  - id: REF-23
+    title: RFC 8594, The Sunset HTTP Header Field
+    url: https://www.rfc-editor.org/rfc/rfc8594
+  - id: REF-24
+    title: BCP 47, Tags for Identifying Languages
+    url: https://www.rfc-editor.org/info/bcp47
+  - id: REF-25
+    title: Service Level Objectives, Google SRE book
+    url: https://sre.google/sre-book/service-level-objectives/
   - id: REF-14
     title: Storing UTC is not a silver bullet, Jon Skeet
     url: https://codeblog.jonskeet.uk/2019/03/27/storing-utc-is-not-a-silver-bullet/
     note: Practitioner analysis of storing future times.
 
 changelog:
+  - version: 0.6.0
+    date: '2026-10-05'
+    changes:
+      - Added privacy and retention, with GDPR-compatible erasure that keeps the record (BR-11, FR-14).
+      - Added the CloudEvents envelope, delivery guarantees and a transactional outbox (FR-15, DG-1 to DG-4).
+      - Added API conventions, measurable performance requirements, a product perspective diagram, acronyms and risks.
+      - Added quality attributes for reliability, compatibility, usability and portability (ISO/IEC 25010).
+      - Added a locale per participant for reminders, and a rule that reminders are never sent after the start (BR-12).
+    breaking: false
   - version: 0.5.0
     date: '2026-10-05'
     changes:

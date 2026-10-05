@@ -10,6 +10,11 @@
 export const SPEC_SECTIONS = [
   { id: 'actors', title: 'Actors', summary: 'Who interacts with the module' },
   {
+    id: 'context',
+    title: 'Product perspective',
+    summary: 'Where the module sits among the services around it',
+  },
+  {
     id: 'assumptions',
     title: 'Assumptions and dependencies',
     summary: 'What the spec takes as true, and why',
@@ -34,7 +39,17 @@ export const SPEC_SECTIONS = [
   { id: 'data-model', title: 'Data model', summary: 'Logical fields, types and constraints' },
   { id: 'relationships', title: 'Relationships', summary: 'How the module relates to others' },
   { id: 'api', title: 'API', summary: 'Endpoints, requests, responses and errors' },
+  {
+    id: 'api-conventions',
+    title: 'API conventions',
+    summary: 'Authentication, errors, pagination, rate limits and versioning',
+  },
   { id: 'events', title: 'Events', summary: 'Events the module emits and their payloads' },
+  {
+    id: 'event-delivery',
+    title: 'Event delivery',
+    summary: 'The event envelope, delivery guarantees, ordering and versioning',
+  },
   { id: 'errors', title: 'Errors', summary: 'Every error code, its HTTP status and meaning' },
   {
     id: 'dependencies',
@@ -48,9 +63,19 @@ export const SPEC_SECTIONS = [
   },
   { id: 'permissions', title: 'Permissions', summary: 'Named permissions and what they grant' },
   {
+    id: 'privacy',
+    title: 'Privacy and retention',
+    summary: 'Personal data held, why, for how long, and how it is erased',
+  },
+  {
     id: 'requirements',
     title: 'Functional requirements',
     summary: 'What the service must do, and how each requirement is verified',
+  },
+  {
+    id: 'performance',
+    title: 'Performance requirements',
+    summary: 'Measurable indicators, their targets and how they are measured',
   },
   {
     id: 'nfrs',
@@ -85,11 +110,13 @@ export const SPEC_SECTIONS = [
   },
   { id: 'concepts', title: 'Concepts', summary: 'The domain concepts the module is built on' },
   { id: 'glossary', title: 'Glossary', summary: 'Definitions of the terms used' },
+  { id: 'acronyms', title: 'Acronyms', summary: 'Abbreviations used in the spec' },
   {
     id: 'decisions',
     title: 'Decisions',
     summary: 'Design decisions, their reasons and the alternatives rejected',
   },
+  { id: 'risks', title: 'Risks', summary: 'What could go wrong, its impact and how it is limited' },
   { id: 'open-questions', title: 'Open questions', summary: 'What has not been decided yet' },
   { id: 'references', title: 'References', summary: 'Standards and sources the spec relies on' },
   { id: 'changelog', title: 'Version history', summary: 'What changed in each version' },
@@ -107,7 +134,12 @@ export interface SpecGroup {
 
 /** In reading order. Functions come first after the overview: they are what readers most often come for. */
 export const SPEC_GROUPS: SpecGroup[] = [
-  { id: 'overview', title: 'Overview', slug: null, sections: ['actors', 'assumptions'] },
+  {
+    id: 'overview',
+    title: 'Overview',
+    slug: null,
+    sections: ['context', 'actors', 'assumptions'],
+  },
   {
     id: 'functions',
     title: 'Functions',
@@ -119,14 +151,19 @@ export const SPEC_GROUPS: SpecGroup[] = [
     id: 'interfaces',
     title: 'External interfaces',
     slug: 'interfaces',
-    sections: ['api', 'events', 'errors', 'dependencies'],
+    sections: ['api', 'api-conventions', 'events', 'event-delivery', 'errors', 'dependencies'],
   },
-  { id: 'security', title: 'Security', slug: 'security', sections: ['access-matrix', 'permissions'] },
+  {
+    id: 'security',
+    title: 'Security',
+    slug: 'security',
+    sections: ['access-matrix', 'permissions', 'privacy'],
+  },
   {
     id: 'requirements',
     title: 'Requirements',
     slug: 'requirements',
-    sections: ['requirements', 'nfrs', 'constraints', 'settings'],
+    sections: ['requirements', 'performance', 'nfrs', 'constraints', 'settings'],
   },
   { id: 'design', title: 'Design', slug: 'design', sections: ['tables', 'technical-notes'] },
   {
@@ -139,7 +176,16 @@ export const SPEC_GROUPS: SpecGroup[] = [
     id: 'supporting',
     title: 'Supporting information',
     slug: 'supporting',
-    sections: ['concepts', 'glossary', 'decisions', 'open-questions', 'references', 'changelog'],
+    sections: [
+      'concepts',
+      'glossary',
+      'acronyms',
+      'decisions',
+      'risks',
+      'open-questions',
+      'references',
+      'changelog',
+    ],
   },
 ];
 

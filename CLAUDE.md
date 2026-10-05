@@ -188,15 +188,15 @@ are defined only in `spec-sections.ts`:
 
 | Folder | Pages |
 |---|---|
-| (module page) | Narrative, the Specification callout, purpose and scope, actors, assumptions and dependencies, and an "In this specification" list |
+| (module page) | Narrative, the Specification callout, purpose and scope, product perspective (diagram from dependencies), actors, assumptions and dependencies, and an "In this specification" list |
 | Functions | Business rules, state machine, workflows, validations, edge cases |
 | Data | Data model (logical), relationships |
-| External interfaces | API, events, errors, dependencies |
-| Security | Permission matrix (actions × actors: any, own, none or a condition), permissions |
-| Requirements | Functional requirements (with verification method), quality attributes, design constraints, configuration |
+| External interfaces | API, API conventions, events, event delivery (CloudEvents envelope and guarantees), errors, dependencies |
+| Security | Permission matrix (actions × actors: any, own, none or a condition), permissions, privacy and retention |
+| Requirements | Functional requirements (with verification method), performance requirements (SLIs and targets), quality attributes (ISO/IEC 25010), design constraints, configuration |
 | Design | Database schema (reference PostgreSQL tables, indexes, constraints), technical notes |
 | Verification | Acceptance criteria, traceability matrix (derived from each criterion's `verifies`) |
-| Supporting information | Concepts, glossary, decisions, open questions, references, version history |
+| Supporting information | Concepts, glossary, acronyms, decisions, risks, open questions, references, version history |
 
 Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
 both renderers) gives it a page in every module. URLs are
@@ -227,6 +227,12 @@ is what surfaces the edge cases. Before calling a module done, check it has:
 - A **permission matrix**, a reference **database schema**, **edge cases**
   (`EC-`, each citing the ids that cover it), **configuration** and
   **technical notes** (`TN-`)
+- **Privacy and retention** for every field holding personal data, and an
+  erasure rule that respects GDPR Article 17(3)
+- The **event envelope** and **delivery guarantees** (`DG-`), **API
+  conventions**, **performance requirements** (`PERF-`, measurable; targets
+  that vary by deployment say so instead of inventing a number), **risks**
+  (`RISK-`) and **acronyms**
 - **Error codes** for every failure, including upstream outages
 - **Edge cases** researched from standards and leading products: concurrency,
   retries, time zones and daylight saving gaps and overlaps, terminal states,

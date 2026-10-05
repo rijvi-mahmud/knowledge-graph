@@ -341,6 +341,90 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
 
   if (has(data.openQuestions)) section('open-questions', bullets(data.openQuestions!));
 
+  if (has(data.dependencies)) {
+    const node = (name: string) => name.replace(/[^A-Za-z0-9_]/g, '_');
+    const lines = (data.dependencies ?? []).map((d) =>
+      d.direction === 'upstream'
+        ? `  M -->|${d.criticality}: ${d.reason.replace(/[|"]/g, '')}| ${node(d.service)}[${d.service}]`
+        : `  M -.->|${d.reason.replace(/[|"]/g, '')}| ${node(d.service)}[${d.service}]`,
+    );
+    section(
+      'context',
+      [
+        'Solid arrows are services this module calls; dotted arrows are services it notifies.',
+        ['```mermaid', 'flowchart LR', `  M[${data.module}]`, ...lines, '```'].join('\n'),
+      ].join('\n\n'),
+    );
+  }
+
+  if (has(data.apiConventions))
+    section(
+      'api-conventions',
+      table(
+        head(['Topic', 'Convention', 'Reference']),
+        rows(data.apiConventions!, (c) => [c.topic, c.text, c.reference]),
+      ),
+    );
+
+  if (has(data.eventEnvelope) || has(data.deliveryGuarantees))
+    section(
+      'event-delivery',
+      [
+        has(data.eventEnvelope)
+          ? 'Every event carries this envelope, following CloudEvents:\n\n' +
+            table(
+              head(['Attribute', 'Type', 'Required', 'Description']),
+              rows(data.eventEnvelope!, (e) => [e.name, e.type, e.required ? 'yes' : 'no', e.description]),
+            )
+          : null,
+        has(data.deliveryGuarantees)
+          ? data
+              .deliveryGuarantees!.map((g) =>
+                [`**${g.id}** ${g.text}${mark(g)}`, g.rationale ? `  - Why: ${g.rationale}` : null]
+                  .filter(Boolean)
+                  .join('\n'),
+              )
+              .join('\n')
+          : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    );
+
+  if (has(data.personalData))
+    section(
+      'privacy',
+      table(
+        head(['Field', 'Category', 'Purpose', 'Retention']),
+        rows(data.personalData!, (d) => [d.field, d.category, d.purpose, d.retention]),
+      ),
+    );
+
+  if (has(data.performanceTargets))
+    section(
+      'performance',
+      table(
+        head(['Id', 'Indicator', 'Target', 'Measured as']),
+        rows(data.performanceTargets!, (t) => [t.id, t.indicator, t.target, t.measurement]),
+      ),
+    );
+
+  if (has(data.acronyms))
+    section(
+      'acronyms',
+      table(head(['Acronym', 'Meaning']), rows(data.acronyms!, (g) => [g.term, g.definition])),
+    );
+
+  if (has(data.risks))
+    section(
+      'risks',
+      data
+        .risks!.map((r) =>
+          [`**${r.id}** ${r.risk}${mark(r)}`, `  - Impact: ${r.impact}`, `  - Mitigation: ${r.mitigation}`].join('\n'),
+        )
+        .join('\n'),
+    );
+
   if (has(data.edgeCases))
     section(
       'edge-cases',
