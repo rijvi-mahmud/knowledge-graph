@@ -77,7 +77,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `content/docs/core/<module>.mdx` | Core layer of a module, industry-neutral. |
 | `content/docs/<industry>/` | Industry: `index.mdx` overview, `<module>.mdx` industry layers, `<domain>/` folders. |
 | `src/lib/spec-inherit.ts` | Resolves a page's `extends` chain into one merged spec tagged with provenance. |
-| `src/lib/spec-sections.ts` | Reference sections and their 6 groups, in reading order. Shared by both renderers. |
+| `src/lib/spec-sections.ts` | Reference sections and their groups (one sub-page each), in reading order. Shared by both renderers and the source loader. |
 | `content/docs/agentic/` | Agentic development: the copy-paste `AGENTS.md` section, how agents navigate and read specs, prompts, and Claude Code, Cursor and Copilot notes. |
 | `src/app/llms.txt/route.ts` | Agent entry point: a "How agents should use" guide, then every page as an absolute `.md` link. |
 | `src/components/module-spec.tsx` | Renders frontmatter to HTML for humans. |
@@ -173,26 +173,61 @@ Rules:
   for a shared module, write the page saying so. It must stay distinguishable
   from "nobody has looked at this yet." See `productivity/appointment.mdx`.
 
-### Spec page layout
+### Spec page layout: one module, several short pages
 
-Reference style: **Mastra docs** - one readable article column, no tabs, no
+Reference style: **Mastra docs**. One readable article column, no tabs, no
 filters, no card grids (the user tried those and found them hard to read).
 
-Page order: title and description → narrative (MDX body) → **Specification**:
-a single tinted callout (status, version, what it builds on, what extends it),
-purpose and scope as plain prose and lists, then the reference. Reference
-groups (Rules & behaviour, Data, Interface, Requirements, People & terms,
-History) are `h2`, sections are `h3`, and every section renders through one
-`ItemList`: key (monospace for ids and names), muted metadata, body, note, and
-the source layer as small coloured text. The TOC nests sections under groups.
+A long spec on one page was hard to read, so every module is a folder in the
+sidebar. Its frontmatter still lives in **one** MDX file; `src/lib/source.ts`
+turns that file into the folder's index and adds a virtual sub-page per spec
+group that has content. Inheritance and both renderers work on the one file,
+unchanged. Groups follow ISO/IEC/IEEE 29148 and are defined only in
+`spec-sections.ts`:
 
-The AI markdown uses the same groups and opens with a "How to read this spec"
-guide telling assistants that anything unlisted is unspecified. Change group
-order or titles in `spec-sections.ts` only, so both renderers move together.
+| Page | Sections |
+|---|---|
+| Module page (overview) | Narrative (MDX body), the Specification callout, purpose and scope, actors, assumptions, and an "In this specification" list |
+| Rules & behaviour | Business rules, validations, state machine, workflows |
+| Data | Data model, relationships |
+| Interface | API, events, permissions, errors, dependencies |
+| Requirements | Functional requirements (with verification method), quality requirements, constraints |
+| Verification | Acceptance criteria, each listing the ids it verifies |
+| Terms & history | Concepts, glossary, decisions, open questions, references, version history |
+
+Adding a group in `spec-sections.ts` creates its sub-page everywhere. Every
+section renders through one `ItemList` (or `AccordionList`): key (monospace for
+ids and names), muted metadata, body, note, and the source layer.
+
+Markdown: `/docs/<module>.md` returns the **complete** spec, so an agent gets
+everything in one fetch; `/docs/<module>/<group>.md` returns one group. The AI
+markdown opens with a "How to read this spec" guide telling assistants that
+anything unlisted is unspecified. Sub-pages carry no `module` in their data, so
+listings, inheritance, `llms-full.txt` and Ask AI skip them.
 
 Sidebar: one plain tree with folder icons (set via `icon` in `meta.json`). No
-root tabs, no separators, no nav links repeated in the docs sidebar - the user
+root tabs, no separators, no nav links repeated in the docs sidebar. The user
 found those confusing.
+
+### Every module page is a complete SRS
+
+Treat each module, at every layer, as a complete software requirements
+specification (ISO/IEC/IEEE 29148), not a feature summary. Writing it that way
+is what surfaces the edge cases. Before calling a module done, check it has:
+
+- **Assumptions** (`AS-`) and **constraints** (`CON-`), each with a reason
+- A **verification method** on every functional requirement (test,
+  demonstration, inspection or analysis)
+- **Acceptance criteria** whose `verifies` list cites rule, requirement or
+  constraint ids that exist
+- **Error codes** for every failure, including upstream outages
+- **Edge cases** researched from standards and leading products: concurrency,
+  retries, time zones and daylight saving gaps and overlaps, terminal states,
+  deletion, and what happens when a dependency is down
+- **References** (`REF-`) to the official sources used
+
+`core/appointment.mdx` is the reference example. Bring other modules to the
+same depth with the same pattern.
 
 ### Navigation and UX
 

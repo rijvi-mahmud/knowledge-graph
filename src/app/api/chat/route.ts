@@ -8,7 +8,7 @@ import {
   toUIMessageStream,
 } from 'ai';
 import { z } from 'zod';
-import { source } from '@/lib/source';
+import { source, specViewOf } from '@/lib/source';
 import { Document, type DocumentData } from 'flexsearch';
 import { ChatUIMessage, SearchTool } from '../../../components/ai/search';
 
@@ -31,7 +31,8 @@ async function createSearchServer() {
 
   const docs = await chunkedAll(
     source.getPages().map(async (page) => {
-      if (!('getText' in page.data)) return null;
+      // Sub-pages carry no prose of their own; their module page is indexed.
+      if (specViewOf(page) || !('getText' in page.data)) return null;
 
       return {
         title: page.data.title,

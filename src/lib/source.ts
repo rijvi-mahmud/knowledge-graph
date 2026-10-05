@@ -1,17 +1,104 @@
 import { docs } from 'collections/server';
-import { loader } from 'fumadocs-core/source';
+import { loader, update } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 import { specToMarkdown } from './spec-markdown';
 import { resolveSpec, type SpecNode } from './spec-inherit';
-import type { ModuleSpecData } from '@/components/module-spec';
+import { activeSpecGroups, type ModuleSpecData } from '@/components/module-spec';
+
+/** Set on a spec sub-page: which module page it belongs to, and which group it shows. */
+export interface SpecView {
+  /** Path of the module's own page, relative to content/docs, e.g. "core/appointment". */
+  root: string;
+  group: string;
+}
+
+type Extra = { view?: SpecView; sourcePath?: string };
+
+const mdx = docs.toFumadocsSource();
+type MdxFile = (typeof mdx)['files'][number];
+type MdxPage = Extract<MdxFile, { type: 'page' }>;
+type MdxMeta = Extract<MdxFile, { type: 'meta' }>;
+type PageData = MdxPage['data'] & Extra;
+type OutFile =
+  | (Omit<MdxPage, 'data'> & { data: PageData })
+  | MdxMeta;
+
+const stripExt = (path: string) => path.replace(/\.mdx?$/, '');
+const isModulePage = (f: MdxFile): f is MdxPage =>
+  f.type === 'page' && Boolean((f.data as ModuleSpecData).module);
+
+/**
+ * Turns every module page into a folder, so a long spec reads as several
+ * short pages in the sidebar. The module's own file becomes the folder's
+ * index (overview), and each spec group with content gets a virtual sub-page
+ * (Rules & behaviour, Data, ...). The frontmatter stays in one file, so
+ * inheritance and both renderers work on it unchanged.
+ */
+const withSpecPages = update(mdx)
+  .files<PageData, MdxMeta['data']>((files) => {
+    const nodes = new Map<string, SpecNode>(
+      files.filter(isModulePage).map((f) => {
+        const path = stripExt(f.path);
+        return [
+          path,
+          { path, title: f.data.title, url: `${docsRoute}/${path}`, data: f.data as ModuleSpecData },
+        ];
+      }),
+    );
+    const all = [...nodes.values()];
+
+    return files.flatMap((file): OutFile[] => {
+      if (!isModulePage(file)) return [file as OutFile];
+
+      const dir = stripExt(file.path);
+      const title = file.data.title;
+      const resolved = resolveSpec(nodes.get(dir)!, (p) => nodes.get(p), all);
+      const groups = activeSpecGroups(resolved).filter((g) => g.slug);
+
+      const index: OutFile = {
+        ...file,
+        path: `${dir}/index.mdx`,
+        data: { ...file.data, sourcePath: file.path },
+      };
+      const subPages: OutFile[] = groups.map((g) => ({
+        ...file,
+        path: `${dir}/${g.slug}.mdx`,
+        data: {
+          ...file.data,
+          // Not a module page itself: listings, inheritance and search skip it.
+          module: undefined,
+          title: g.title,
+          description: `${g.summary}. Part of the ${title} specification.`,
+          toc: [],
+          structuredData: { headings: [], contents: [] },
+          sourcePath: file.path,
+          view: { root: dir, group: g.id },
+        },
+      }));
+      const meta = {
+        type: 'meta',
+        path: `${dir}/meta.json`,
+        data: { title, pages: groups.map((g) => g.slug!) },
+      } as MdxMeta;
+
+      return [index, ...subPages, meta];
+    });
+  })
+  .build();
 
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: docsRoute,
-  source: docs.toFumadocsSource(),
+  source: withSpecPages,
   plugins: [lucideIconsPlugin()],
 });
+
+/** The spec view of a sub-page, or undefined for any other page. */
+export const specViewOf = (page: Page) => (page.data as Extra).view;
+
+/** Path of the MDX file a page comes from, relative to content/docs. */
+export const sourcePathOf = (page: Page) => (page.data as Extra).sourcePath ?? page.path;
 
 export function getPageImageUrl(page: (typeof source)['$inferPage']) {
   const segments = [...page.slugs, 'image.png'];
@@ -42,10 +129,16 @@ function toNode(page: Page): SpecNode {
   };
 }
 
-/** The page's spec merged with every layer it extends, tagged with provenance. */
+/**
+ * The page's spec merged with every layer it extends, tagged with provenance.
+ * A sub-page resolves the spec of the module page it belongs to.
+ */
 export function getResolvedSpec(page: Page): ModuleSpecData {
+  const view = specViewOf(page);
+  const owner = view ? source.getPage(view.root.split('/')) : page;
+  if (!owner) return page.data as ModuleSpecData;
   return resolveSpec(
-    toNode(page),
+    toNode(owner),
     (path) => {
       const parent = source.getPage(path.split('/'));
       return parent ? toNode(parent) : undefined;
@@ -55,9 +148,16 @@ export function getResolvedSpec(page: Page): ModuleSpecData {
 }
 
 export async function getLLMText(page: (typeof source)['$inferPage']) {
+  // A sub-page is one group of the spec, with no prose of its own.
+  const view = specViewOf(page);
+  if (view) {
+    const spec = specToMarkdown(getResolvedSpec(page), view.group);
+    return `# ${page.data.title} (${page.url})\n\n${spec}`;
+  }
+
   const processed = await page.data.getText('processed');
   // The structured spec lives in frontmatter, so it has to be serialised
-  // explicitly - the processed body carries only the prose half of the page.
+  // explicitly. The processed body carries only the prose half of the page.
   const spec = specToMarkdown(getResolvedSpec(page));
 
   return [`# ${page.data.title} (${page.url})`, spec, processed]

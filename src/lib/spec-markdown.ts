@@ -31,7 +31,12 @@ const bullets = (items: string[]) => items.map((i) => `- ${i}`).join('\n');
 type Cell = string | number | undefined;
 type Provenance = { layer?: string; overrides?: string };
 
-export function specToMarkdown(data: ModuleSpecData): string {
+/**
+ * `groupId` limits the output to one page of the spec (a sub-page). Without
+ * it, the whole spec is returned: that is what the module's own .md serves,
+ * so an agent gets the complete spec in one fetch.
+ */
+export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
   if (!data.module) return '';
 
   const out: string[] = [];
@@ -39,6 +44,8 @@ export function specToMarkdown(data: ModuleSpecData): string {
   // same order as the HTML page (see spec-sections.ts).
   const sections = new Map<string, string>();
   const section = (title: string, body: string) => {
+    // A sub-page carries its own group only; purpose and scope live on the module's page.
+    if (groupId && title === 'Purpose & scope') return;
     if (
       title === 'Module identity' ||
       title === 'How to read this spec' ||
@@ -198,18 +205,42 @@ export function specToMarkdown(data: ModuleSpecData): string {
         .join('\n\n'),
     );
 
+  if (has(data.assumptions))
+    section(
+      'Assumptions',
+      data
+        .assumptions!.map((a) =>
+          [`**${a.id}** ${a.text}${mark(a)}`, a.rationale ? `  - Why: ${a.rationale}` : null]
+            .filter(Boolean)
+            .join('\n'),
+        )
+        .join('\n'),
+    );
+
   if (has(data.functionalRequirements))
     section(
       'Functional requirements',
       table(
-        head(['ID', 'Requirement', 'Priority']),
-        rows(data.functionalRequirements!, (r) => [r.id, r.text, r.priority]),
+        head(['ID', 'Requirement', 'Priority', 'Verified by']),
+        rows(data.functionalRequirements!, (r) => [r.id, r.text, r.priority, r.verification]),
       ),
+    );
+
+  if (has(data.constraints))
+    section(
+      'Constraints',
+      data
+        .constraints!.map((c) =>
+          [`**${c.id}** ${c.text}${mark(c)}`, c.rationale ? `  - Why: ${c.rationale}` : null]
+            .filter(Boolean)
+            .join('\n'),
+        )
+        .join('\n'),
     );
 
   if (has(data.nonFunctionalRequirements))
     section(
-      'Non-functional requirements',
+      'Quality requirements',
       table(
         head(['Category', 'Requirement']),
         rows(data.nonFunctionalRequirements!, (n) => [n.category, n.text]),
@@ -221,7 +252,9 @@ export function specToMarkdown(data: ModuleSpecData): string {
       'Acceptance criteria',
       data
         .acceptanceCriteria!.map(
-          (a) => `**${a.id}**${mark(a)}\n- Given ${a.given}\n- When ${a.when}\n- Then ${a.then}`,
+          (a) =>
+            `**${a.id}**${mark(a)}\n- Given ${a.given}\n- When ${a.when}\n- Then ${a.then}` +
+            (has(a.verifies) ? `\n- Verifies: ${a.verifies!.join(', ')}` : ''),
         )
         .join('\n\n'),
     );
@@ -307,6 +340,15 @@ export function specToMarkdown(data: ModuleSpecData): string {
 
   if (has(data.openQuestions)) section('Open questions', bullets(data.openQuestions!));
 
+  if (has(data.references))
+    section(
+      'References',
+      table(
+        head(['ID', 'Source', 'Note']),
+        rows(data.references!, (r) => [r.id, `[${r.title}](${r.url})`, r.note]),
+      ),
+    );
+
   if (has(data.changelog))
     section(
       'Version history',
@@ -321,6 +363,7 @@ export function specToMarkdown(data: ModuleSpecData): string {
     );
 
   for (const group of SPEC_GROUPS) {
+    if (groupId && group.id !== groupId) continue;
     const present = group.sections.filter((id) => sections.has(sectionTitle(id)));
     if (present.length === 0) continue;
     out.push(`## ${group.title}`);

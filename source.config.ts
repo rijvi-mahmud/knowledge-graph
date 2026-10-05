@@ -111,10 +111,39 @@ const workflowSchema = z.object({
 
 // --- requirements ----------------------------------------------------------
 
+// How a requirement is shown to be met. The four methods of ISO/IEC/IEEE 29148.
+const verificationMethod = z.enum(['test', 'demonstration', 'inspection', 'analysis']);
+
 const requirementSchema = z.object({
   id: z.string(), // e.g. "FR-1"
   text: z.string(),
   priority: z.enum(['must', 'should', 'could']).default('must'),
+  verification: verificationMethod.optional(),
+});
+
+// Something the spec takes as true but does not enforce. If it stops being
+// true, the requirements that depend on it need another look.
+const assumptionSchema = z.object({
+  id: z.string(), // e.g. "AS-1"
+  text: z.string(),
+  rationale: z.string().optional(),
+});
+
+// A limit on how the module may be built: a design constraint or a standard
+// it must comply with (ISO/IEC/IEEE 29148 "design constraints" and
+// "standards compliance").
+const constraintSchema = z.object({
+  id: z.string(), // e.g. "CON-1"
+  text: z.string(),
+  rationale: z.string().optional(),
+});
+
+// A standard, regulation or source the spec relies on.
+const referenceSchema = z.object({
+  id: z.string(), // e.g. "REF-1"
+  title: z.string(),
+  url: z.string(),
+  note: z.string().optional(),
 });
 
 const nfrSchema = z.object({
@@ -137,6 +166,7 @@ const acceptanceSchema = z.object({
   given: z.string(),
   when: z.string(),
   then: z.string(),
+  verifies: z.array(z.string()).default([]), // rule and requirement ids, e.g. ["BR-4", "FR-2"]
 });
 
 // --- interface -------------------------------------------------------------
@@ -205,6 +235,7 @@ const graphSchema = pageSchema.extend({
   scope: z.array(z.string()).default([]),
   nonGoals: z.array(z.string()).default([]),
   actors: z.array(actorSchema).default([]),
+  assumptions: z.array(assumptionSchema).default([]),
   glossary: z.array(glossarySchema).default([]),
 
   // 2. domain
@@ -221,6 +252,7 @@ const graphSchema = pageSchema.extend({
   // 4. requirements
   functionalRequirements: z.array(requirementSchema).default([]),
   nonFunctionalRequirements: z.array(nfrSchema).default([]),
+  constraints: z.array(constraintSchema).default([]),
   acceptanceCriteria: z.array(acceptanceSchema).default([]),
 
   // 5. interface
@@ -234,6 +266,7 @@ const graphSchema = pageSchema.extend({
   decisions: z.array(decisionSchema).default([]),
   openQuestions: z.array(z.string()).default([]),
   changelog: z.array(changelogSchema).default([]),
+  references: z.array(referenceSchema).default([]),
 });
 
 // A domain always lives inside an industry; a domain page without one would

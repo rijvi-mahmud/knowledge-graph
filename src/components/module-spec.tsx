@@ -1,12 +1,18 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { SPEC_GROUPS, SPEC_SECTIONS, sectionTitle, type SpecSectionId } from '@/lib/spec-sections';
+import {
+  SPEC_GROUPS,
+  SPEC_SECTIONS,
+  sectionTitle,
+  type SpecGroup,
+  type SpecSectionId,
+} from '@/lib/spec-sections';
 
 /**
  * Renders the structured SRS frontmatter of a module page.
  *
  * The frontmatter is the single source of truth: it is what an assistant reads
- * over the MCP/llms.txt surface, and this component is how a human reads the
+ * over the llms.txt surface, and this component is how a human reads the
  * same data. Nothing here is authored twice - if a section is absent from
  * frontmatter, it simply does not render.
  */
@@ -85,6 +91,21 @@ interface Requirement extends Provenance {
   id: string;
   text: string;
   priority: 'must' | 'should' | 'could';
+  verification?: 'test' | 'demonstration' | 'inspection' | 'analysis';
+}
+
+/** Assumptions and constraints share one shape: a statement and its reason. */
+interface Statement extends Provenance {
+  id: string;
+  text: string;
+  rationale?: string;
+}
+
+interface Reference extends Provenance {
+  id: string;
+  title: string;
+  url: string;
+  note?: string;
 }
 
 interface Nfr extends Provenance {
@@ -97,6 +118,7 @@ interface Acceptance extends Provenance {
   given: string;
   when: string;
   then: string;
+  verifies?: string[];
 }
 
 interface Endpoint extends Provenance {
@@ -161,6 +183,7 @@ export interface ModuleSpecData {
   scope?: string[];
   nonGoals?: string[];
   actors?: Named[];
+  assumptions?: Statement[];
   glossary?: GlossaryEntry[];
 
   concepts?: Named[];
@@ -174,6 +197,7 @@ export interface ModuleSpecData {
 
   functionalRequirements?: Requirement[];
   nonFunctionalRequirements?: Nfr[];
+  constraints?: Statement[];
   acceptanceCriteria?: Acceptance[];
 
   api?: Endpoint[];
@@ -185,6 +209,7 @@ export interface ModuleSpecData {
   decisions?: Decision[];
   openQuestions?: string[];
   changelog?: ChangelogEntry[];
+  references?: Reference[];
 }
 
 const has = (v: unknown[] | undefined): boolean => Array.isArray(v) && v.length > 0;
@@ -206,12 +231,15 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     requirements: has(data.functionalRequirements),
     nfrs: has(data.nonFunctionalRequirements),
     acceptance: has(data.acceptanceCriteria),
+    constraints: has(data.constraints),
     actors: has(data.actors),
+    assumptions: has(data.assumptions),
     concepts: has(data.concepts),
     glossary: has(data.glossary),
     decisions: has(data.decisions),
     'open-questions': has(data.openQuestions),
     changelog: has(data.changelog),
+    references: has(data.references),
   };
   return new Set(SPEC_SECTIONS.filter((s) => present[s.id]).map((s) => s.id));
 }
@@ -226,12 +254,16 @@ export function activeSpecGroups(data: ModuleSpecData) {
   }));
 }
 
-/** TOC entries for the spec: groups, with their sections nested beneath. */
-export function specToc(data: ModuleSpecData) {
-  return activeSpecGroups(data).flatMap((g) => [
-    { title: g.title, url: `#${g.id}`, depth: 2 },
-    ...g.sections.map((id) => ({ title: sectionTitle(id), url: `#${id}`, depth: 3 })),
-  ]);
+/**
+ * TOC entries for one page of the spec. The module's own page lists the
+ * overview sections; a sub-page lists the sections of its group.
+ */
+export function specToc(data: ModuleSpecData, groupId = 'overview') {
+  const group = activeSpecGroups(data).find((g) => g.id === groupId);
+  if (!group) return [];
+  // On the module's own page the sections sit under the "Specification" heading.
+  const depth = groupId === 'overview' ? 3 : 2;
+  return group.sections.map((id) => ({ title: sectionTitle(id), url: `#${id}`, depth }));
 }
 
 // --- layers ----------------------------------------------------------------
@@ -503,7 +535,17 @@ const Label = ({ children }: { children: ReactNode }) => (
 
 // --- the spec --------------------------------------------------------------
 
-export function ModuleSpec({ data }: { data: ModuleSpecData }) {
+export function ModuleSpec({
+  data,
+  group = 'overview',
+  baseUrl,
+}: {
+  data: ModuleSpecData;
+  /** Which page of the spec to render: 'overview' for the module's own page, or a group id. */
+  group?: string;
+  /** URL of the module's own page, for links between the spec's pages. */
+  baseUrl: string;
+}) {
   // Not a graph node - ordinary docs page, render nothing.
   if (!data.module) return null;
 
@@ -863,6 +905,11 @@ export function ModuleSpec({ data }: { data: ModuleSpecData }) {
               <span className="leading-relaxed">
                 {r.text} {origin(r.from)}
               </span>
+              {r.verification && (
+                <span className="ml-auto shrink-0 font-code text-xs text-fd-muted-foreground">
+                  {r.verification}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -907,11 +954,64 @@ export function ModuleSpec({ data }: { data: ModuleSpecData }) {
             <dd>{a.when}</dd>
             <dt className="font-medium text-fd-foreground">Then</dt>
             <dd>{a.then}</dd>
+            {has(a.verifies) && (
+              <>
+                <dt className="font-medium text-fd-foreground">Verifies</dt>
+                <dd className="font-code text-sm">{a.verifies!.join(', ')}</dd>
+              </>
+            )}
           </dl>
         ),
         from: a,
       })),
       (items) => <AccordionList origin={origin} items={items} />,
+    ),
+
+    constraints: grouped(
+      (data.constraints ?? []).map((c) => ({
+        key: c.id,
+        ref: c.id,
+        text: c.text,
+        detail: c.rationale && (
+          <>
+            <Label>Why:</Label>
+            {c.rationale}
+          </>
+        ),
+        from: c,
+      })),
+      (items) => <AccordionList origin={origin} items={items} />,
+    ),
+
+    assumptions: grouped(
+      (data.assumptions ?? []).map((a) => ({
+        key: a.id,
+        ref: a.id,
+        text: a.text,
+        detail: a.rationale && (
+          <>
+            <Label>Why:</Label>
+            {a.rationale}
+          </>
+        ),
+        from: a,
+      })),
+      (items) => <AccordionList origin={origin} items={items} />,
+    ),
+
+    references: grouped(
+      (data.references ?? []).map((r) => ({
+        key: (
+          <a href={r.url} target="_blank" rel="noreferrer noopener">
+            {r.title}
+          </a>
+        ),
+        ref: r.id,
+        meta: [r.id],
+        body: r.note,
+        from: r,
+      })),
+      (items) => <ItemList origin={origin} items={items} />,
     ),
 
     actors: grouped(
@@ -995,25 +1095,69 @@ export function ModuleSpec({ data }: { data: ModuleSpecData }) {
     ),
   };
 
+  const groups = activeSpecGroups(data);
+  const current = groups.find((g) => g.id === group);
+  const sections = (level: 'h2' | 'h3') =>
+    current?.sections.map((id) => {
+      const Heading = level;
+      return (
+        <section key={id}>
+          <Heading id={id} className="scroll-m-20">
+            {sectionTitle(id)}
+          </Heading>
+          {lists[id]}
+        </section>
+      );
+    });
+
+  // A sub-page: only its group, with a line saying which spec it belongs to.
+  if (group !== 'overview') {
+    return (
+      <div className="mt-2">
+        <SubPageNote data={data} baseUrl={baseUrl} />
+        {sections('h2')}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-16">
       <SpecIntro data={data} />
-      {activeSpecGroups(data).map((group) => (
-        <section key={group.id}>
-          <h2 id={group.id} className="scroll-m-20">
-            {group.title}
-          </h2>
-          {group.sections.map((id) => (
-            <section key={id}>
-              <h3 id={id} className="scroll-m-20">
-                {sectionTitle(id)}
-              </h3>
-              {lists[id]}
-            </section>
-          ))}
-        </section>
-      ))}
+      {sections('h3')}
+      <SpecContents groups={groups} baseUrl={baseUrl} />
     </div>
+  );
+}
+
+/** The other pages of this spec, listed at the end of the module's own page. */
+function SpecContents({ groups, baseUrl }: { groups: SpecGroup[]; baseUrl: string }) {
+  const pages = groups.filter((g) => g.slug);
+  if (pages.length === 0) return null;
+  return (
+    <section>
+      <h3 id="in-this-specification" className="scroll-m-20">
+        In this specification
+      </h3>
+      <ul>
+        {pages.map((g) => (
+          <li key={g.id}>
+            <Link href={`${baseUrl}/${g.slug}`}>{g.title}</Link>: {g.summary}.
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Opens a sub-page: the spec and version it belongs to, and how layers are shown. */
+function SubPageNote({ data, baseUrl }: { data: ModuleSpecData; baseUrl: string }) {
+  const layered = has(data.lineage?.basedOn);
+  const statusText = data.status === 'stable' ? 'stable' : data.status === 'deprecated' ? 'deprecated' : 'draft';
+  return (
+    <p className="text-sm text-fd-muted-foreground">
+      Part of the <Link href={baseUrl}>{data.module} specification</Link>, v{data.version} ({statusText}).
+      {layered && ' Items are grouped by the layer they come from.'}
+    </p>
   );
 }
 
@@ -1053,7 +1197,7 @@ function SpecIntro({ data }: { data: ModuleSpecData }) {
                 <LayerLink {...l} />
               </span>
             ))}
-            . Everything from those pages is included below and labelled with where it comes from.
+            . Everything from those pages is included in this specification and labelled with where it comes from.
           </p>
         ) : (
           <p className="mt-1.5">

@@ -47,6 +47,9 @@ const KEYS = {
   errors: (i: Item) => str(i.code),
   dependencies: (i: Item) => `${str(i.service)}:${str(i.direction)}`,
   decisions: (i: Item) => str(i.id),
+  assumptions: (i: Item) => str(i.id),
+  constraints: (i: Item) => str(i.id),
+  references: (i: Item) => str(i.id),
 } satisfies Partial<Record<keyof ModuleSpecData, (i: Item) => string>>;
 
 /** Frontmatter list fields that inherit down the chain. */

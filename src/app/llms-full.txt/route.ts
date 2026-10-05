@@ -1,9 +1,10 @@
-import { getLLMText, source } from '@/lib/source';
+import { getLLMText, source, specViewOf } from '@/lib/source';
 
 export const revalidate = false;
 
 export async function GET() {
-  const scan = source.getPages().map(getLLMText);
+  // Sub-pages repeat parts of their module's spec, which is already included in full.
+  const scan = source.getPages().filter((page) => !specViewOf(page)).map(getLLMText);
   const scanned = await Promise.all(scan);
 
   return new Response(scanned.join('\n\n'));

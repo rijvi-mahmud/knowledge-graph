@@ -1,8 +1,8 @@
 ---
 title: Appointment
-description: The scheduling lifecycle - booking, rescheduling, cancellation, reminders and attendance - specified in industry-neutral terms.
+description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.3.0
+version: 0.4.0
 status: stable
 
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
@@ -14,12 +14,12 @@ scope:
   - Schedule reminders relative to the start time
   - Emit lifecycle events other modules react to
 nonGoals:
-  - Owning participant identity - that belongs to the Identity module
-  - Owning payment or billing - that belongs to the Billing module
+  - Owning participant identity, which belongs to the Identity module
+  - Owning payment or billing, which belongs to the Billing module
   - Owning what happens during the appointment, such as notes or outcomes
-  - Computing availability, working hours, buffers or minimum booking notice - Appointment asks Calendar
-  - Recurring series - see open questions
-  - Delivering notifications - Appointment emits reminder_due and Notification delivers it
+  - Computing availability, working hours, buffers or minimum booking notice. Appointment asks Calendar.
+  - Recurring series (see open questions)
+  - Delivering notifications. Appointment emits reminder_due and Notification delivers it.
 
 actors:
   - name: Requester
@@ -30,6 +30,20 @@ actors:
     description: Operator with elevated rights to book, move, cancel or close out appointments on behalf of others.
   - name: System
     description: Automated actor that dispatches reminders and, where enabled, records no-shows after a grace period.
+
+assumptions:
+  - id: AS-1
+    text: Calendar is the authority on availability, including working hours, buffers, minimum notice and how far ahead bookings are allowed.
+    rationale: Appointment asks Calendar instead of computing availability (ADR-4). If Calendar answers wrongly, Appointment books what it was told is free.
+  - id: AS-2
+    text: Identity ids stay resolvable for the life of an appointment, including after a participant's account is deactivated.
+    rationale: Appointments are kept forever (BR-2) and keep referring to their participants. Identity owns what happens to the person behind the id.
+  - id: AS-3
+    text: Notification delivers reminders and formats times for each participant. Appointment only decides when a reminder is due.
+    rationale: Channels, templates and languages vary by deployment and don't belong in the booking lifecycle.
+  - id: AS-4
+    text: Server clocks are synchronised to UTC, for example with NTP.
+    rationale: Whether a start time is in the future, and when a reminder fires, are decided by server time. A drifting clock accepts bookings in the past and sends reminders late.
 
 glossary:
   - term: Slot
@@ -77,7 +91,7 @@ dataModel:
   - name: end_time
     type: local datetime
     required: true
-    description: Wall-clock end in time_zone. Exclusive - the slot ends immediately before this time.
+    description: Wall-clock end in time_zone. It is exclusive, so the slot ends immediately before this time.
     constraints: after start_time
   - name: time_zone
     type: string
@@ -93,6 +107,11 @@ dataModel:
     type: instant
     required: true
     description: Absolute end, derived from end_time and time_zone.
+    constraints: derived, never written by clients
+  - name: tz_version
+    type: string
+    required: true
+    description: The IANA time zone database release used to derive start_at and end_at, for example 2026e.
     constraints: derived, never written by clients
   - name: status
     type: enum
@@ -178,15 +197,18 @@ businessRules:
   - id: BR-6
     text: Every appointment has one reference time zone. Its times are stored as wall-clock time in that zone, and absolute instants are derived from them and recomputed for future appointments when time zone rules change.
     rationale: People agree to a time in a particular place, such as 09:00 in New York. Governments change daylight saving rules with little notice, and an instant computed before the change would move the appointment.
-  - id: BR-9
-    text: Every participant sees the appointment, and receives its reminders, in their own time zone. Times shown to a participant are converted from the absolute instant and always include the zone or offset.
-    rationale: Participants in different countries share one moment, not one clock reading. The gap between two zones also changes during the year because countries switch daylight saving time on different dates, so a fixed offset per participant would be wrong for weeks at a time.
   - id: BR-7
     text: A reminder whose dispatch time has already passed when the appointment is booked or rescheduled is skipped. It never causes the booking to fail.
     rationale: With a 24-hour default, rejecting such bookings would block every same-day appointment. The remaining reminders still fire.
   - id: BR-8
     text: A no-show can be recorded only after the appointment's start time. By default a Scheduler records it; automatic recording after a grace period is a per-deployment setting.
     rationale: Leading scheduling products record no-shows manually, because only staff know whether someone is running late, attended remotely or was seen elsewhere. A wrongly recorded no-show is terminal and can trigger fees.
+  - id: BR-9
+    text: Every participant sees the appointment, and receives its reminders, in their own time zone. Times shown to a participant are converted from the absolute instant and always include the zone or offset.
+    rationale: Participants in different countries share one moment, not one clock reading. The gap between two zones also changes during the year because countries switch daylight saving time on different dates, so a fixed offset per participant would be wrong for weeks at a time.
+  - id: BR-10
+    text: A wall-clock time that doesn't exist in the reference time zone, because clocks went forward, is rejected. A wall-clock time that occurs twice, because clocks went back, must come with a UTC offset to say which one is meant; without one it's rejected.
+    rationale: Guessing silently books the wrong hour. JavaScript's Temporal offers a reject option for exactly these cases, and an RFC 9557 timestamp carries the offset that removes the doubt.
 
 validations:
   - field: start_time
@@ -198,6 +220,9 @@ validations:
   - field: start_time
     rule: must exist in time_zone; a wall-clock time skipped by a daylight saving change is rejected
     error: APPOINTMENT_INVALID_LOCAL_TIME
+  - field: start_time
+    rule: a wall-clock time that occurs twice in time_zone must come with a UTC offset
+    error: APPOINTMENT_AMBIGUOUS_LOCAL_TIME
   - field: time_zone
     rule: must be a valid IANA time zone name
     error: APPOINTMENT_INVALID_TIME_ZONE
@@ -293,40 +318,55 @@ functionalRequirements:
   - id: FR-1
     text: The service must let an authorised actor book an appointment for two or more participants.
     priority: must
+    verification: test
   - id: FR-2
     text: The service must reject a booking or reschedule whose slot overlaps an active appointment for any participant, and the check must hold when requests arrive concurrently.
     priority: must
+    verification: test
   - id: FR-3
     text: The service must allow only the transitions declared in the state machine and reject all others.
     priority: must
+    verification: test
   - id: FR-4
     text: The service must schedule one reminder per offset, skip offsets already in the past, reschedule reminders when the time changes, and withdraw them when the appointment leaves booked.
     priority: must
+    verification: test
   - id: FR-5
     text: The service must retain cancelled appointments and expose them to reads.
     priority: must
+    verification: test
   - id: FR-6
     text: The service must emit a lifecycle event for every status change and every reschedule.
     priority: must
+    verification: test
   - id: FR-7
     text: The service must store wall-clock times with an IANA reference time zone, and recompute derived instants for future appointments when the time zone database changes.
     priority: must
-  - id: FR-11
-    text: The service must return start_at and end_at as RFC 3339 timestamps in UTC, and start and end as RFC 9557 timestamps that carry both the offset and the reference zone, so any client can convert them to its own time zone.
-    priority: must
-  - id: FR-12
-    text: The service must give Notification each participant's time zone with every reminder, so the reminder shows the time in the participant's zone.
-    priority: must
+    verification: test
   - id: FR-8
     text: The service must accept an Idempotency-Key on book, reschedule, cancel, complete and record-no-show requests, and return the original result when a request is retried with the same key.
     priority: must
+    verification: test
   - id: FR-9
     text: The service must reject a reschedule whose revision doesn't match the stored revision.
     priority: must
+    verification: test
   - id: FR-10
     text: The service should let a deployment record no-shows automatically once a configurable grace period after start_at has passed with no completion.
     priority: should
-
+    verification: test
+  - id: FR-11
+    text: The service must return start_at and end_at as RFC 3339 timestamps in UTC, and start and end as RFC 9557 timestamps that carry both the offset and the reference zone, so any client can convert them to its own time zone.
+    priority: must
+    verification: test
+  - id: FR-12
+    text: The service must give Notification each participant's time zone with every reminder, so the reminder shows the time in the participant's zone.
+    priority: must
+    verification: test
+  - id: FR-13
+    text: The service must fail a booking or reschedule when Calendar can't be reached, instead of booking without an availability check.
+    priority: must
+    verification: test
 nonFunctionalRequirements:
   - category: availability
     text: Read paths stay available when downstream consumers are unavailable, and downstream outages never block a booking.
@@ -341,64 +381,139 @@ nonFunctionalRequirements:
   - category: maintainability
     text: Industry-specific behaviour is additive. Core stays deployable with no industry layer present.
 
+constraints:
+  - id: CON-1
+    text: Instants are exchanged as RFC 3339 timestamps in UTC, zoned times as RFC 9557 timestamps, and time zones as IANA names.
+    rationale: These are the formats other systems already parse, and only an RFC 9557 timestamp carries both the offset and the zone a time was agreed in.
+  - id: CON-2
+    text: The overlap check and the write that books a slot are one atomic operation, such as a database exclusion constraint on the participant and the slot.
+    rationale: A check in application code followed by a separate insert lets two concurrent requests both succeed.
+  - id: CON-3
+    text: Reminders and automatic no-show recording run on a durable scheduler, never on in-process timers.
+    rationale: Appointments are booked months ahead, and in-process timers don't survive deploys or restarts (ADR-3).
+  - id: CON-4
+    text: Each appointment records the time zone database release its instants were derived with (tz_version).
+    rationale: When IANA publishes a release, it identifies exactly which future appointments need their instants recomputed.
+
 acceptanceCriteria:
   - id: AC-1
     given: a requester with appointment.write and two valid participants
     when: they book a free future slot
     then: an appointment is created with status booked and revision 0, and appointment.booked is emitted
+    verifies:
+      - BR-1
+      - FR-1
   - id: AC-2
     given: an active appointment from 09:00 to 10:00 for a participant
     when: another booking from 09:30 to 10:30 is requested for the same participant
     then: the request fails with APPOINTMENT_SLOT_TAKEN and nothing is persisted
+    verifies:
+      - BR-4
+      - FR-2
   - id: AC-3
     given: an active appointment from 09:00 to 10:00 for a participant
     when: another booking from 10:00 to 11:00 is requested for the same participant
     then: the booking succeeds, because the slots are back-to-back, not overlapping
+    verifies:
+      - BR-4
   - id: AC-4
     given: two concurrent requests for overlapping slots for the same participant
     when: both are processed
     then: exactly one succeeds and the other fails with APPOINTMENT_SLOT_TAKEN
+    verifies:
+      - FR-2
+      - CON-2
   - id: AC-5
     given: an appointment in status completed
     when: a cancel is attempted
     then: the request fails with APPOINTMENT_TERMINAL_STATE and the record is unchanged
+    verifies:
+      - BR-5
+      - FR-3
   - id: AC-6
     given: a booking request 3 hours before start_at with reminder_offsets [24h, 2h]
     when: it is booked
     then: the booking succeeds, only the 2-hour reminder is scheduled, and no error is raised
+    verifies:
+      - BR-7
+      - FR-4
   - id: AC-7
     given: a booked appointment at revision 2 with a pending reminder
     when: it is rescheduled with revision 2
     then: the id is unchanged, revision becomes 3, the old reminder is withdrawn, a new one is scheduled and appointment.rescheduled is emitted
+    verifies:
+      - BR-3
+      - FR-4
+      - FR-6
   - id: AC-8
     given: a booked appointment at revision 3
     when: a reschedule is submitted with revision 2
     then: the request fails with APPOINTMENT_REVISION_CONFLICT and the appointment is unchanged
+    verifies:
+      - FR-9
   - id: AC-9
     given: a booking request that succeeded
     when: it is retried with the same Idempotency-Key and the same body
     then: the original appointment is returned and no second appointment is created
+    verifies:
+      - FR-8
   - id: AC-10
     given: a booked appointment whose start_at is in the future
     when: a Scheduler records a no-show
     then: the request fails with APPOINTMENT_NOT_YET_STARTED
+    verifies:
+      - BR-8
   - id: AC-11
     given: an appointment at 09:00 Europe/Zurich, booked before a change to the zone's daylight saving rules
     when: the time zone database is updated
     then: start_time stays 09:00 and start_at is recomputed under the new rules
-  - id: AC-13
-    given: an appointment at 09:00 America/New_York on 3 March 2026, with participants in Europe/Zurich and Asia/Tokyo
-    when: each participant views it
-    then: the Zurich participant sees 15:00 and the Tokyo participant sees 23:00, and start_at is 14:00 UTC for everyone
-  - id: AC-14
-    given: an appointment at 09:00 America/New_York on 10 March 2026, after the United States has switched to daylight saving time but before Europe has
-    when: the Europe/Zurich participant views it
-    then: they see 14:00, not 15:00
+    verifies:
+      - BR-6
+      - FR-7
   - id: AC-12
     given: an appointment with a pending reminder
     when: it is cancelled
     then: the reminder is withdrawn and no appointment.reminder_due is emitted
-
+    verifies:
+      - FR-4
+  - id: AC-13
+    given: an appointment at 09:00 America/New_York on 3 March 2026, with participants in Europe/Zurich and Asia/Tokyo
+    when: each participant views it
+    then: the Zurich participant sees 15:00 and the Tokyo participant sees 23:00, and start_at is 14:00 UTC for everyone
+    verifies:
+      - BR-9
+      - FR-11
+  - id: AC-14
+    given: an appointment at 09:00 America/New_York on 10 March 2026, after the United States has switched to daylight saving time but before Europe has
+    when: the Europe/Zurich participant views it
+    then: they see 14:00, not 15:00
+    verifies:
+      - BR-9
+  - id: AC-15
+    given: a booking request for 01:30 America/New_York on 1 November 2026, with no UTC offset
+    when: it is submitted
+    then: the request fails with APPOINTMENT_AMBIGUOUS_LOCAL_TIME, because 01:30 occurs twice that night
+    verifies:
+      - BR-10
+  - id: AC-16
+    given: a booking request for 2026-11-01T01:30:00-05:00[America/New_York]
+    when: it is submitted
+    then: the booking succeeds at the second 01:30, and start_at is 06:30 UTC
+    verifies:
+      - BR-10
+      - FR-11
+  - id: AC-17
+    given: a booking request for 02:30 America/New_York on 8 March 2026
+    when: it is submitted
+    then: the request fails with APPOINTMENT_INVALID_LOCAL_TIME, because clocks skip from 02:00 to 03:00 that night
+    verifies:
+      - BR-10
+  - id: AC-18
+    given: Calendar can't be reached
+    when: a booking is requested
+    then: the request fails with APPOINTMENT_AVAILABILITY_UNAVAILABLE and nothing is persisted
+    verifies:
+      - FR-13
 api:
   - method: POST
     path: /appointments
@@ -409,6 +524,8 @@ api:
       - APPOINTMENT_INVALID_TIME_RANGE
       - APPOINTMENT_START_IN_PAST
       - APPOINTMENT_INVALID_LOCAL_TIME
+      - APPOINTMENT_AMBIGUOUS_LOCAL_TIME
+      - APPOINTMENT_AVAILABILITY_UNAVAILABLE
       - APPOINTMENT_INVALID_TIME_ZONE
       - APPOINTMENT_INVALID_PARTICIPANTS
       - APPOINTMENT_INVALID_REMINDER_OFFSET
@@ -438,6 +555,8 @@ api:
       - APPOINTMENT_INVALID_TIME_RANGE
       - APPOINTMENT_START_IN_PAST
       - APPOINTMENT_INVALID_LOCAL_TIME
+      - APPOINTMENT_AMBIGUOUS_LOCAL_TIME
+      - APPOINTMENT_AVAILABILITY_UNAVAILABLE
   - method: POST
     path: /appointments/{id}/cancel
     description: Cancel the appointment without deleting it. Accepts an Idempotency-Key header.
@@ -532,6 +651,12 @@ errors:
   - code: APPOINTMENT_INVALID_LOCAL_TIME
     http: 422
     message: The requested time doesn't exist in this time zone because of a daylight saving change.
+  - code: APPOINTMENT_AMBIGUOUS_LOCAL_TIME
+    http: 422
+    message: The requested time occurs twice in this time zone. Send it with a UTC offset to choose one.
+  - code: APPOINTMENT_AVAILABILITY_UNAVAILABLE
+    http: 503
+    message: Availability couldn't be checked because Calendar is unavailable. Retry later.
   - code: APPOINTMENT_INVALID_TIME_ZONE
     http: 422
     message: time_zone must be a valid IANA time zone name.
@@ -582,17 +707,17 @@ decisions:
   - id: ADR-1
     decision: Cancellation is a status change, never a delete.
     rationale: Downstream modules keep references to appointment ids, and hard delete breaks billing and audit trails.
-    alternatives: Hard delete with a tombstone table - rejected because it duplicates state and complicates reads.
+    alternatives: Hard delete with a tombstone table. Rejected because it duplicates state and complicates reads.
     date: '2026-01-15'
   - id: ADR-2
     decision: Rescheduling changes the existing appointment and increases its revision instead of creating a successor.
     rationale: Attendance history and no-show statistics must follow one appointment across time changes, and the revision gives clients the same signal as iCalendar's SEQUENCE.
-    alternatives: Cancel the original and book a linked replacement, as Cal.com and Calendly do - rejected because every reschedule then counts as a cancellation and history is split across records. Integrations with those systems map each revision to a new linked booking.
+    alternatives: Cancel the original and book a linked replacement, as Cal.com and Calendly do. Rejected because every reschedule then counts as a cancellation and history is split across records. Integrations with those systems map each revision to a new linked booking.
     date: '2026-01-15'
   - id: ADR-3
     decision: Reminders are delegated to a durable scheduler rather than in-process timers.
     rationale: Appointments are booked months ahead, and in-process timers don't survive deploys or restarts.
-    alternatives: A periodic sweep over the table - viable, but adds polling latency and load at scale.
+    alternatives: A periodic sweep over the table. Viable, but adds polling latency and load at scale.
     date: '2026-01-20'
   - id: ADR-4
     decision: Availability, including working hours, buffers and minimum notice, is asked of Calendar rather than computed inside Appointment.
@@ -601,17 +726,17 @@ decisions:
   - id: ADR-5
     decision: Rescheduled is an event and a revision, not a status.
     rationale: A rescheduled appointment is still booked. A separate status forced a confirm step back to booked, and left completion and no-shows undefined for rescheduled appointments. iCalendar and Google Calendar have no rescheduled status either.
-    alternatives: Keep rescheduled as a status - rejected for the reasons above.
+    alternatives: Keep rescheduled as a status. Rejected for the reasons above.
     date: '2026-10-05'
   - id: ADR-6
     decision: Each appointment stores wall-clock time in one reference time zone, with instants derived, and each participant has their own display time zone.
     rationale: For future events, an instant computed today can be wrong by the time the event happens if time zone rules change. One reference zone keeps a single source of truth, and converting from the instant gives every participant the correct local time. Google Calendar and RFC 5545 attach a zone to the event, and Cal.com stores the host's and each attendee's zone separately.
-    alternatives: Store only UTC instants - rejected because a rule change silently moves future appointments. Store a fixed UTC offset - rejected because offsets carry no daylight saving rules. Store each participant's local time - rejected because the copies disagree after a rule change.
+    alternatives: Store only UTC instants. Rejected because a rule change silently moves future appointments. Store a fixed UTC offset. Rejected because offsets carry no daylight saving rules. Store each participant's local time. Rejected because the copies disagree after a rule change.
     date: '2026-10-05'
   - id: ADR-7
     decision: No-shows are recorded by a Scheduler by default, with automatic recording after a grace period as an opt-in setting.
     rationale: Acuity Scheduling and Cal.com both record no-shows manually. Automatic expiry mislabels late arrivals and remote attendance, and a no-show is terminal and can carry fees.
-    alternatives: Always record no-shows automatically when end_at passes - rejected for the reasons above.
+    alternatives: Always record no-shows automatically when end_at passes. Rejected for the reasons above.
     date: '2026-10-05'
 
 openQuestions:
@@ -620,8 +745,67 @@ openQuestions:
   - Should attendance be recorded per participant rather than for the whole appointment? Cal.com records absence separately for the host and each attendee.
   - How is a wrongly recorded no-show corrected, given that no_show is terminal?
   - Should overlap be checked per resource, such as a room or device, as well as per participant?
+  - Can participants be added to or removed from a booked appointment, and does that count as a reschedule?
+
+references:
+  - id: REF-1
+    title: ISO/IEC/IEEE 29148:2018, Requirements engineering
+    url: https://standards.ieee.org/standard/29148-2018.html
+    note: Structure of this specification, and the four verification methods.
+  - id: REF-2
+    title: RFC 5545, iCalendar
+    url: https://www.rfc-editor.org/rfc/rfc5545
+    note: Event status values, exclusive end time and SEQUENCE.
+  - id: REF-3
+    title: RFC 3339, Date and Time on the Internet
+    url: https://www.rfc-editor.org/rfc/rfc3339
+  - id: REF-4
+    title: RFC 9557, Date and Time with Additional Information
+    url: https://www.rfc-editor.org/rfc/rfc9557
+    note: Timestamps that carry both a UTC offset and a time zone name.
+  - id: REF-5
+    title: IANA Time Zone Database
+    url: https://www.iana.org/time-zones
+  - id: REF-6
+    title: Temporal.ZonedDateTime, MDN
+    url: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/ZonedDateTime
+    note: How skipped and repeated local times are resolved.
+  - id: REF-7
+    title: Google Calendar API, Events
+    url: https://developers.google.com/workspace/calendar/api/v3/reference/events
+  - id: REF-8
+    title: Cal.com API, Bookings
+    url: https://cal.com/docs/api-reference/v2/bookings/get-a-booking
+  - id: REF-9
+    title: Calendly, webhook payloads for rescheduled events
+    url: https://developer.calendly.com/see-how-webhook-payloads-change-when-invitees-reschedule-events
+  - id: REF-10
+    title: Acuity Scheduling, marking appointments as no-shows
+    url: https://help.acuityscheduling.com/hc/en-us/articles/36176963261325-Marking-appointments-as-no-shows
+  - id: REF-11
+    title: Stripe API, Idempotent requests
+    url: https://docs.stripe.com/api/idempotent_requests
+  - id: REF-12
+    title: PostgreSQL, Exclusion constraints
+    url: https://www.postgresql.org/docs/current/ddl-constraints.html
+  - id: REF-13
+    title: Optimizing number and timing of appointment reminders, a randomized trial
+    url: https://www.ajmc.com/view/optimizing-number-and-timing-of-appointment-reminders-a-randomized-trial
+  - id: REF-14
+    title: Storing UTC is not a silver bullet, Jon Skeet
+    url: https://codeblog.jonskeet.uk/2019/03/27/storing-utc-is-not-a-silver-bullet/
+    note: Practitioner analysis of storing future times.
 
 changelog:
+  - version: 0.4.0
+    date: '2026-10-05'
+    changes:
+      - Added assumptions, constraints and references, following ISO/IEC/IEEE 29148.
+      - Every functional requirement names its verification method, and every acceptance criterion lists the rules and requirements it verifies.
+      - Times that occur twice when clocks go back must carry a UTC offset (BR-10, AC-15, AC-16).
+      - A booking fails with APPOINTMENT_AVAILABILITY_UNAVAILABLE when Calendar can't be reached (FR-13, AC-18).
+      - Added tz_version so appointments can be recomputed after a time zone database release (CON-4).
+    breaking: false
   - version: 0.3.0
     date: '2026-10-05'
     changes:
@@ -709,6 +893,12 @@ APIs return both forms: `start_at` in UTC, and `start` in the RFC 9557 format
 that carries the offset and the zone, such as
 `2026-03-03T09:00:00-05:00[America/New_York]` (FR-11).
 
+Twice a year a local time is unclear. In New York, 02:30 on 8 March 2026 never
+happens, because clocks jump from 02:00 to 03:00. 01:30 on 1 November 2026
+happens twice, because clocks go back an hour. The first is rejected, and the
+second needs a UTC offset to say which 01:30 is meant (BR-10). Guessing would
+quietly book the wrong hour.
+
 ## A reschedule changes the time, not the appointment
 
 Moving an appointment keeps its id, records the previous time and increases its
@@ -756,6 +946,6 @@ appointment id (BR-2).
 Each industry layer adds only what its industry requires and inherits
 everything else unchanged.
 
-- [Clinical appointments](/docs/healthcare/appointment) - healthcare
-- [Advisory appointments](/docs/finance/appointment) - finance
-- [General scheduling](/docs/productivity/appointment) - productivity, which uses this specification unchanged
+- [Clinical appointments](/docs/healthcare/appointment): healthcare
+- [Advisory appointments](/docs/finance/appointment): finance
+- [General scheduling](/docs/productivity/appointment): productivity, which uses this specification unchanged
