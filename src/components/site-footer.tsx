@@ -8,7 +8,7 @@ const columns = [
       { text: 'Introduction', href: docsRoute },
       { text: 'Appointment', href: `${docsRoute}/core/appointment` },
       { text: 'Healthcare', href: `${docsRoute}/healthcare` },
-      { text: 'EHR', href: `${docsRoute}/healthcare/ehr` },
+      { text: 'Electronic health record (EHR)', href: `${docsRoute}/healthcare/ehr` },
     ],
   },
   {
