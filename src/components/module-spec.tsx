@@ -145,24 +145,17 @@ interface TechnicalNote extends Provenance {
   code?: string;
 }
 
+interface ApiConvention extends Provenance {
+  topic: string;
+  text: string;
+  reference?: string;
+}
+
 interface PersonalData extends Provenance {
   field: string;
   category: string;
   purpose: string;
   retention: string;
-}
-
-interface EnvelopeAttr extends Provenance {
-  name: string;
-  type: string;
-  required: boolean;
-  description: string;
-}
-
-interface ApiConvention extends Provenance {
-  topic: string;
-  text: string;
-  reference?: string;
 }
 
 interface PerformanceTarget extends Provenance {
@@ -199,12 +192,15 @@ interface Acceptance extends Provenance {
   verifies?: string[];
 }
 
-interface Endpoint extends Provenance {
-  method: string;
-  path: string;
+interface Operation extends Provenance {
+  name: string;
+  actor?: string;
   description: string;
-  request?: string;
-  response?: string;
+  method?: string;
+  path?: string;
+  success?: number;
+  input?: string;
+  output?: string;
   errors: string[];
 }
 
@@ -267,7 +263,6 @@ export interface ModuleSpecData {
   concepts?: Named[];
   dataModel?: Field[];
   relationships?: Relation[];
-  tables?: Table[];
 
   businessRules?: BusinessRule[];
   validations?: Validation[];
@@ -280,16 +275,16 @@ export interface ModuleSpecData {
   constraints?: Statement[];
   settings?: Setting[];
   performanceTargets?: PerformanceTarget[];
-  technicalNotes?: TechnicalNote[];
   acceptanceCriteria?: Acceptance[];
 
-  api?: Endpoint[];
+  operations?: Operation[];
+  apiConventions?: ApiConvention[];
+  tables?: Table[];
+  technicalNotes?: TechnicalNote[];
   events?: EventDef[];
   permissions?: Named[];
   accessMatrix?: AccessRow[];
   personalData?: PersonalData[];
-  apiConventions?: ApiConvention[];
-  eventEnvelope?: EnvelopeAttr[];
   deliveryGuarantees?: Statement[];
   errors?: ErrorDef[];
   dependencies?: Dependency[];
@@ -313,7 +308,10 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     workflows: has(data.workflows),
     'data-model': has(data.dataModel),
     relationships: has(data.relationships),
-    api: has(data.api),
+    operations: has(data.operations),
+    'api-conventions': has(data.apiConventions),
+    tables: has(data.tables),
+    'technical-notes': has(data.technicalNotes),
     events: has(data.events),
     permissions: has(data.permissions),
     errors: has(data.errors),
@@ -323,13 +321,10 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     acceptance: has(data.acceptanceCriteria),
     constraints: has(data.constraints),
     settings: has(data.settings),
-    'technical-notes': has(data.technicalNotes),
-    tables: has(data.tables),
     'edge-cases': has(data.edgeCases),
     'access-matrix': has(data.accessMatrix),
     context: has(data.dependencies),
-    'api-conventions': has(data.apiConventions),
-    'event-delivery': has(data.eventEnvelope) || has(data.deliveryGuarantees),
+    'event-delivery': has(data.deliveryGuarantees),
     privacy: has(data.personalData),
     performance: has(data.performanceTargets),
     acronyms: has(data.acronyms),
@@ -362,7 +357,7 @@ export function activeSpecGroups(data: ModuleSpecData) {
  * overview sections; a sub-page lists the sections of its group.
  */
 export function specToc(data: ModuleSpecData, sectionId?: SpecSectionId) {
-  // A section page: the database schema lists its tables, other sections need no TOC.
+  // A section page: the storage design lists its tables, other sections need no TOC.
   if (sectionId === 'tables')
     return (data.tables ?? []).map((t) => ({ title: t.name, url: `#table-${t.name}`, depth: 2 }));
   if (sectionId) return [];
@@ -694,6 +689,13 @@ function traceRows(data: ModuleSpecData) {
   ].map((r) => ({ ...r, verifiedBy: verifiers.get(r.id) ?? [] }));
 }
 
+const NonNormative = () => (
+  <p className="not-prose mb-4 rounded-lg border border-dashed border-fd-border px-3 py-2 text-sm text-fd-muted-foreground">
+    Non-normative: one way to build what the requirements describe. Nothing in the requirements
+    depends on it, so a team using another store or language can replace it.
+  </p>
+);
+
 // --- the spec --------------------------------------------------------------
 
 export function ModuleSpec({
@@ -918,41 +920,57 @@ export function ModuleSpec({
       ),
     ),
 
-    api: grouped(
-      (data.api ?? []).map((e) => ({
-        key: `${e.method} ${e.path}`,
-        id: <Badge tone={METHOD_TONE[e.method] ?? 'neutral'}>{e.method}</Badge>,
-        text: <span className="font-code text-sm">{e.path}</span>,
+    operations: grouped(
+      (data.operations ?? []).map((o) => ({
+        key: o.name,
+        text: (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="font-medium">{o.name}</span>
+            {o.method && o.path && (
+              <span className="flex items-center gap-1.5">
+                <Badge tone={METHOD_TONE[o.method] ?? 'neutral'}>{o.method}</Badge>
+                <span className="font-code text-sm">{o.path}</span>
+              </span>
+            )}
+          </span>
+        ),
+        meta: o.actor,
         detail: (
           <div className="flex flex-col gap-2">
-            <span className="text-fd-foreground">{e.description}</span>
-            {(e.request || e.response) && (
+            <span className="text-fd-foreground">{o.description}</span>
+            {o.success && (
+              <span>
+                <Label>Success:</Label>
+                <span className="font-code text-sm">{o.success}</span>
+              </span>
+            )}
+            {(o.input || o.output) && (
               <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1">
-                {e.request && (
+                {o.input && (
                   <>
-                    <dt className="font-medium text-fd-foreground">Request</dt>
-                    <dd>{e.request}</dd>
+                    <dt className="font-medium text-fd-foreground">Input</dt>
+                    <dd>{o.input}</dd>
                   </>
                 )}
-                {e.response && (
+                {o.output && (
                   <>
-                    <dt className="font-medium text-fd-foreground">Response</dt>
-                    <dd>{e.response}</dd>
+                    <dt className="font-medium text-fd-foreground">Result</dt>
+                    <dd>{o.output}</dd>
                   </>
                 )}
               </dl>
             )}
-            {e.errors.length > 0 && (
+            {o.errors.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="mr-1 font-medium text-fd-foreground">Errors</span>
-                {e.errors.map((code) => (
+                {o.errors.map((code) => (
                   <Chip key={code}>{code}</Chip>
                 ))}
               </div>
             )}
           </div>
         ),
-        from: e,
+        from: o,
       })),
       (items) => <AccordionList origin={origin} items={items} />,
     ),
@@ -1172,42 +1190,20 @@ export function ModuleSpec({
       (items) => <ItemList origin={origin} items={items} />,
     ),
 
-    'event-delivery': (
-      <>
-        {has(data.eventEnvelope) && (
+    'event-delivery': grouped(
+      (data.deliveryGuarantees ?? []).map((g) => ({
+        key: g.id,
+        ref: g.id,
+        text: g.text,
+        detail: g.rationale && (
           <>
-            <p>Every event carries this envelope, following CloudEvents:</p>
-            <Grid
-              head={['Attribute', 'Type', 'Required', 'Description']}
-              rows={(data.eventEnvelope ?? []).map((e) => [
-                <code key="n">{e.name}</code>,
-                <code key="t">{e.type}</code>,
-                e.required ? 'yes' : 'no',
-                <span key="d">
-                  {e.description} {origin(e)}
-                </span>,
-              ])}
-            />
+            <Label>Why:</Label>
+            {g.rationale}
           </>
-        )}
-        {has(data.deliveryGuarantees) && (
-          <AccordionList
-            origin={origin}
-            items={(data.deliveryGuarantees ?? []).map((g) => ({
-              key: g.id,
-              ref: g.id,
-              text: g.text,
-              detail: g.rationale && (
-                <>
-                  <Label>Why:</Label>
-                  {g.rationale}
-                </>
-              ),
-              from: g,
-            }))}
-          />
-        )}
-      </>
+        ),
+        from: g,
+      })),
+      (items) => <AccordionList origin={origin} items={items} />,
     ),
 
     privacy: (
@@ -1333,6 +1329,7 @@ export function ModuleSpec({
 
     tables: (
       <div className="flex flex-col gap-10">
+        <NonNormative />
         {(data.tables ?? []).map((t) => (
           <section key={t.name}>
             <h2 id={`table-${t.name}`} className="scroll-m-20 font-code">
@@ -1394,7 +1391,10 @@ export function ModuleSpec({
       />
     ),
 
-    'technical-notes': grouped(
+    'technical-notes': (
+      <>
+        <NonNormative />
+        {grouped(
       (data.technicalNotes ?? []).map((n) => ({
         key: n.title,
         ref: n.id,
@@ -1412,6 +1412,8 @@ export function ModuleSpec({
         from: n,
       })),
       (items) => <ItemList origin={origin} items={items} />,
+    )}
+      </>
     ),
 
     traceability: (

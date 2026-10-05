@@ -192,10 +192,10 @@ are defined only in `spec-sections.ts`:
 | (module page) | Narrative, the Specification callout, purpose and scope, product perspective (diagram from dependencies), actors, assumptions and dependencies, and an "In this specification" list |
 | Functions | Business rules, state machine, workflows, validations, edge cases |
 | Data | Data model (logical), relationships |
-| External interfaces | API, API conventions, events, event delivery (CloudEvents envelope and guarantees), errors, dependencies |
+| External interfaces | API (each operation with its HTTP method, path and success status), API conventions, events, event delivery guarantees, errors (with HTTP status), dependencies |
 | Security | Permission matrix (actions × actors: any, own, none or a condition), permissions, privacy and retention |
 | Requirements | Functional requirements (with verification method), performance requirements (SLIs and targets), quality attributes (ISO/IEC 25010), design constraints, configuration |
-| Design | Database schema (reference PostgreSQL tables, indexes, constraints), technical notes |
+| Reference implementation | Non-normative. Storage design (reference PostgreSQL tables, indexes, constraints) and implementation notes |
 | Verification | Acceptance criteria, traceability matrix (derived from each criterion's `verifies`) |
 | Supporting information | Concepts, glossary, acronyms, decisions, risks, open questions, references, version history |
 
@@ -213,6 +213,24 @@ Sidebar: one plain tree with folder icons (set via `icon` in `meta.json`). No
 root tabs, no separators, no nav links repeated in the docs sidebar. The user
 found those confusing.
 
+### Requirements say what, including the interface; never how it's stored or coded
+
+Requirements must be implementation-free (an ISO/IEC/IEEE 29148
+characteristic) and singular: one requirement, stated in one place.
+
+- **Normative**: business rules, operations, errors, events and quality
+  attributes. The HTTP interface counts as an external interface requirement,
+  because HTTP is a standard, not a vendor choice. Each operation carries its
+  method, path and success status, and each error its HTTP status, so an
+  endpoint is never described twice. `pnpm check:specs` fails if two
+  operations share a method and path.
+- **Non-normative**: storage (tables, SQL) and code live only in the
+  Reference implementation group, marked as one way to build it. No
+  requirement may reference them, so a team on another store or language
+  replaces only that group.
+- When the same fact appears in two places, keep it in one and remove the
+  other (for example DG-3 was dropped because FR-15 states it).
+
 ### Every module page is a complete SRS
 
 Treat each module, at every layer, as a complete software requirements
@@ -225,12 +243,12 @@ is what surfaces the edge cases. Before calling a module done, check it has:
 - **Acceptance criteria** whose `verifies` list cites rule, requirement or
   constraint ids that exist, with no "Not verified yet" left in the
   traceability matrix
-- A **permission matrix**, a reference **database schema**, **edge cases**
+- A **permission matrix**, a reference **storage design** (non-normative), **edge cases**
   (`EC-`, each citing the ids that cover it), **configuration** and
   **technical notes** (`TN-`)
 - **Privacy and retention** for every field holding personal data, and an
   erasure rule that respects GDPR Article 17(3)
-- The **event envelope** and **delivery guarantees** (`DG-`), **API
+- **Delivery guarantees** (`DG-`, including what every event carries), **API
   conventions**, **performance requirements** (`PERF-`, measurable; targets
   that vary by deployment say so instead of inventing a number), **risks**
   (`RISK-`) and **acronyms**

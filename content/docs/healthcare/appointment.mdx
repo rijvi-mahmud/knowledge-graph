@@ -155,25 +155,33 @@ acceptanceCriteria:
     when: the Encounter service creates its record
     then: encounter_id is written back and is readable on the appointment
 
-api:
-  - method: POST
-    path: /appointments/{id}/consent
+operations:
+  - name: Record consent
+    actor: Scheduler
     description: Record the patient's consent decision for this appointment.
-    request: consent_status, recorded_by
-    response: the updated appointment
+    method: POST
+    path: '/appointments/{id}/consent'
+    success: 200
+    input: consent decision, who recorded it
+    output: the updated appointment
     errors:
       - APPOINTMENT_NOT_FOUND
       - APPOINTMENT_TERMINAL_STATE
-  - method: GET
-    path: /appointments/{id}/eligibility
+  - name: Read eligibility
     description: Read the current payer eligibility result.
-    response: insurance_eligibility_status with payer detail
+    method: GET
+    path: '/appointments/{id}/eligibility'
+    success: 200
+    output: insurance_eligibility_status with payer detail
     errors:
       - APPOINTMENT_NOT_FOUND
-  - method: POST
-    path: /appointments/{id}/eligibility/recheck
-    description: Re-run the payer eligibility query.
-    response: accepted, result arrives asynchronously
+  - name: Recheck eligibility
+    actor: Scheduler
+    description: Run the payer eligibility check again. The result arrives later.
+    method: POST
+    path: '/appointments/{id}/eligibility/recheck'
+    success: 202
+    output: confirmation that the check started
 
 events:
   - name: appointment.eligibility_verified

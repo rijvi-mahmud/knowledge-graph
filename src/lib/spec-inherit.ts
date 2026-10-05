@@ -5,7 +5,7 @@ import type { LineageLink, ModuleSpecData } from '@/components/module-spec';
  * merged spec.
  *
  * Merge semantics:
- * - Domain facts (data model, rules, API, events, ...) inherit. Items are
+ * - Domain facts (data model, rules, operations, events, ...) inherit. Items are
  *   matched by their natural key; a child item with the same key replaces the
  *   parent's in place and records which layer it overrode. Everything else is
  *   appended in chain order, so core items come first.
@@ -41,7 +41,10 @@ const KEYS = {
   functionalRequirements: (i: Item) => str(i.id),
   nonFunctionalRequirements: (i: Item) => `${str(i.category)}:${str(i.text)}`,
   acceptanceCriteria: (i: Item) => str(i.id),
-  api: (i: Item) => `${str(i.method)} ${str(i.path)}`,
+  operations: (i: Item) => str(i.name),
+  apiConventions: (i: Item) => str(i.topic),
+  tables: (i: Item) => str(i.name),
+  technicalNotes: (i: Item) => str(i.id),
   events: (i: Item) => str(i.name),
   permissions: (i: Item) => str(i.name),
   errors: (i: Item) => str(i.code),
@@ -51,13 +54,9 @@ const KEYS = {
   constraints: (i: Item) => str(i.id),
   references: (i: Item) => str(i.id),
   accessMatrix: (i: Item) => str(i.action),
-  tables: (i: Item) => str(i.name),
   edgeCases: (i: Item) => str(i.id),
   settings: (i: Item) => str(i.name),
-  technicalNotes: (i: Item) => str(i.id),
   personalData: (i: Item) => str(i.field),
-  apiConventions: (i: Item) => str(i.topic),
-  eventEnvelope: (i: Item) => str(i.name),
   deliveryGuarantees: (i: Item) => str(i.id),
   performanceTargets: (i: Item) => str(i.id),
   acronyms: (i: Item) => str(i.term),

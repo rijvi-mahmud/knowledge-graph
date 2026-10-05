@@ -184,25 +184,32 @@ acceptanceCriteria:
     when: a booking is requested
     then: the request fails rather than proceeding with unverified status
 
-api:
-  - method: POST
-    path: /appointments/{id}/kyc-check
-    description: Trigger or refresh KYC verification for the client participant.
-    response: accepted, result arrives asynchronously
+operations:
+  - name: Check client verification
+    description: Start or refresh KYC verification for the client participant. The result arrives later.
+    method: POST
+    path: '/appointments/{id}/kyc-check'
+    success: 202
+    output: confirmation that the check started
     errors:
       - APPOINTMENT_NOT_FOUND
-  - method: POST
-    path: /appointments/override
-    description: Book with a compliance override of the KYC gate.
-    request: booking payload plus override_reason and officer id
-    response: the created appointment
+  - name: Book with a compliance override
+    actor: Compliance officer
+    description: Book even though the client's KYC check hasn't passed, with a recorded reason.
+    method: POST
+    path: '/appointments/override'
+    success: 201
+    input: the booking details, the override reason and the officer
+    output: the created appointment
     errors:
       - APPOINTMENT_OVERRIDE_NOT_PERMITTED
-  - method: GET
-    path: /advisors/{id}/schedule
-    description: Read an advisor's appointments for a date range.
-    request: from, to
-    response: appointments assigned to the advisor
+  - name: List an advisor's appointments
+    description: List an advisor's appointments for a time window.
+    method: GET
+    path: '/advisors/{id}/schedule'
+    success: 200
+    input: advisor, time window
+    output: the advisor's appointments
 
 events:
   - name: appointment.kyc_verified

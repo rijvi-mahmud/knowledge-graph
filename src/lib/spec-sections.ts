@@ -3,8 +3,11 @@
  *
  * Shared by <ModuleSpec /> (HTML), spec-markdown (AI) and the source loader,
  * which gives every section its own page inside a sidebar folder per group.
- * Titles follow ISO/IEC/IEEE 29148 where it has one. Section ids are stable
- * anchors and URL slugs: change a title freely, never an id.
+ * Titles follow ISO/IEC/IEEE 29148 where it has one. Requirements say what the
+ * module must do, including its HTTP interface, never how it is stored or
+ * coded. Storage and code live only in the non-normative Reference
+ * implementation group. Section ids are stable anchors and URL slugs: change a
+ * title freely, never an id.
  */
 
 export const SPEC_SECTIONS = [
@@ -38,17 +41,21 @@ export const SPEC_SECTIONS = [
   },
   { id: 'data-model', title: 'Data model', summary: 'Logical fields, types and constraints' },
   { id: 'relationships', title: 'Relationships', summary: 'How the module relates to others' },
-  { id: 'api', title: 'API', summary: 'Endpoints, requests, responses and errors' },
+  {
+    id: 'operations',
+    title: 'API',
+    summary: 'Every operation: its HTTP endpoint, who calls it, input, result and errors',
+  },
   {
     id: 'api-conventions',
     title: 'API conventions',
-    summary: 'Authentication, errors, pagination, rate limits and versioning',
+    summary: 'Authentication, error format, retries, paging, rate limits and versioning',
   },
   { id: 'events', title: 'Events', summary: 'Events the module emits and their payloads' },
   {
     id: 'event-delivery',
     title: 'Event delivery',
-    summary: 'The event envelope, delivery guarantees, ordering and versioning',
+    summary: 'What every event carries, and the delivery guarantees consumers can rely on',
   },
   { id: 'errors', title: 'Errors', summary: 'Every error code, its HTTP status and meaning' },
   {
@@ -89,16 +96,6 @@ export const SPEC_SECTIONS = [
   },
   { id: 'settings', title: 'Configuration', summary: 'Settings a deployment can change' },
   {
-    id: 'tables',
-    title: 'Database schema',
-    summary: 'Reference tables, columns, indexes and constraints',
-  },
-  {
-    id: 'technical-notes',
-    title: 'Technical notes',
-    summary: 'Implementation guidance for the hard parts',
-  },
-  {
     id: 'acceptance',
     title: 'Acceptance criteria',
     summary: 'Given / When / Then criteria for tests',
@@ -107,6 +104,16 @@ export const SPEC_SECTIONS = [
     id: 'traceability',
     title: 'Traceability matrix',
     summary: 'Which acceptance criteria verify each rule and requirement',
+  },
+  {
+    id: 'tables',
+    title: 'Storage design',
+    summary: 'One way to store the data: tables, indexes and constraints',
+  },
+  {
+    id: 'technical-notes',
+    title: 'Implementation notes',
+    summary: 'Guidance for the hard parts, with example code',
   },
   { id: 'concepts', title: 'Concepts', summary: 'The domain concepts the module is built on' },
   { id: 'glossary', title: 'Glossary', summary: 'Definitions of the terms used' },
@@ -151,7 +158,7 @@ export const SPEC_GROUPS: SpecGroup[] = [
     id: 'interfaces',
     title: 'External interfaces',
     slug: 'interfaces',
-    sections: ['api', 'api-conventions', 'events', 'event-delivery', 'errors', 'dependencies'],
+    sections: ['operations', 'api-conventions', 'events', 'event-delivery', 'errors', 'dependencies'],
   },
   {
     id: 'security',
@@ -165,12 +172,18 @@ export const SPEC_GROUPS: SpecGroup[] = [
     slug: 'requirements',
     sections: ['requirements', 'performance', 'nfrs', 'constraints', 'settings'],
   },
-  { id: 'design', title: 'Design', slug: 'design', sections: ['tables', 'technical-notes'] },
   {
     id: 'verification',
     title: 'Verification',
     slug: 'verification',
     sections: ['acceptance', 'traceability'],
+  },
+  {
+    // Non-normative: one way to build it. Nothing in the groups above depends on it.
+    id: 'reference-implementation',
+    title: 'Reference implementation',
+    slug: 'reference-implementation',
+    sections: ['tables', 'technical-notes'],
   },
   {
     id: 'supporting',

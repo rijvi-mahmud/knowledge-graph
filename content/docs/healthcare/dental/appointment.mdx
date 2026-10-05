@@ -235,28 +235,37 @@ acceptanceCriteria:
     when: a prophylaxis is completed on 10 March
     then: the next prophy recall is due 10 September and no appointment is created
 
-api:
-  - method: POST
-    path: /appointments/{id}/procedures
-    description: Attach treatment-planned procedures. Recomputes the time pattern unless time locked.
-    request: procedure_ids
-    response: the updated appointment
+operations:
+  - name: Attach procedures
+    actor: Scheduler
+    description: Attach treatment-planned procedures. Recomputes the time pattern unless the time is locked.
+    method: POST
+    path: '/appointments/{id}/procedures'
+    success: 200
+    input: the procedures to attach
+    output: the updated appointment
     errors:
       - APPOINTMENT_NOT_FOUND
       - APPOINTMENT_TERMINAL_STATE
       - APPOINTMENT_INVALID_PROCEDURES
-  - method: DELETE
-    path: /appointments/{id}/procedures/{procedure_id}
-    description: Detach a procedure; it returns to the treatment plan.
-    response: the updated appointment
+  - name: Detach a procedure
+    actor: Scheduler
+    description: Detach a procedure, which returns to the treatment plan.
+    method: DELETE
+    path: '/appointments/{id}/procedures/{procedure_id}'
+    success: 200
+    input: the procedure to detach
+    output: the updated appointment
     errors:
       - APPOINTMENT_NOT_FOUND
       - APPOINTMENT_TERMINAL_STATE
-  - method: GET
-    path: /operatories/{id}/appointments
-    description: List an operatory's appointments for a date range - one column of the day view.
-    request: from, to
-    response: appointments with time patterns and provider-time conflicts
+  - name: List an operatory's appointments
+    description: List an operatory's appointments for a time window, which is one column of the day view.
+    method: GET
+    path: '/operatories/{id}/appointments'
+    success: 200
+    input: operatory, time window
+    output: appointments with their time patterns and provider-time conflicts
 
 events:
   - name: appointment.procedures_completed

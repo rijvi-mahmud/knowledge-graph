@@ -260,17 +260,19 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
         .join('\n\n'),
     );
 
-  if (has(data.api))
+  if (has(data.operations))
     section(
-      'api',
+      'operations',
       data
-        .api!.map((e) =>
+        .operations!.map((o) =>
           [
-            `#### \`${e.method} ${e.path}\`${mark(e)}`,
-            e.description,
-            e.request ? `- Request: ${e.request}` : null,
-            e.response ? `- Response: ${e.response}` : null,
-            e.errors.length > 0 ? `- Errors: ${e.errors.join(', ')}` : null,
+            `#### ${o.name}${o.method && o.path ? `: \`${o.method} ${o.path}\`` : ''}${mark(o)}`,
+            o.description,
+            o.success ? `- Success: ${o.success}` : null,
+            o.actor ? `- Actor: ${o.actor}` : null,
+            o.input ? `- Input: ${o.input}` : null,
+            o.output ? `- Result: ${o.output}` : null,
+            o.errors.length > 0 ? `- Errors: ${o.errors.join(', ')}` : null,
           ]
             .filter(Boolean)
             .join('\n'),
@@ -366,29 +368,16 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
       ),
     );
 
-  if (has(data.eventEnvelope) || has(data.deliveryGuarantees))
+  if (has(data.deliveryGuarantees))
     section(
       'event-delivery',
-      [
-        has(data.eventEnvelope)
-          ? 'Every event carries this envelope, following CloudEvents:\n\n' +
-            table(
-              head(['Attribute', 'Type', 'Required', 'Description']),
-              rows(data.eventEnvelope!, (e) => [e.name, e.type, e.required ? 'yes' : 'no', e.description]),
-            )
-          : null,
-        has(data.deliveryGuarantees)
-          ? data
-              .deliveryGuarantees!.map((g) =>
-                [`**${g.id}** ${g.text}${mark(g)}`, g.rationale ? `  - Why: ${g.rationale}` : null]
-                  .filter(Boolean)
-                  .join('\n'),
-              )
-              .join('\n')
-          : null,
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+      data
+        .deliveryGuarantees!.map((g) =>
+          [`**${g.id}** ${g.text}${mark(g)}`, g.rationale ? `  - Why: ${g.rationale}` : null]
+            .filter(Boolean)
+            .join('\n'),
+        )
+        .join('\n'),
     );
 
   if (has(data.personalData))
@@ -465,8 +454,9 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
   if (has(data.tables))
     section(
       'tables',
-      data
-        .tables!.map((t) =>
+      [
+        'Non-normative: one way to build what the requirements describe. Nothing in the requirements depends on it.',
+        ...data.tables!.map((t) =>
           [
             `#### \`${t.name}\`${mark(t)}`,
             t.description,
@@ -483,8 +473,8 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
           ]
             .filter(Boolean)
             .join('\n\n'),
-        )
-        .join('\n\n'),
+        ),
+      ].join('\n\n'),
     );
 
   if (has(data.settings))
@@ -499,13 +489,14 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
   if (has(data.technicalNotes))
     section(
       'technical-notes',
-      data
-        .technicalNotes!.map((n) =>
+      [
+        'Non-normative: one way to build what the requirements describe. Nothing in the requirements depends on it.',
+        ...data.technicalNotes!.map((n) =>
           [`#### ${n.id}: ${n.title}${mark(n)}`, n.text, n.code ? `\`\`\`\n${n.code}\n\`\`\`` : null]
             .filter(Boolean)
             .join('\n\n'),
-        )
-        .join('\n\n'),
+        ),
+      ].join('\n\n'),
     );
 
   if ((data.acceptanceCriteria ?? []).some((a) => has(a.verifies))) {

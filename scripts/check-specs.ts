@@ -5,9 +5,9 @@
  * Errors (exit code 1):
  * - frontmatter that doesn't parse or doesn't match the schema
  * - a broken inheritance chain (missing parent, cycle, module mismatch)
- * - a duplicate id within one page's own list
+ * - a duplicate id within one page's own list, or two operations on one endpoint
  * - an id in a `verifies` or `covers` list that doesn't exist
- * - an error code raised by an endpoint or validation but not defined
+ * - an error code returned by an operation or validation but not defined
  * - an em or en dash anywhere in the page
  *
  * Warnings (exit code 0, or 1 with --strict):
@@ -83,7 +83,6 @@ const ID_LISTS = [
   'edgeCases',
   'deliveryGuarantees',
   'decisions',
-  'technicalNotes',
   'performanceTargets',
   'risks',
   'references',
@@ -126,11 +125,21 @@ for (const node of all) {
     for (const id of e.covers ?? [])
       if (!known.has(id)) errors.push(`${where}: ${e.id} covers ${id}, which doesn't exist`);
 
+  // Each endpoint is defined once: no two operations share a method and path.
+  const endpoints = new Map<string, string>();
+  for (const op of spec.operations ?? []) {
+    if (!op.method || !op.path) continue;
+    const key = `${op.method} ${op.path}`;
+    if (endpoints.has(key))
+      errors.push(`${where}: "${op.name}" and "${endpoints.get(key)}" both use ${key}`);
+    else endpoints.set(key, op.name);
+  }
+
   // Every error code an endpoint or validation raises must be defined.
   const codes = new Set((spec.errors ?? []).map((e) => e.code));
-  for (const ep of spec.api ?? [])
-    for (const code of ep.errors ?? [])
-      if (!codes.has(code)) errors.push(`${where}: ${ep.method} ${ep.path} raises undefined error ${code}`);
+  for (const op of spec.operations ?? [])
+    for (const code of op.errors ?? [])
+      if (!codes.has(code)) errors.push(`${where}: operation "${op.name}" returns undefined error ${code}`);
   for (const v of spec.validations ?? [])
     if (!codes.has(v.error)) errors.push(`${where}: validation on ${v.field} raises undefined error ${v.error}`);
 

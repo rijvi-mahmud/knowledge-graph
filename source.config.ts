@@ -147,23 +147,6 @@ const accessSchema = z.object({
   note: z.string().optional(),
 });
 
-// Physical storage: a reference database schema, separate from the logical
-// data model. PostgreSQL is the reference dialect.
-const columnSchema = z.object({
-  name: z.string(),
-  type: z.string(),
-  nullable: z.boolean().default(false),
-  default: z.string().optional(),
-  note: z.string().optional(),
-});
-const tableSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  columns: z.array(columnSchema),
-  indexes: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
-  constraints: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
-});
-
 // A situation that is easy to get wrong, the behaviour the spec requires, and
 // the ids that cover it.
 const edgeCaseSchema = z.object({
@@ -181,35 +164,12 @@ const settingSchema = z.object({
   description: z.string(),
 });
 
-// Implementation guidance: how to build something the spec requires.
-const technicalNoteSchema = z.object({
-  id: z.string(), // e.g. "TN-1"
-  title: z.string(),
-  text: z.string(),
-  code: z.string().optional(), // an illustrative snippet, e.g. SQL
-});
-
 // Personal data a field holds, why it's kept, and for how long.
 const personalDataSchema = z.object({
   field: z.string(),
   category: z.string(), // e.g. "personal", "pseudonymous", "free text"
   purpose: z.string(),
   retention: z.string(),
-});
-
-// One attribute of the envelope every event carries (CloudEvents).
-const envelopeSchema = z.object({
-  name: z.string(),
-  type: z.string(),
-  required: z.boolean().default(true),
-  description: z.string(),
-});
-
-// A convention every endpoint follows: authentication, errors, pagination...
-const apiConventionSchema = z.object({
-  topic: z.string(),
-  text: z.string(),
-  reference: z.string().optional(), // e.g. "RFC 9457"
 });
 
 // A measurable performance requirement: what is measured, the target, and how.
@@ -267,13 +227,26 @@ const acceptanceSchema = z.object({
 
 // --- interface -------------------------------------------------------------
 
-const endpointSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
-  path: z.string(),
+// Something a caller can ask the module to do, and the HTTP endpoint that
+// exposes it. HTTP is a standard interface, so the endpoint is part of the
+// external interface requirements (ISO/IEC/IEEE 29148), stated once, here.
+const operationSchema = z.object({
+  name: z.string(), // e.g. "Book an appointment"
+  actor: z.string().optional(), // who may call it, by actor name
   description: z.string(),
-  request: z.string().optional(), // shape summary, not full OpenAPI
-  response: z.string().optional(),
-  errors: z.array(z.string()).default([]), // error codes this endpoint can raise
+  method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
+  path: z.string().optional(), // e.g. "/appointments/{id}/cancel"
+  success: z.number().optional(), // HTTP status on success, e.g. 201
+  input: z.string().optional(),
+  output: z.string().optional(),
+  errors: z.array(z.string()).default([]), // error codes this operation can return
+});
+
+// A convention every endpoint follows: authentication, errors, paging...
+const apiConventionSchema = z.object({
+  topic: z.string(),
+  text: z.string(),
+  reference: z.string().optional(), // e.g. "RFC 9457"
 });
 
 const eventSchema = z.object({
@@ -289,7 +262,7 @@ const permissionSchema = z.object({
 
 const errorSchema = z.object({
   code: z.string(), // e.g. "APPOINTMENT_SLOT_TAKEN"
-  http: z.number().optional(),
+  http: z.number().optional(), // HTTP status, e.g. 409
   message: z.string(),
 });
 
@@ -310,6 +283,36 @@ const changelogSchema = z.object({
   date: z.string().optional(),
   changes: z.array(z.string()),
   breaking: z.boolean().default(false),
+});
+
+// --- reference implementation ---------------------------------------------
+// Non-normative: one way to build what the requirements describe. Nothing in
+// the requirements depends on it, so a team on another store or language
+// replaces only this part.
+
+// Reference storage design: tables for one way to store the data. PostgreSQL
+// is the reference dialect.
+const columnSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  nullable: z.boolean().default(false),
+  default: z.string().optional(),
+  note: z.string().optional(),
+});
+const tableSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  columns: z.array(columnSchema),
+  indexes: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
+  constraints: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
+});
+
+// Implementation guidance: how to build something the spec requires.
+const technicalNoteSchema = z.object({
+  id: z.string(), // e.g. "TN-1"
+  title: z.string(),
+  text: z.string(),
+  code: z.string().optional(), // an illustrative snippet, e.g. SQL
 });
 
 // --- the page schema -------------------------------------------------------
@@ -338,7 +341,6 @@ const graphSchema = pageSchema.extend({
   concepts: z.array(conceptSchema).default([]),
   dataModel: z.array(fieldSchema).default([]),
   relationships: z.array(relationSchema).default([]),
-  tables: z.array(tableSchema).default([]),
 
   // 3. behaviour
   businessRules: z.array(businessRuleSchema).default([]),
@@ -353,17 +355,15 @@ const graphSchema = pageSchema.extend({
   constraints: z.array(constraintSchema).default([]),
   settings: z.array(settingSchema).default([]),
   performanceTargets: z.array(performanceSchema).default([]),
-  technicalNotes: z.array(technicalNoteSchema).default([]),
   acceptanceCriteria: z.array(acceptanceSchema).default([]),
 
   // 5. interface
-  api: z.array(endpointSchema).default([]),
+  operations: z.array(operationSchema).default([]),
+  apiConventions: z.array(apiConventionSchema).default([]),
   events: z.array(eventSchema).default([]),
   permissions: z.array(permissionSchema).default([]),
   accessMatrix: z.array(accessSchema).default([]),
   personalData: z.array(personalDataSchema).default([]),
-  apiConventions: z.array(apiConventionSchema).default([]),
-  eventEnvelope: z.array(envelopeSchema).default([]),
   deliveryGuarantees: z.array(assumptionSchema).default([]), // same shape: id, text, rationale
   errors: z.array(errorSchema).default([]),
   dependencies: z.array(dependencySchema).default([]),
@@ -373,6 +373,10 @@ const graphSchema = pageSchema.extend({
   openQuestions: z.array(z.string()).default([]),
   changelog: z.array(changelogSchema).default([]),
   references: z.array(referenceSchema).default([]),
+
+  // reference implementation (non-normative)
+  tables: z.array(tableSchema).default([]),
+  technicalNotes: z.array(technicalNoteSchema).default([]),
   acronyms: z.array(glossarySchema).default([]),
   risks: z.array(riskSchema).default([]),
 });
