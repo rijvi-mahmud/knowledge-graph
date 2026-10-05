@@ -50,6 +50,11 @@ const KEYS = {
   assumptions: (i: Item) => str(i.id),
   constraints: (i: Item) => str(i.id),
   references: (i: Item) => str(i.id),
+  accessMatrix: (i: Item) => str(i.action),
+  tables: (i: Item) => str(i.name),
+  edgeCases: (i: Item) => str(i.id),
+  settings: (i: Item) => str(i.name),
+  technicalNotes: (i: Item) => str(i.id),
 } satisfies Partial<Record<keyof ModuleSpecData, (i: Item) => string>>;
 
 /** Frontmatter list fields that inherit down the chain. */

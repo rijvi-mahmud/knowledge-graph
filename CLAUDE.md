@@ -178,29 +178,32 @@ Rules:
 Reference style: **Mastra docs**. One readable article column, no tabs, no
 filters, no card grids (the user tried those and found them hard to read).
 
-A long spec on one page was hard to read, so every module is a folder in the
-sidebar. Its frontmatter still lives in **one** MDX file; `src/lib/source.ts`
-turns that file into the folder's index and adds a virtual sub-page per spec
-group that has content. Inheritance and both renderers work on the one file,
-unchanged. Groups follow ISO/IEC/IEEE 29148 and are defined only in
-`spec-sections.ts`:
+A long spec on one page was hard to read, so every module is a subtree in the
+sidebar: one folder per group, one focused page per section. Its frontmatter
+still lives in **one** MDX file; `src/lib/source.ts` turns that file into the
+folder's index (the overview) and adds a virtual page for every section that
+has content. Inheritance and both renderers work on the one file, unchanged.
+Folders are open by default. Groups and titles follow ISO/IEC/IEEE 29148 and
+are defined only in `spec-sections.ts`:
 
-| Page | Sections |
+| Folder | Pages |
 |---|---|
-| Module page (overview) | Narrative (MDX body), the Specification callout, purpose and scope, actors, assumptions, and an "In this specification" list |
-| Rules & behaviour | Business rules, validations, state machine, workflows |
-| Data | Data model, relationships |
-| Interface | API, events, permissions, errors, dependencies |
-| Requirements | Functional requirements (with verification method), quality requirements, constraints |
-| Verification | Acceptance criteria, each listing the ids it verifies |
-| Terms & history | Concepts, glossary, decisions, open questions, references, version history |
+| (module page) | Narrative, the Specification callout, purpose and scope, actors, assumptions and dependencies, and an "In this specification" list |
+| Functions | Business rules, state machine, workflows, validations, edge cases |
+| Data | Data model (logical), relationships |
+| External interfaces | API, events, errors, dependencies |
+| Security | Permission matrix (actions × actors: any, own, none or a condition), permissions |
+| Requirements | Functional requirements (with verification method), quality attributes, design constraints, configuration |
+| Design | Database schema (reference PostgreSQL tables, indexes, constraints), technical notes |
+| Verification | Acceptance criteria, traceability matrix (derived from each criterion's `verifies`) |
+| Supporting information | Concepts, glossary, decisions, open questions, references, version history |
 
-Adding a group in `spec-sections.ts` creates its sub-page everywhere. Every
-section renders through one `ItemList` (or `AccordionList`): key (monospace for
-ids and names), muted metadata, body, note, and the source layer.
+Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
+both renderers) gives it a page in every module. URLs are
+`/docs/<module>/<group>/<section>`.
 
 Markdown: `/docs/<module>.md` returns the **complete** spec, so an agent gets
-everything in one fetch; `/docs/<module>/<group>.md` returns one group. The AI
+everything in one fetch; `/docs/<module>/<group>/<section>.md` returns one section. The AI
 markdown opens with a "How to read this spec" guide telling assistants that
 anything unlisted is unspecified. Sub-pages carry no `module` in their data, so
 listings, inheritance, `llms-full.txt` and Ask AI skip them.
@@ -219,7 +222,11 @@ is what surfaces the edge cases. Before calling a module done, check it has:
 - A **verification method** on every functional requirement (test,
   demonstration, inspection or analysis)
 - **Acceptance criteria** whose `verifies` list cites rule, requirement or
-  constraint ids that exist
+  constraint ids that exist, with no "Not verified yet" left in the
+  traceability matrix
+- A **permission matrix**, a reference **database schema**, **edge cases**
+  (`EC-`, each citing the ids that cover it), **configuration** and
+  **technical notes** (`TN-`)
 - **Error codes** for every failure, including upstream outages
 - **Edge cases** researched from standards and leading products: concurrency,
   retries, time zones and daylight saving gaps and overlaps, terminal states,

@@ -1,39 +1,98 @@
 /**
- * The reference half of a spec, split into the pages a module shows in the
- * sidebar.
+ * The sections of a spec and the groups they sit in.
  *
- * Shared by <ModuleSpec /> (HTML), spec-markdown (AI) and the source loader
- * (which creates one sub-page per group), so every surface groups and orders
- * sections identically. The grouping follows ISO/IEC/IEEE 29148: an overview,
- * then behaviour, data, interfaces, requirements, verification and supporting
- * information. Section ids are stable anchors: change a title freely, never
- * an id.
+ * Shared by <ModuleSpec /> (HTML), spec-markdown (AI) and the source loader,
+ * which gives every section its own page inside a sidebar folder per group.
+ * Titles follow ISO/IEC/IEEE 29148 where it has one. Section ids are stable
+ * anchors and URL slugs: change a title freely, never an id.
  */
 
 export const SPEC_SECTIONS = [
-  { id: 'actors', title: 'Actors' },
-  { id: 'assumptions', title: 'Assumptions' },
-  { id: 'business-rules', title: 'Business rules' },
-  { id: 'validations', title: 'Validations' },
-  { id: 'state-machine', title: 'State machine' },
-  { id: 'workflows', title: 'Workflows' },
-  { id: 'data-model', title: 'Data model' },
-  { id: 'relationships', title: 'Relationships' },
-  { id: 'api', title: 'API contract' },
-  { id: 'events', title: 'Events' },
-  { id: 'permissions', title: 'Permissions' },
-  { id: 'errors', title: 'Errors' },
-  { id: 'dependencies', title: 'Dependencies' },
-  { id: 'requirements', title: 'Functional requirements' },
-  { id: 'nfrs', title: 'Quality requirements' },
-  { id: 'constraints', title: 'Constraints' },
-  { id: 'acceptance', title: 'Acceptance criteria' },
-  { id: 'concepts', title: 'Concepts' },
-  { id: 'glossary', title: 'Glossary' },
-  { id: 'decisions', title: 'Decisions' },
-  { id: 'open-questions', title: 'Open questions' },
-  { id: 'references', title: 'References' },
-  { id: 'changelog', title: 'Version history' },
+  { id: 'actors', title: 'Actors', summary: 'Who interacts with the module' },
+  {
+    id: 'assumptions',
+    title: 'Assumptions and dependencies',
+    summary: 'What the spec takes as true, and why',
+  },
+  {
+    id: 'business-rules',
+    title: 'Business rules',
+    summary: 'The rules the module enforces, each with its reason',
+  },
+  {
+    id: 'state-machine',
+    title: 'State machine',
+    summary: 'Statuses and the only transitions allowed between them',
+  },
+  { id: 'workflows', title: 'Workflows', summary: 'Step-by-step flows and who runs them' },
+  { id: 'validations', title: 'Validations', summary: 'Input checks and the error each one raises' },
+  {
+    id: 'edge-cases',
+    title: 'Edge cases',
+    summary: 'Situations that are easy to get wrong, and the required behaviour',
+  },
+  { id: 'data-model', title: 'Data model', summary: 'Logical fields, types and constraints' },
+  { id: 'relationships', title: 'Relationships', summary: 'How the module relates to others' },
+  { id: 'api', title: 'API', summary: 'Endpoints, requests, responses and errors' },
+  { id: 'events', title: 'Events', summary: 'Events the module emits and their payloads' },
+  { id: 'errors', title: 'Errors', summary: 'Every error code, its HTTP status and meaning' },
+  {
+    id: 'dependencies',
+    title: 'Dependencies',
+    summary: 'Services the module needs, and what happens when they are down',
+  },
+  {
+    id: 'access-matrix',
+    title: 'Permission matrix',
+    summary: 'What each actor may do, action by action',
+  },
+  { id: 'permissions', title: 'Permissions', summary: 'Named permissions and what they grant' },
+  {
+    id: 'requirements',
+    title: 'Functional requirements',
+    summary: 'What the service must do, and how each requirement is verified',
+  },
+  {
+    id: 'nfrs',
+    title: 'Quality attributes',
+    summary: 'Availability, security, scalability and other qualities',
+  },
+  {
+    id: 'constraints',
+    title: 'Design constraints',
+    summary: 'Limits on how the module may be built',
+  },
+  { id: 'settings', title: 'Configuration', summary: 'Settings a deployment can change' },
+  {
+    id: 'tables',
+    title: 'Database schema',
+    summary: 'Reference tables, columns, indexes and constraints',
+  },
+  {
+    id: 'technical-notes',
+    title: 'Technical notes',
+    summary: 'Implementation guidance for the hard parts',
+  },
+  {
+    id: 'acceptance',
+    title: 'Acceptance criteria',
+    summary: 'Given / When / Then criteria for tests',
+  },
+  {
+    id: 'traceability',
+    title: 'Traceability matrix',
+    summary: 'Which acceptance criteria verify each rule and requirement',
+  },
+  { id: 'concepts', title: 'Concepts', summary: 'The domain concepts the module is built on' },
+  { id: 'glossary', title: 'Glossary', summary: 'Definitions of the terms used' },
+  {
+    id: 'decisions',
+    title: 'Decisions',
+    summary: 'Design decisions, their reasons and the alternatives rejected',
+  },
+  { id: 'open-questions', title: 'Open questions', summary: 'What has not been decided yet' },
+  { id: 'references', title: 'References', summary: 'Standards and sources the spec relies on' },
+  { id: 'changelog', title: 'Version history', summary: 'What changed in each version' },
 ] as const;
 
 export type SpecSectionId = (typeof SPEC_SECTIONS)[number]['id'];
@@ -41,66 +100,53 @@ export type SpecSectionId = (typeof SPEC_SECTIONS)[number]['id'];
 export interface SpecGroup {
   id: string;
   title: string;
-  /** Sub-page slug under the module, or null for the module's own page. */
+  /** Sidebar folder slug under the module, or null for the module's own page. */
   slug: string | null;
-  /** One line for the sub-page's description, completed with the module name. */
-  summary: string;
   sections: SpecSectionId[];
 }
 
-/** In reading order. Rules come first after the overview: they are what readers most often come for. */
+/** In reading order. Functions come first after the overview: they are what readers most often come for. */
 export const SPEC_GROUPS: SpecGroup[] = [
+  { id: 'overview', title: 'Overview', slug: null, sections: ['actors', 'assumptions'] },
   {
-    id: 'overview',
-    title: 'Overview',
-    slug: null,
-    summary: 'Purpose, scope, actors and assumptions',
-    sections: ['actors', 'assumptions'],
+    id: 'functions',
+    title: 'Functions',
+    slug: 'functions',
+    sections: ['business-rules', 'state-machine', 'workflows', 'validations', 'edge-cases'],
   },
+  { id: 'data', title: 'Data', slug: 'data', sections: ['data-model', 'relationships'] },
   {
-    id: 'rules',
-    title: 'Rules & behaviour',
-    slug: 'rules',
-    summary: 'Business rules, validations, the state machine and workflows',
-    sections: ['business-rules', 'validations', 'state-machine', 'workflows'],
+    id: 'interfaces',
+    title: 'External interfaces',
+    slug: 'interfaces',
+    sections: ['api', 'events', 'errors', 'dependencies'],
   },
-  {
-    id: 'data',
-    title: 'Data',
-    slug: 'data',
-    summary: 'The data model and relationships to other modules',
-    sections: ['data-model', 'relationships'],
-  },
-  {
-    id: 'interface',
-    title: 'Interface',
-    slug: 'interface',
-    summary: 'API contract, events, permissions, errors and dependencies',
-    sections: ['api', 'events', 'permissions', 'errors', 'dependencies'],
-  },
+  { id: 'security', title: 'Security', slug: 'security', sections: ['access-matrix', 'permissions'] },
   {
     id: 'requirements',
     title: 'Requirements',
     slug: 'requirements',
-    summary: 'Functional requirements, quality requirements and constraints',
-    sections: ['requirements', 'nfrs', 'constraints'],
+    sections: ['requirements', 'nfrs', 'constraints', 'settings'],
   },
+  { id: 'design', title: 'Design', slug: 'design', sections: ['tables', 'technical-notes'] },
   {
     id: 'verification',
     title: 'Verification',
     slug: 'verification',
-    summary: 'Acceptance criteria and the rules and requirements each one verifies',
-    sections: ['acceptance'],
+    sections: ['acceptance', 'traceability'],
   },
   {
-    id: 'terms',
-    title: 'Terms & history',
-    slug: 'terms',
-    summary: 'Concepts, glossary, decisions, open questions, references and version history',
+    id: 'supporting',
+    title: 'Supporting information',
+    slug: 'supporting',
     sections: ['concepts', 'glossary', 'decisions', 'open-questions', 'references', 'changelog'],
   },
 ];
 
-export const sectionTitle = (id: SpecSectionId) => SPEC_SECTIONS.find((s) => s.id === id)!.title;
+const byId = new Map<string, (typeof SPEC_SECTIONS)[number]>(SPEC_SECTIONS.map((s) => [s.id, s]));
 
-export const groupBySlug = (slug: string) => SPEC_GROUPS.find((g) => g.slug === slug);
+export const sectionTitle = (id: SpecSectionId) => byId.get(id)!.title;
+export const sectionSummary = (id: SpecSectionId) => byId.get(id)!.summary;
+
+/** The group a section belongs to. */
+export const groupOf = (id: SpecSectionId) => SPEC_GROUPS.find((g) => g.sections.includes(id))!;

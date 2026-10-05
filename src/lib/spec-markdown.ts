@@ -1,5 +1,5 @@
 import type { ModuleSpecData } from '@/components/module-spec';
-import { SPEC_GROUPS, sectionTitle } from './spec-sections';
+import { SPEC_GROUPS, sectionTitle, type SpecSectionId } from './spec-sections';
 
 /**
  * Serialises the structured SRS frontmatter into Markdown.
@@ -32,20 +32,21 @@ type Cell = string | number | undefined;
 type Provenance = { layer?: string; overrides?: string };
 
 /**
- * `groupId` limits the output to one page of the spec (a sub-page). Without
+ * `sectionId` limits the output to one section (a sub-page). Without
  * it, the whole spec is returned: that is what the module's own .md serves,
  * so an agent gets the complete spec in one fetch.
  */
-export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
+export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId): string {
   if (!data.module) return '';
 
   const out: string[] = [];
   // Reference sections are collected by title, then emitted grouped in the
   // same order as the HTML page (see spec-sections.ts).
+  // Sections are collected by id, then emitted in group order.
   const sections = new Map<string, string>();
   const section = (title: string, body: string) => {
-    // A sub-page carries its own group only; purpose and scope live on the module's page.
-    if (groupId && title === 'Purpose & scope') return;
+    // A sub-page carries its own section only; purpose and scope live on the module's page.
+    if (sectionId && title === 'Purpose & scope') return;
     if (
       title === 'Module identity' ||
       title === 'How to read this spec' ||
@@ -89,7 +90,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
     'How to read this spec',
     bullets([
       'This is the complete spec for this page, with every inherited item already merged in.',
-      'If a behaviour is not listed here, it is unspecified. Do not assume or invent it - ask, or record it as an open question.',
+      'If a behaviour is not listed here, it is unspecified. Do not assume or invent it. Ask, or record it as an open question.',
       'Ids such as BR-1, FR-2 and AC-3 are stable. Cite them in code, tests and commit messages.',
       layered
         ? 'Tags such as [core] or [healthcare] show which layer an item comes from. "overrides X" means it replaces the item with the same id from layer X.'
@@ -107,7 +108,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.actors))
     section(
-      'Actors',
+      'actors',
       table(
         head(['Actor', 'Description']),
         rows(data.actors!, (a) => [a.name, a.description]),
@@ -116,7 +117,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.concepts))
     section(
-      'Concepts',
+      'concepts',
       table(
         head(['Concept', 'Meaning']),
         rows(data.concepts!, (c) => [c.name, c.description]),
@@ -125,7 +126,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.dataModel))
     section(
-      'Data model',
+      'data-model',
       table(
         head(['Field', 'Type', 'Required', 'Description', 'Constraints']),
         rows(data.dataModel!, (f) => [
@@ -140,7 +141,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.relationships))
     section(
-      'Relationships',
+      'relationships',
       table(
         head(['Edge', 'Target', 'Note']),
         rows(data.relationships!, (r) => [r.type, r.target, r.note]),
@@ -151,7 +152,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
   // "correcting" a rule it does not understand.
   if (has(data.businessRules))
     section(
-      'Business rules',
+      'business-rules',
       data
         .businessRules!.map((r) =>
           [`**${r.id}** ${r.text}${mark(r)}`, r.rationale ? `  - Why: ${r.rationale}` : null]
@@ -163,7 +164,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.validations))
     section(
-      'Validations',
+      'validations',
       table(
         head(['Field', 'Rule', 'Error']),
         rows(data.validations!, (v) => [v.field, v.rule, v.error]),
@@ -173,7 +174,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
   if (data.stateMachine) {
     const sm = data.stateMachine;
     section(
-      'State machine',
+      'state-machine',
       [
         `Initial state: \`${sm.initial}\`. States: ${sm.states.map((s) => `\`${s}\``).join(', ')}.${mark(sm)}`,
         'Any transition not listed below is invalid.',
@@ -188,7 +189,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.workflows))
     section(
-      'Workflows',
+      'workflows',
       data
         .workflows!.map((w) =>
           [
@@ -207,7 +208,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.assumptions))
     section(
-      'Assumptions',
+      'assumptions',
       data
         .assumptions!.map((a) =>
           [`**${a.id}** ${a.text}${mark(a)}`, a.rationale ? `  - Why: ${a.rationale}` : null]
@@ -219,7 +220,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.functionalRequirements))
     section(
-      'Functional requirements',
+      'requirements',
       table(
         head(['ID', 'Requirement', 'Priority', 'Verified by']),
         rows(data.functionalRequirements!, (r) => [r.id, r.text, r.priority, r.verification]),
@@ -228,7 +229,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.constraints))
     section(
-      'Constraints',
+      'constraints',
       data
         .constraints!.map((c) =>
           [`**${c.id}** ${c.text}${mark(c)}`, c.rationale ? `  - Why: ${c.rationale}` : null]
@@ -240,7 +241,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.nonFunctionalRequirements))
     section(
-      'Quality requirements',
+      'nfrs',
       table(
         head(['Category', 'Requirement']),
         rows(data.nonFunctionalRequirements!, (n) => [n.category, n.text]),
@@ -249,7 +250,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.acceptanceCriteria))
     section(
-      'Acceptance criteria',
+      'acceptance',
       data
         .acceptanceCriteria!.map(
           (a) =>
@@ -261,7 +262,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.api))
     section(
-      'API contract',
+      'api',
       data
         .api!.map((e) =>
           [
@@ -279,7 +280,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.events))
     section(
-      'Events',
+      'events',
       table(
         head(['Event', 'Description', 'Payload']),
         rows(data.events!, (e) => [e.name, e.description, e.payload.join(', ')]),
@@ -288,7 +289,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.permissions))
     section(
-      'Permissions',
+      'permissions',
       table(
         head(['Permission', 'Grants']),
         rows(data.permissions!, (p) => [p.name, p.description]),
@@ -297,7 +298,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.errors))
     section(
-      'Errors',
+      'errors',
       table(
         head(['Code', 'HTTP', 'Meaning']),
         rows(data.errors!, (e) => [e.code, e.http, e.message]),
@@ -306,7 +307,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.dependencies))
     section(
-      'Dependencies',
+      'dependencies',
       table(
         head(['Service', 'Direction', 'Criticality', 'Reason']),
         rows(data.dependencies!, (d) => [d.service, d.direction, d.criticality, d.reason]),
@@ -315,7 +316,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.decisions))
     section(
-      'Decisions',
+      'decisions',
       data
         .decisions!.map((d) =>
           [
@@ -331,18 +332,119 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.glossary))
     section(
-      'Glossary',
+      'glossary',
       table(
         head(['Term', 'Definition']),
         rows(data.glossary!, (g) => [g.term, g.definition]),
       ),
     );
 
-  if (has(data.openQuestions)) section('Open questions', bullets(data.openQuestions!));
+  if (has(data.openQuestions)) section('open-questions', bullets(data.openQuestions!));
+
+  if (has(data.edgeCases))
+    section(
+      'edge-cases',
+      data
+        .edgeCases!.map((e) =>
+          [
+            `**${e.id}** ${e.situation}${mark(e)}`,
+            `  - Required behaviour: ${e.behaviour}`,
+            has(e.covers) ? `  - Covered by: ${e.covers.join(', ')}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        )
+        .join('\n'),
+    );
+
+  if (has(data.accessMatrix)) {
+    const rowsIn = data.accessMatrix!;
+    const roles = [
+      ...new Set([
+        ...(data.actors ?? []).map((a) => a.name).filter((n) => rowsIn.some((r) => n in r.roles)),
+        ...rowsIn.flatMap((r) => Object.keys(r.roles)),
+      ]),
+    ];
+    section(
+      'access-matrix',
+      [
+        table(
+          head(['Action', ...roles]),
+          rows(rowsIn, (r) => [r.action, ...roles.map((role) => r.roles[role] ?? 'none')]),
+        ),
+        'any: every appointment. own: appointments the actor takes part in. none: not allowed.',
+        ...rowsIn.filter((r) => r.note).map((r) => `- ${r.action}: ${r.note}`),
+      ].join('\n\n'),
+    );
+  }
+
+  if (has(data.tables))
+    section(
+      'tables',
+      data
+        .tables!.map((t) =>
+          [
+            `#### \`${t.name}\`${mark(t)}`,
+            t.description,
+            table(
+              ['Column', 'Type', 'Null', 'Default', 'Notes'],
+              t.columns.map((c) => [c.name, c.type, c.nullable ? 'yes' : 'no', c.default, c.note]),
+            ),
+            has(t.indexes)
+              ? `Indexes:\n${bullets(t.indexes.map((i) => `\`${i.definition}\`${i.note ? ` ${i.note}` : ''}`))}`
+              : null,
+            has(t.constraints)
+              ? `Constraints:\n${bullets(t.constraints.map((c) => `\`${c.definition}\`${c.note ? ` ${c.note}` : ''}`))}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+        )
+        .join('\n\n'),
+    );
+
+  if (has(data.settings))
+    section(
+      'settings',
+      table(
+        head(['Setting', 'Type', 'Default', 'Description']),
+        rows(data.settings!, (st) => [st.name, st.type, st.default ?? 'none', st.description]),
+      ),
+    );
+
+  if (has(data.technicalNotes))
+    section(
+      'technical-notes',
+      data
+        .technicalNotes!.map((n) =>
+          [`#### ${n.id}: ${n.title}${mark(n)}`, n.text, n.code ? `\`\`\`\n${n.code}\n\`\`\`` : null]
+            .filter(Boolean)
+            .join('\n\n'),
+        )
+        .join('\n\n'),
+    );
+
+  if ((data.acceptanceCriteria ?? []).some((a) => has(a.verifies))) {
+    const verifiers = new Map<string, string[]>();
+    for (const a of data.acceptanceCriteria ?? [])
+      for (const id of a.verifies ?? []) verifiers.set(id, [...(verifiers.get(id) ?? []), a.id]);
+    const ids = [
+      ...(data.businessRules ?? []).map((r) => r.id),
+      ...(data.functionalRequirements ?? []).map((r) => r.id),
+      ...(data.constraints ?? []).map((c) => c.id),
+    ];
+    section(
+      'traceability',
+      table(
+        ['Id', 'Verified by'],
+        ids.map((id) => [id, (verifiers.get(id) ?? []).join(', ') || 'not verified yet']),
+      ),
+    );
+  }
 
   if (has(data.references))
     section(
-      'References',
+      'references',
       table(
         head(['ID', 'Source', 'Note']),
         rows(data.references!, (r) => [r.id, `[${r.title}](${r.url})`, r.note]),
@@ -351,7 +453,7 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
 
   if (has(data.changelog))
     section(
-      'Version history',
+      'changelog',
       data
         .changelog!.map((c) =>
           [
@@ -362,13 +464,18 @@ export function specToMarkdown(data: ModuleSpecData, groupId?: string): string {
         .join('\n\n'),
     );
 
+  // A sub-page: its one section, as the page's only heading below the guide.
+  if (sectionId) {
+    const body = sections.get(sectionId);
+    if (body) out.push(`## ${sectionTitle(sectionId)}\n\n${body}`);
+    return out.join('\n\n');
+  }
+
   for (const group of SPEC_GROUPS) {
-    if (groupId && group.id !== groupId) continue;
-    const present = group.sections.filter((id) => sections.has(sectionTitle(id)));
+    const present = group.sections.filter((id) => sections.has(id));
     if (present.length === 0) continue;
     out.push(`## ${group.title}`);
-    for (const id of present)
-      out.push(`### ${sectionTitle(id)}\n\n${sections.get(sectionTitle(id))}`);
+    for (const id of present) out.push(`### ${sectionTitle(id)}\n\n${sections.get(id)}`);
   }
 
   return out.join('\n\n');

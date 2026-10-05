@@ -29,14 +29,14 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
   const spec = getResolvedSpec(page);
-  // A spec sub-page shows one group of its module's spec and has no prose.
+  // A spec sub-page shows one section of its module's spec and has no prose.
   const view = specViewOf(page);
-  const group = view?.group ?? 'overview';
+  const section = view?.section;
   const baseUrl = view ? `/docs/${view.root}` : page.url;
 
   // The spec renders outside MDX, so its headings are added to the TOC by
   // hand. On the module's own page they sit under a "Specification" entry.
-  const specEntries = specToc(spec, group);
+  const specEntries = specToc(spec, section);
   const toc = view
     ? specEntries
     : [
@@ -67,7 +67,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
             })}
           />
         )}
-        <ModuleSpec data={spec} group={group} baseUrl={baseUrl} />
+        <ModuleSpec data={spec} section={section} baseUrl={baseUrl} />
       </DocsBody>
     </DocsPage>
   );

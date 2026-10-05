@@ -138,6 +138,57 @@ const constraintSchema = z.object({
   rationale: z.string().optional(),
 });
 
+// One row of the permission matrix: an action, and what each actor may do.
+// Cells are usually "any", "own" (appointments they take part in) or "none";
+// anything else is a condition, explained in the note.
+const accessSchema = z.object({
+  action: z.string(), // e.g. "Reschedule"
+  roles: z.record(z.string(), z.string()), // actor name -> any | own | none | condition
+  note: z.string().optional(),
+});
+
+// Physical storage: a reference database schema, separate from the logical
+// data model. PostgreSQL is the reference dialect.
+const columnSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  nullable: z.boolean().default(false),
+  default: z.string().optional(),
+  note: z.string().optional(),
+});
+const tableSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  columns: z.array(columnSchema),
+  indexes: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
+  constraints: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
+});
+
+// A situation that is easy to get wrong, the behaviour the spec requires, and
+// the ids that cover it.
+const edgeCaseSchema = z.object({
+  id: z.string(), // e.g. "EC-1"
+  situation: z.string(),
+  behaviour: z.string(),
+  covers: z.array(z.string()).default([]),
+});
+
+// A setting a deployment can change, with its default.
+const settingSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  default: z.string().optional(),
+  description: z.string(),
+});
+
+// Implementation guidance: how to build something the spec requires.
+const technicalNoteSchema = z.object({
+  id: z.string(), // e.g. "TN-1"
+  title: z.string(),
+  text: z.string(),
+  code: z.string().optional(), // an illustrative snippet, e.g. SQL
+});
+
 // A standard, regulation or source the spec relies on.
 const referenceSchema = z.object({
   id: z.string(), // e.g. "REF-1"
@@ -242,23 +293,28 @@ const graphSchema = pageSchema.extend({
   concepts: z.array(conceptSchema).default([]),
   dataModel: z.array(fieldSchema).default([]),
   relationships: z.array(relationSchema).default([]),
+  tables: z.array(tableSchema).default([]),
 
   // 3. behaviour
   businessRules: z.array(businessRuleSchema).default([]),
   validations: z.array(validationSchema).default([]),
   stateMachine: stateMachineSchema.optional(),
   workflows: z.array(workflowSchema).default([]),
+  edgeCases: z.array(edgeCaseSchema).default([]),
 
   // 4. requirements
   functionalRequirements: z.array(requirementSchema).default([]),
   nonFunctionalRequirements: z.array(nfrSchema).default([]),
   constraints: z.array(constraintSchema).default([]),
+  settings: z.array(settingSchema).default([]),
+  technicalNotes: z.array(technicalNoteSchema).default([]),
   acceptanceCriteria: z.array(acceptanceSchema).default([]),
 
   // 5. interface
   api: z.array(endpointSchema).default([]),
   events: z.array(eventSchema).default([]),
   permissions: z.array(permissionSchema).default([]),
+  accessMatrix: z.array(accessSchema).default([]),
   errors: z.array(errorSchema).default([]),
   dependencies: z.array(dependencySchema).default([]),
 

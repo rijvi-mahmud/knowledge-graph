@@ -4,6 +4,7 @@ import {
   SPEC_GROUPS,
   SPEC_SECTIONS,
   sectionTitle,
+  sectionSummary,
   type SpecGroup,
   type SpecSectionId,
 } from '@/lib/spec-sections';
@@ -101,6 +102,49 @@ interface Statement extends Provenance {
   rationale?: string;
 }
 
+interface AccessRow extends Provenance {
+  action: string;
+  roles: Record<string, string>;
+  note?: string;
+}
+
+interface Column {
+  name: string;
+  type: string;
+  nullable: boolean;
+  default?: string;
+  note?: string;
+}
+
+interface Table extends Provenance {
+  name: string;
+  description: string;
+  columns: Column[];
+  indexes: { name: string; definition: string; note?: string }[];
+  constraints: { name: string; definition: string; note?: string }[];
+}
+
+interface EdgeCase extends Provenance {
+  id: string;
+  situation: string;
+  behaviour: string;
+  covers: string[];
+}
+
+interface Setting extends Provenance {
+  name: string;
+  type: string;
+  default?: string;
+  description: string;
+}
+
+interface TechnicalNote extends Provenance {
+  id: string;
+  title: string;
+  text: string;
+  code?: string;
+}
+
 interface Reference extends Provenance {
   id: string;
   title: string;
@@ -189,20 +233,25 @@ export interface ModuleSpecData {
   concepts?: Named[];
   dataModel?: Field[];
   relationships?: Relation[];
+  tables?: Table[];
 
   businessRules?: BusinessRule[];
   validations?: Validation[];
   stateMachine?: StateMachine;
   workflows?: Workflow[];
+  edgeCases?: EdgeCase[];
 
   functionalRequirements?: Requirement[];
   nonFunctionalRequirements?: Nfr[];
   constraints?: Statement[];
+  settings?: Setting[];
+  technicalNotes?: TechnicalNote[];
   acceptanceCriteria?: Acceptance[];
 
   api?: Endpoint[];
   events?: EventDef[];
   permissions?: Named[];
+  accessMatrix?: AccessRow[];
   errors?: ErrorDef[];
   dependencies?: Dependency[];
 
@@ -232,6 +281,12 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     nfrs: has(data.nonFunctionalRequirements),
     acceptance: has(data.acceptanceCriteria),
     constraints: has(data.constraints),
+    settings: has(data.settings),
+    'technical-notes': has(data.technicalNotes),
+    tables: has(data.tables),
+    'edge-cases': has(data.edgeCases),
+    'access-matrix': has(data.accessMatrix),
+    traceability: (data.acceptanceCriteria ?? []).some((a) => has(a.verifies)),
     actors: has(data.actors),
     assumptions: has(data.assumptions),
     concepts: has(data.concepts),
@@ -258,12 +313,17 @@ export function activeSpecGroups(data: ModuleSpecData) {
  * TOC entries for one page of the spec. The module's own page lists the
  * overview sections; a sub-page lists the sections of its group.
  */
-export function specToc(data: ModuleSpecData, groupId = 'overview') {
-  const group = activeSpecGroups(data).find((g) => g.id === groupId);
-  if (!group) return [];
-  // On the module's own page the sections sit under the "Specification" heading.
-  const depth = groupId === 'overview' ? 3 : 2;
-  return group.sections.map((id) => ({ title: sectionTitle(id), url: `#${id}`, depth }));
+export function specToc(data: ModuleSpecData, sectionId?: SpecSectionId) {
+  // A section page: the database schema lists its tables, other sections need no TOC.
+  if (sectionId === 'tables')
+    return (data.tables ?? []).map((t) => ({ title: t.name, url: `#table-${t.name}`, depth: 2 }));
+  if (sectionId) return [];
+  // The module's own page: its overview sections, under the "Specification" heading.
+  const overview = activeSpecGroups(data).find((g) => g.id === 'overview');
+  return [
+    ...(overview?.sections ?? []).map((id) => ({ title: sectionTitle(id), url: `#${id}`, depth: 3 })),
+    { title: 'In this specification', url: '#in-this-specification', depth: 3 },
+  ];
 }
 
 // --- layers ----------------------------------------------------------------
@@ -533,16 +593,69 @@ const Label = ({ children }: { children: ReactNode }) => (
   <span className="font-medium text-fd-foreground">{children} </span>
 );
 
+/** A compact reference table, styled like the other lists. */
+function Grid({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
+  return (
+    <div className="not-prose mt-3 overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-fd-border text-left">
+            {head.map((h, i) => (
+              <th key={i} className="px-3 py-2 font-medium whitespace-nowrap">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-fd-border">
+          {rows.map((r, i) => (
+            <tr key={i} className="align-top">
+              {r.map((c, j) => (
+                <td key={j} className="px-3 py-2 leading-relaxed">
+                  {c}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const ACCESS_TONE: Record<string, Tone> = { any: 'green', own: 'blue' };
+
+/** A permission matrix cell: any and own as badges, none as a muted word, anything else as a condition. */
+function AccessCell({ value }: { value?: string }) {
+  const v = (value ?? 'none').trim();
+  const key = v.toLowerCase();
+  if (key === 'none') return <span className="text-fd-muted-foreground">None</span>;
+  if (ACCESS_TONE[key]) return <Badge tone={ACCESS_TONE[key]}>{capitalise(key)}</Badge>;
+  return <span className="text-sm">{v}</span>;
+}
+
+/** Ids that acceptance criteria can verify: rules, requirements and constraints, in that order. */
+function traceRows(data: ModuleSpecData) {
+  const verifiers = new Map<string, string[]>();
+  for (const a of data.acceptanceCriteria ?? [])
+    for (const id of a.verifies ?? []) verifiers.set(id, [...(verifiers.get(id) ?? []), a.id]);
+  return [
+    ...(data.businessRules ?? []).map((r) => ({ id: r.id, text: r.text })),
+    ...(data.functionalRequirements ?? []).map((r) => ({ id: r.id, text: r.text })),
+    ...(data.constraints ?? []).map((c) => ({ id: c.id, text: c.text })),
+  ].map((r) => ({ ...r, verifiedBy: verifiers.get(r.id) ?? [] }));
+}
+
 // --- the spec --------------------------------------------------------------
 
 export function ModuleSpec({
   data,
-  group = 'overview',
+  section,
   baseUrl,
 }: {
   data: ModuleSpecData;
-  /** Which page of the spec to render: 'overview' for the module's own page, or a group id. */
-  group?: string;
+  /** The section a sub-page shows. Unset on the module's own page. */
+  section?: SpecSectionId;
   /** URL of the module's own page, for links between the spec's pages. */
   baseUrl: string;
 }) {
@@ -967,6 +1080,175 @@ export function ModuleSpec({
       (items) => <AccordionList origin={origin} items={items} />,
     ),
 
+    'edge-cases': grouped(
+      (data.edgeCases ?? []).map((e) => ({
+        key: e.id,
+        ref: e.id,
+        text: e.situation,
+        detail: (
+          <div className="flex flex-col gap-0.5">
+            <span>
+              <Label>Required behaviour:</Label>
+              {e.behaviour}
+            </span>
+            {has(e.covers) && (
+              <span>
+                <Label>Covered by:</Label>
+                <span className="font-code text-sm">{e.covers.join(', ')}</span>
+              </span>
+            )}
+          </div>
+        ),
+        from: e,
+      })),
+      (items) => <AccordionList origin={origin} items={items} />,
+    ),
+
+    'access-matrix': (() => {
+      const rows = data.accessMatrix ?? [];
+      // Columns follow the actor list, then any role only the matrix mentions.
+      const roles = [
+        ...new Set([
+          ...(data.actors ?? []).map((a) => a.name).filter((n) => rows.some((r) => n in r.roles)),
+          ...rows.flatMap((r) => Object.keys(r.roles)),
+        ]),
+      ];
+      return (
+        <>
+          <Grid
+            head={['Action', ...roles]}
+            rows={rows.map((r) => [
+              <span key="a" className="font-medium">
+                {r.action} {origin(r)}
+              </span>,
+              ...roles.map((role) => <AccessCell key={role} value={r.roles[role]} />),
+            ])}
+          />
+          {rows.some((r) => r.note) && (
+            <ul className="mt-3 text-sm text-fd-muted-foreground">
+              {rows
+                .filter((r) => r.note)
+                .map((r) => (
+                  <li key={r.action}>
+                    <Label>{r.action}:</Label>
+                    {r.note}
+                  </li>
+                ))}
+            </ul>
+          )}
+          <p className="mt-3 text-sm text-fd-muted-foreground">
+            <strong>Any</strong>: every appointment. <strong>Own</strong>: appointments the actor
+            takes part in. <strong>None</strong>: not allowed.
+          </p>
+        </>
+      );
+    })(),
+
+    tables: (
+      <div className="flex flex-col gap-10">
+        {(data.tables ?? []).map((t) => (
+          <section key={t.name}>
+            <h2 id={`table-${t.name}`} className="scroll-m-20 font-code">
+              {t.name} {origin(t)}
+            </h2>
+            <p>{t.description}</p>
+            <Grid
+              head={['Column', 'Type', 'Null', 'Default', 'Notes']}
+              rows={t.columns.map((c) => [
+                <code key="n">{c.name}</code>,
+                <code key="t">{c.type}</code>,
+                c.nullable ? 'yes' : 'no',
+                c.default ? <code key="d">{c.default}</code> : '',
+                c.note ?? '',
+              ])}
+            />
+            {has(t.indexes) && (
+              <>
+                <p className="mt-5 font-medium">Indexes</p>
+                <ul>
+                  {t.indexes.map((i) => (
+                    <li key={i.name}>
+                      <code>{i.definition}</code>
+                      {i.note && <span className="text-fd-muted-foreground"> {i.note}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {has(t.constraints) && (
+              <>
+                <p className="mt-5 font-medium">Constraints</p>
+                <ul>
+                  {t.constraints.map((c) => (
+                    <li key={c.name}>
+                      <code>{c.definition}</code>
+                      {c.note && <span className="text-fd-muted-foreground"> {c.note}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+        ))}
+      </div>
+    ),
+
+    settings: (
+      <Grid
+        head={['Setting', 'Type', 'Default', 'Description']}
+        rows={(data.settings ?? []).map((st) => [
+          <code key="n">{st.name}</code>,
+          <code key="t">{st.type}</code>,
+          st.default ? <code key="d">{st.default}</code> : 'none',
+          <span key="x">
+            {st.description} {origin(st)}
+          </span>,
+        ])}
+      />
+    ),
+
+    'technical-notes': grouped(
+      (data.technicalNotes ?? []).map((n) => ({
+        key: n.title,
+        ref: n.id,
+        meta: [n.id],
+        body: (
+          <>
+            <p>{n.text}</p>
+            {n.code && (
+              <pre className="mt-2 overflow-x-auto rounded-lg border border-fd-border bg-fd-muted/50 p-3 text-xs">
+                <code>{n.code}</code>
+              </pre>
+            )}
+          </>
+        ),
+        from: n,
+      })),
+      (items) => <ItemList origin={origin} items={items} />,
+    ),
+
+    traceability: (
+      <>
+        <Grid
+          head={['Id', 'Statement', 'Verified by']}
+          rows={traceRows(data).map((r) => [
+            <code key="i">{r.id}</code>,
+            r.text,
+            r.verifiedBy.length > 0 ? (
+              <code key="v">{r.verifiedBy.join(', ')}</code>
+            ) : (
+              <span key="v" className="text-fd-muted-foreground">
+                Not verified yet
+              </span>
+            ),
+          ])}
+        />
+        <p className="mt-3 text-sm text-fd-muted-foreground">
+          Derived from the ids each acceptance criterion lists under Verifies.
+        </p>
+      </>
+    ),
+
     constraints: grouped(
       (data.constraints ?? []).map((c) => ({
         key: c.id,
@@ -1096,55 +1378,60 @@ export function ModuleSpec({
   };
 
   const groups = activeSpecGroups(data);
-  const current = groups.find((g) => g.id === group);
-  const sections = (level: 'h2' | 'h3') =>
-    current?.sections.map((id) => {
-      const Heading = level;
-      return (
-        <section key={id}>
-          <Heading id={id} className="scroll-m-20">
-            {sectionTitle(id)}
-          </Heading>
-          {lists[id]}
-        </section>
-      );
-    });
 
-  // A sub-page: only its group, with a line saying which spec it belongs to.
-  if (group !== 'overview') {
+  // A section page: just that section, with a line saying which spec it belongs to.
+  if (section) {
     return (
       <div className="mt-2">
         <SubPageNote data={data} baseUrl={baseUrl} />
-        {sections('h2')}
+        {lists[section]}
       </div>
     );
   }
 
+  const overview = groups.find((g) => g.id === 'overview');
   return (
     <div className="mt-16">
       <SpecIntro data={data} />
-      {sections('h3')}
+      {overview?.sections.map((id) => (
+        <section key={id}>
+          <h3 id={id} className="scroll-m-20">
+            {sectionTitle(id)}
+          </h3>
+          {lists[id]}
+        </section>
+      ))}
       <SpecContents groups={groups} baseUrl={baseUrl} />
     </div>
   );
 }
 
-/** The other pages of this spec, listed at the end of the module's own page. */
+/** Every other page of this spec, by group, at the end of the module's own page. */
 function SpecContents({ groups, baseUrl }: { groups: SpecGroup[]; baseUrl: string }) {
-  const pages = groups.filter((g) => g.slug);
-  if (pages.length === 0) return null;
+  const folders = groups.filter((g) => g.slug);
+  if (folders.length === 0) return null;
   return (
     <section>
       <h3 id="in-this-specification" className="scroll-m-20">
         In this specification
       </h3>
-      <ul>
-        {pages.map((g) => (
-          <li key={g.id}>
-            <Link href={`${baseUrl}/${g.slug}`}>{g.title}</Link>: {g.summary}.
-          </li>
+      <dl className="not-prose mt-3 divide-y divide-fd-border border-b border-fd-border">
+        {folders.map((g) => (
+          <div key={g.id} className="grid gap-2 px-3 py-3 sm:grid-cols-[11rem_1fr] sm:gap-6">
+            <dt className="font-medium">{g.title}</dt>
+            <dd className="flex flex-col gap-1.5">
+              {g.sections.map((id) => (
+                <span key={id}>
+                  <Link href={`${baseUrl}/${g.slug}/${id}`} className="font-medium text-fd-primary">
+                    {sectionTitle(id)}
+                  </Link>
+                  <span className="text-fd-muted-foreground">: {sectionSummary(id)}</span>
+                </span>
+              ))}
+            </dd>
+          </div>
         ))}
-      </ul>
+      </dl>
     </section>
   );
 }

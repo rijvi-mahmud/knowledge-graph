@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.4.0
+version: 0.5.0
 status: stable
 
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
@@ -178,6 +178,192 @@ relationships:
   - type: requires_permission
     target: appointment.write
 
+tables:
+  - name: appointments
+    description: One row per appointment. Times are stored as agreed (wall-clock time and zone) and as derived instants.
+    columns:
+      - name: id
+        type: uuid
+        default: gen_random_uuid()
+      - name: calendar_id
+        type: uuid
+      - name: status
+        type: text
+        default: "'booked'"
+      - name: time_zone
+        type: text
+        note: IANA name of the reference time zone.
+      - name: start_local
+        type: timestamp
+        note: Wall-clock start (start_time), without a time zone.
+      - name: end_local
+        type: timestamp
+        note: Wall-clock end (end_time), exclusive.
+      - name: start_at
+        type: timestamptz
+        note: Derived from start_local and time_zone.
+      - name: end_at
+        type: timestamptz
+        note: Derived from end_local and time_zone.
+      - name: tz_version
+        type: text
+        note: IANA release used to derive start_at and end_at, such as 2026e.
+      - name: revision
+        type: integer
+        default: '0'
+      - name: reminder_offsets
+        type: interval[]
+        default: "'{24 hours}'"
+      - name: location
+        type: text
+        nullable: true
+      - name: notes
+        type: text
+        nullable: true
+      - name: cancelled_reason
+        type: text
+        nullable: true
+      - name: cancelled_by
+        type: uuid
+        nullable: true
+      - name: cancelled_at
+        type: timestamptz
+        nullable: true
+      - name: completed_at
+        type: timestamptz
+        nullable: true
+      - name: no_show_recorded_by
+        type: text
+        nullable: true
+        note: An identity id, or system.
+      - name: created_at
+        type: timestamptz
+        default: now()
+      - name: updated_at
+        type: timestamptz
+        default: now()
+    indexes:
+      - name: appointments_calendar_start
+        definition: CREATE INDEX ON appointments (calendar_id, start_at)
+        note: Lists a calendar's appointments in time order.
+      - name: appointments_open
+        definition: CREATE INDEX ON appointments (start_at) WHERE status = 'booked'
+        note: Finds appointments to close out after they start.
+      - name: appointments_tz_version
+        definition: CREATE INDEX ON appointments (tz_version) WHERE status = 'booked'
+        note: Finds future appointments to recompute after a time zone database release.
+    constraints:
+      - name: appointments_pkey
+        definition: PRIMARY KEY (id)
+      - name: appointments_status
+        definition: CHECK (status IN ('booked', 'cancelled', 'completed', 'no_show'))
+      - name: appointments_range
+        definition: CHECK (end_local > start_local)
+      - name: appointments_cancel_reason
+        definition: CHECK (status <> 'cancelled' OR cancelled_reason IS NOT NULL)
+  - name: appointment_participants
+    description: One row per participant. Holds a copy of the slot so the overlap rule can be enforced per participant.
+    columns:
+      - name: appointment_id
+        type: uuid
+      - name: identity_id
+        type: uuid
+      - name: role
+        type: text
+      - name: time_zone
+        type: text
+        nullable: true
+        note: Display zone. Null means the appointment's time_zone.
+      - name: slot
+        type: tstzrange
+        note: Copy of [start_at, end_at), updated in the same transaction.
+      - name: active
+        type: boolean
+        default: 'true'
+        note: False once the appointment is cancelled, completed or a no-show.
+    constraints:
+      - name: appointment_participants_pkey
+        definition: PRIMARY KEY (appointment_id, identity_id)
+      - name: appointment_participants_appointment
+        definition: FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+      - name: no_overlapping_appointments
+        definition: EXCLUDE USING gist (identity_id WITH =, slot WITH &&) WHERE (active)
+        note: Enforces BR-4. Needs the btree_gist extension.
+  - name: appointment_reminders
+    description: One row per scheduled reminder, tied to the revision it was scheduled for.
+    columns:
+      - name: id
+        type: uuid
+        default: gen_random_uuid()
+      - name: appointment_id
+        type: uuid
+      - name: revision
+        type: integer
+      - name: reminder_offset
+        type: interval
+      - name: due_at
+        type: timestamptz
+      - name: status
+        type: text
+        default: "'pending'"
+        note: pending, sent, skipped or withdrawn.
+    indexes:
+      - name: appointment_reminders_due
+        definition: CREATE INDEX ON appointment_reminders (due_at) WHERE status = 'pending'
+    constraints:
+      - name: appointment_reminders_once
+        definition: UNIQUE (appointment_id, revision, reminder_offset)
+  - name: appointment_history
+    description: Append-only record of every change, including the previous times of each reschedule.
+    columns:
+      - name: id
+        type: bigint
+        default: generated always as identity
+      - name: appointment_id
+        type: uuid
+      - name: revision
+        type: integer
+      - name: change
+        type: text
+        note: booked, rescheduled, cancelled, completed or no_show.
+      - name: actor
+        type: text
+      - name: previous_start_at
+        type: timestamptz
+        nullable: true
+      - name: previous_end_at
+        type: timestamptz
+        nullable: true
+      - name: at
+        type: timestamptz
+        default: now()
+    indexes:
+      - name: appointment_history_by_appointment
+        definition: CREATE INDEX ON appointment_history (appointment_id, at)
+  - name: idempotency_keys
+    description: Results of write requests, so a retry with the same key returns the same result.
+    columns:
+      - name: caller_id
+        type: text
+      - name: key
+        type: text
+      - name: request_hash
+        type: text
+      - name: status_code
+        type: integer
+      - name: response
+        type: jsonb
+      - name: created_at
+        type: timestamptz
+        default: now()
+    indexes:
+      - name: idempotency_keys_created
+        definition: CREATE INDEX ON idempotency_keys (created_at)
+        note: Prunes keys older than the retention period.
+    constraints:
+      - name: idempotency_keys_pkey
+        definition: PRIMARY KEY (caller_id, key)
+
 businessRules:
   - id: BR-1
     text: An appointment must have at least two distinct participants.
@@ -314,6 +500,80 @@ workflows:
       - Notification delivers it to the participants
     outcome: Participants are reminded ahead of the appointment, and never about a superseded time.
 
+edgeCases:
+  - id: EC-1
+    situation: Two requests book overlapping slots for the same participant at the same moment.
+    behaviour: Exactly one succeeds. The other fails with APPOINTMENT_SLOT_TAKEN.
+    covers: [BR-4, FR-2, CON-2, AC-4]
+  - id: EC-2
+    situation: A client times out and retries a booking that actually succeeded.
+    behaviour: With the same Idempotency-Key, the retry returns the original appointment and nothing new is booked.
+    covers: [FR-8, AC-9]
+  - id: EC-3
+    situation: One appointment ends at 10:00 and another for the same participant starts at 10:00.
+    behaviour: Both are allowed. Slots exclude their end, so back-to-back isn't an overlap.
+    covers: [BR-4, AC-3]
+  - id: EC-4
+    situation: An appointment is booked 3 hours ahead, with a 24-hour reminder.
+    behaviour: The booking succeeds and the 24-hour reminder is skipped. Later reminders still fire.
+    covers: [BR-7, AC-6]
+  - id: EC-5
+    situation: A booking asks for 02:30 in New York on 8 March 2026, a time skipped when clocks go forward.
+    behaviour: Rejected with APPOINTMENT_INVALID_LOCAL_TIME.
+    covers: [BR-10, AC-17]
+  - id: EC-6
+    situation: A booking asks for 01:30 in New York on 1 November 2026, which happens twice when clocks go back.
+    behaviour: Rejected with APPOINTMENT_AMBIGUOUS_LOCAL_TIME unless it carries a UTC offset that picks one.
+    covers: [BR-10, AC-15, AC-16]
+  - id: EC-7
+    situation: An appointment from 00:30 to 02:30 in New York on 1 November 2026 spans the clock change.
+    behaviour: It lasts 3 hours, not 2. Overlap checks, reminders and length are all computed from start_at and end_at.
+    covers: [BR-6]
+  - id: EC-8
+    situation: Participants are in New York and Zurich in the weeks when only the United States has switched to daylight saving time.
+    behaviour: A 09:00 New York appointment on 10 March 2026 shows as 14:00 in Zurich, not 15:00.
+    covers: [BR-9, AC-14]
+  - id: EC-9
+    situation: A government changes its time zone rules after appointments have been booked.
+    behaviour: start_time stays as agreed. start_at, end_at and pending reminders are recomputed with the new time zone database release.
+    covers: [BR-6, FR-7, CON-4, AC-11]
+  - id: EC-10
+    situation: Two people reschedule the same appointment at the same time.
+    behaviour: The first succeeds. The second sends a revision that is now out of date and fails with APPOINTMENT_REVISION_CONFLICT.
+    covers: [FR-9, AC-8]
+  - id: EC-11
+    situation: A reminder fires for a time the appointment was moved away from.
+    behaviour: The reminder belongs to an older revision, so it's dropped and the reminder for the current time is sent instead.
+    covers: [FR-4]
+  - id: EC-12
+    situation: An appointment is cancelled while one of its reminders is being dispatched.
+    behaviour: Dispatch checks the status first, so no reminder is sent for a cancelled appointment.
+    covers: [FR-4, AC-12]
+  - id: EC-13
+    situation: Calendar is down when someone books.
+    behaviour: The booking fails with APPOINTMENT_AVAILABILITY_UNAVAILABLE and nothing is saved.
+    covers: [FR-13, AC-18]
+  - id: EC-14
+    situation: Notification is down when a reminder is due.
+    behaviour: appointment.reminder_due is still emitted. Bookings and other changes carry on unaffected.
+    covers: [AS-3]
+  - id: EC-15
+    situation: Someone tries to change a completed, cancelled or no-show appointment.
+    behaviour: Rejected with APPOINTMENT_TERMINAL_STATE, and the record is unchanged.
+    covers: [BR-5, AC-5]
+  - id: EC-16
+    situation: A Scheduler records a no-show before the appointment has started.
+    behaviour: Rejected with APPOINTMENT_NOT_YET_STARTED.
+    covers: [BR-8, AC-10]
+  - id: EC-17
+    situation: A participant's account is deactivated after the appointment was booked.
+    behaviour: The appointment keeps the participant's id, which Identity keeps resolvable.
+    covers: [AS-2]
+  - id: EC-18
+    situation: The same identity is listed twice as a participant.
+    behaviour: Rejected with APPOINTMENT_INVALID_PARTICIPANTS.
+    covers: [BR-1]
+
 functionalRequirements:
   - id: FR-1
     text: The service must let an authorised actor book an appointment for two or more participants.
@@ -394,6 +654,57 @@ constraints:
   - id: CON-4
     text: Each appointment records the time zone database release its instants were derived with (tz_version).
     rationale: When IANA publishes a release, it identifies exactly which future appointments need their instants recomputed.
+
+settings:
+  - name: default_reminder_offsets
+    type: duration[]
+    default: '[24h]'
+    description: Reminder offsets used when a booking doesn't set its own.
+  - name: automatic_no_show
+    type: boolean
+    default: 'false'
+    description: Whether System records a no-show once no_show_grace_period has passed after start_at with no completion.
+  - name: no_show_grace_period
+    type: duration
+    description: How long after start_at System waits before recording a no-show. Required when automatic_no_show is true.
+  - name: idempotency_key_retention
+    type: duration
+    default: 24h
+    description: How long a key and its result are kept. At least 24 hours, so retries after a network failure still match.
+
+technicalNotes:
+  - id: TN-1
+    title: Prevent overlaps in the database
+    text: Store each participant's slot as a tstzrange and add an exclusion constraint. Ranges exclude their upper bound by default, so back-to-back slots don't conflict. A conflicting insert fails with SQLSTATE 23P01 (exclusion_violation); map it to APPOINTMENT_SLOT_TAKEN.
+    code: |
+      CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+      ALTER TABLE appointment_participants
+        ADD CONSTRAINT no_overlapping_appointments
+        EXCLUDE USING gist (identity_id WITH =, slot WITH &&)
+        WHERE (active);
+  - id: TN-2
+    title: Derive instants from the agreed time
+    text: Convert start_time and end_time with a time zone aware library and reject skipped or repeated times instead of guessing. Record the time zone database release in tz_version. When a new release ships, recompute booked appointments whose tz_version is older and whose start_at is still in the future.
+    code: |
+      // JavaScript Temporal: throws a RangeError for a skipped or repeated time
+      Temporal.ZonedDateTime.from(
+        { timeZone: 'America/New_York', year: 2026, month: 11, day: 1, hour: 1, minute: 30 },
+        { disambiguation: 'reject' },
+      );
+  - id: TN-3
+    title: Store idempotent results in the same transaction
+    text: Save the caller, key, a hash of the request and the response in the same transaction as the change. A retry with the same key and hash returns the saved response. A retry with the same key and a different hash fails with APPOINTMENT_IDEMPOTENCY_KEY_REUSED. Prune keys older than idempotency_key_retention.
+  - id: TN-4
+    title: Key reminders by revision
+    text: Schedule each reminder on a durable scheduler, keyed by appointment id, revision and offset. When it fires, load the appointment and drop the reminder if the status isn't booked or the revision has moved on.
+  - id: TN-5
+    title: Detect concurrent changes with the revision
+    text: Update with the revision the client sent in the WHERE clause. If no row changes, someone else changed the appointment first, so return APPOINTMENT_REVISION_CONFLICT.
+    code: |
+      UPDATE appointments
+         SET start_local = $3, end_local = $4, revision = revision + 1, updated_at = now()
+       WHERE id = $1 AND revision = $2 AND status = 'booked';
 
 acceptanceCriteria:
   - id: AC-1
@@ -514,6 +825,45 @@ acceptanceCriteria:
     then: the request fails with APPOINTMENT_AVAILABILITY_UNAVAILABLE and nothing is persisted
     verifies:
       - FR-13
+  - id: AC-19
+    given: a booked appointment
+    when: it is cancelled with a reason
+    then: the record still exists with status cancelled, cancelled_reason, cancelled_by and cancelled_at set, and GET /appointments/{id} returns it
+    verifies:
+      - BR-2
+      - FR-5
+  - id: AC-20
+    given: a deployment with automatic_no_show on and a 15-minute no_show_grace_period
+    when: 15 minutes pass after start_at with no completion
+    then: System records a no-show and appointment.no_show is emitted with no_show_recorded_by = system
+    verifies:
+      - FR-10
+  - id: AC-21
+    given: an appointment at 09:00 America/New_York on 3 March 2026 with a participant in Asia/Tokyo
+    when: its reminder becomes due
+    then: Notification receives the Tokyo participant's time zone, so their reminder shows 23:00
+    verifies:
+      - FR-12
+  - id: AC-22
+    given: an appointment at 09:00 America/New_York on 3 March 2026
+    when: it is fetched
+    then: start_at is 2026-03-03T14:00:00Z and start is 2026-03-03T09:00:00-05:00[America/New_York]
+    verifies:
+      - CON-1
+      - FR-11
+  - id: AC-23
+    given: a booked appointment with a pending reminder
+    when: the service restarts before the reminder is due
+    then: the reminder still fires at its due time
+    verifies:
+      - CON-3
+  - id: AC-24
+    given: the service runs with time zone database release 2026e
+    when: an appointment is booked
+    then: its tz_version is 2026e
+    verifies:
+      - CON-4
+
 api:
   - method: POST
     path: /appointments
@@ -637,6 +987,25 @@ permissions:
     description: Book, reschedule and cancel appointments the caller takes part in.
   - name: appointment.manage
     description: Act on any appointment regardless of participation, including completing it and recording no-shows (Scheduler role).
+
+accessMatrix:
+  - action: View
+    roles: { Requester: own, Participant: own, Scheduler: any, System: any }
+  - action: Book
+    roles: { Requester: own, Participant: own, Scheduler: any, System: none }
+    note: A Requester who books for others without taking part needs appointment.manage, which makes them a Scheduler.
+  - action: Reschedule
+    roles: { Requester: own, Participant: own, Scheduler: any, System: none }
+  - action: Cancel
+    roles: { Requester: own, Participant: own, Scheduler: any, System: By policy }
+    note: System cancels only when an upstream policy requires it, and records the policy as the reason.
+  - action: Complete
+    roles: { Requester: none, Participant: none, Scheduler: any, System: none }
+  - action: Record no-show
+    roles: { Requester: none, Participant: none, Scheduler: any, System: If enabled }
+    note: System records no-shows only when the deployment turns on automatic_no_show (FR-10).
+  - action: Dispatch reminders
+    roles: { Requester: none, Participant: none, Scheduler: none, System: any }
 
 errors:
   - code: APPOINTMENT_NOT_FOUND
@@ -797,6 +1166,12 @@ references:
     note: Practitioner analysis of storing future times.
 
 changelog:
+  - version: 0.5.0
+    date: '2026-10-05'
+    changes:
+      - Added a permission matrix, a reference database schema (PostgreSQL), edge cases, configuration settings and technical notes.
+      - Added acceptance criteria so every business rule, functional requirement and design constraint is verified (AC-19 to AC-24).
+    breaking: false
   - version: 0.4.0
     date: '2026-10-05'
     changes:
