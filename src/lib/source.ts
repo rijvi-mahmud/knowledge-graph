@@ -79,7 +79,8 @@ const withSpecPages = update(mdx)
       const meta = {
         type: 'meta',
         path: `${dir}/meta.json`,
-        data: { title, pages: groups.map((g) => g.slug!) },
+        // Open by default, so a module's spec sections are always visible under it.
+        data: { title, defaultOpen: true, pages: groups.map((g) => g.slug!) },
       } as MdxMeta;
 
       return [index, ...subPages, meta];
