@@ -28,15 +28,18 @@ assumptions:
 - id: AS-E2
   text: A Referral service can confirm that a referral is valid for a department.
   rationale: Some departments only accept referred patients (BR-E3).
+- id: AS-E3
+  text: Departments and rooms are owned by the Organization module. This module only refers to them by id.
+  rationale: Opening a clinic or renaming a room is not a scheduling decision.
 dataModel:
 - name: department_id
   type: string
   required: true
-  description: The clinic or department providing the service (FHIR HealthcareService).
+  description: The clinic or department providing the service, owned by the Organization module (FHIR HealthcareService).
 - name: location_id
   type: string
   required: false
-  description: The room, such as an examination room.
+  description: The room, such as an examination room, owned by the Organization module.
 - name: referral_id
   type: string
   required: false
@@ -72,7 +75,7 @@ businessRules:
   rationale: Every visit needs an appointment to link its encounter and keep statistics complete.
 validations:
 - field: department_id
-  rule: must be an existing department
+  rule: Organization confirms the department exists
   error: APPOINTMENT_INVALID_DEPARTMENT
 - field: referral_id
   rule: required and valid when the department has referral_required on
@@ -254,14 +257,27 @@ events:
   - encounter_id
   - revision
 dependencies:
+- service: organization-service
+  direction: upstream
+  reason: owns departments and rooms
+  criticality: hard
+  contract:
+  - 'Asks: does this department exist?'
+  - 'Asks: which rooms belong to this department?'
 - service: encounter-service
   direction: downstream
   reason: opens an encounter when a patient checks in
   criticality: soft
+  contract:
+  - 'Gives: appointment.checked_in'
+  - 'Receives: the id of the encounter it opened'
+  - How encounters are documented is Encounter's concern
 - service: referral-service
   direction: upstream
   reason: confirms referrals for referral-only departments
   criticality: hard
+  contract:
+  - 'Asks: is this referral valid for this patient and department?'
 accessMatrix:
 - action: Register a walk-in
   roles:

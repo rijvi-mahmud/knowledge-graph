@@ -36,11 +36,15 @@ const relationSchema = z.object({
 
 // Runtime service coupling. Distinct from `relationships`: this is about what
 // must be reachable for the service to function, not domain semantics.
+// Another module this one relies on, and the contract between them: only what
+// this module needs from it (upstream) or gives it (downstream), never how the
+// other module works. Each module is its own bounded context.
 const dependencySchema = z.object({
   service: z.string(),
   direction: z.enum(['upstream', 'downstream']),
   reason: z.string(),
   criticality: z.enum(['hard', 'soft']).default('hard'), // hard = blocks core flow when down
+  contract: z.array(z.string()).default([]), // e.g. "Is this slot free for these participants?"
 });
 
 // --- domain description ----------------------------------------------------

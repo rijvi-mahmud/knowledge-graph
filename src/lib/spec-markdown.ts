@@ -310,10 +310,13 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
   if (has(data.dependencies))
     section(
       'dependencies',
-      table(
-        head(['Service', 'Direction', 'Criticality', 'Reason']),
-        rows(data.dependencies!, (d) => [d.service, d.direction, d.criticality, d.reason]),
-      ),
+      [
+        'Each dependency lists its contract: only what this module needs from it (upstream) or gives it (downstream). How the other module works is out of scope.',
+        table(
+          head(['Service', 'Direction', 'Criticality', 'Reason', 'Contract']),
+          rows(data.dependencies!, (d) => [d.service, d.direction, d.criticality, d.reason, (d.contract ?? []).join('; ')]),
+        ),
+      ].join('\n\n'),
     );
 
   if (has(data.decisions))

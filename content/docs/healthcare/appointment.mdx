@@ -645,6 +645,19 @@ changelog:
   breaking: false
   changes:
   - First healthcare layer, for the United States and the European Union.
+dependencies:
+- service: identity-service
+  direction: upstream
+  reason: resolve participants, and give the patient details check-in and messaging need
+  criticality: hard
+  contract:
+  - 'Asks: does this identity exist, and is it active?'
+  - 'Asks: the person''s preferred time zone and locale, if they have one'
+  - 'Asks: does the caller hold this permission?'
+  - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
+  - 'Asks: whether the patient wants confidential communications, and where to'
+  - 'Asks: whether a person is the personal representative of a patient'
+  - 'Asks: whether a person is a practitioner'
 ---
 
 A clinical appointment is still an appointment: everything in the

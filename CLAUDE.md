@@ -208,6 +208,25 @@ Sidebar: one plain tree with folder icons (set via `icon` in `meta.json`). No
 root tabs, no separators, no nav links repeated in the docs sidebar. The user
 found those confusing.
 
+### Each module is its own bounded context
+
+A module specifies only its own job. When it needs another module, it states
+only what it needs from it or gives it, never how that module works. The user's
+example: Appointment needs a patient, but doesn't need to know how a patient is
+created. In domain-driven design this is a bounded context; the relationships
+between contexts are a context map (Fowler).
+
+- Every dependency lists its **contract** (`contract:` in frontmatter):
+  "Asks: does this identity exist?", "Gives: appointment.checked_in". The
+  Dependencies page is the module's context map. `pnpm check:specs` warns
+  about a dependency without one.
+- Name who owns a concept ("owned by the Organization module", "Identity's
+  concern"), then stop. Never describe the other module's rules, data model
+  or workflow, and never prescribe how it behaves.
+- Refer to another module's data by id, plus the few fields this module reads.
+- If a rule really belongs to another module, it goes on that module's page
+  when that page is written, not here.
+
 ### Requirements say what, including the interface; never how it's stored or coded
 
 Requirements must be implementation-free (an ISO/IEC/IEEE 29148

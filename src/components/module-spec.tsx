@@ -37,6 +37,7 @@ interface Dependency extends Provenance {
   direction: 'upstream' | 'downstream';
   reason: string;
   criticality: 'hard' | 'soft';
+  contract?: string[];
 }
 
 interface Named extends Provenance {
@@ -1058,6 +1059,13 @@ export function ModuleSpec({
                       <p className="mt-1 text-sm leading-relaxed text-fd-muted-foreground">
                         {d.reason}
                       </p>
+                      {has(d.contract) && (
+                        <ul className="mt-1.5 list-disc pl-5 text-sm leading-relaxed">
+                          {d.contract!.map((c) => (
+                            <li key={c}>{c}</li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -12,6 +12,7 @@
  *
  * Warnings (exit code 0, or 1 with --strict):
  * - rules, requirements and constraints no acceptance criterion verifies
+ * - dependencies without a contract (what this module needs from them)
  *
  * Usage: pnpm check:specs [--strict]
  */
@@ -142,6 +143,11 @@ for (const node of all) {
       if (!codes.has(code)) errors.push(`${where}: operation "${op.name}" returns undefined error ${code}`);
   for (const v of spec.validations ?? [])
     if (!codes.has(v.error)) errors.push(`${where}: validation on ${v.field} raises undefined error ${v.error}`);
+
+  // Every dependency states its contract: what this module needs or gives.
+  for (const dep of spec.dependencies ?? [])
+    if (!dep.contract || dep.contract.length === 0)
+      warnings.push(`${where}: dependency ${dep.service} has no contract`);
 
   // Rules, requirements and constraints with no acceptance criterion.
   const verified = new Set((spec.acceptanceCriteria ?? []).flatMap((a) => a.verifies ?? []));
