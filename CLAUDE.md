@@ -1,12 +1,58 @@
 # Knowledge Graph
 
 Open-source, versioned specification of the domain knowledge software teams
-rebuild on every project. Not a framework, not code generation, not a SaaS —
+rebuild on every project. Not a framework, not code generation, not a SaaS:
 knowledge, structured so both engineers and AI assistants read the same source.
 
 Production: https://knowledge-graph-ecru.vercel.app (Vercel). Pushes to `main`
 deploy to production; every PR gets a preview build, which sits behind Vercel
 deployment protection (fetch it with `vercel curl`, not plain `curl`).
+
+## Working rules
+
+These apply to every task: writing, coding, configuration and reference
+content. The user set them so they don't have to repeat them.
+
+### Research first, from official sources
+
+Don't work from memory. Before you write docs, code, configuration or a
+domain fact, search the web and read the official, trusted source:
+
+- **Code and tools**: the framework's or vendor's own docs (nextjs.org,
+  fumadocs.dev, code.claude.com, docs.github.com, cursor.com/docs).
+- **Standards and formats**: the RFC or specification itself (rfc-editor.org,
+  llmstxt.org, agents.md).
+- **Domain facts**: regulators, standards bodies, and the documentation of
+  leading products in that domain. See
+  [Research domain facts](#research-domain-facts-never-write-from-memory).
+- **Writing**: the [Mastra docs](https://mastra.ai/docs) first, then the
+  [Google developer documentation style guide](https://developers.google.com/style)
+  and [Diátaxis](https://diataxis.fr/).
+
+Blogs and forums are only for finding the primary source. When sources
+disagree, say so, and model the difference as a setting or an open question
+instead of picking one. Tell the user which sources you used.
+
+Example: the user suggested `proxy.ts` belongs outside `src/`. The Next.js
+docs say it sits next to `app`, which here is `src/app`, so `src/proxy.ts` is
+correct. Check, then answer.
+
+### Write like the Mastra docs, everywhere
+
+Use Mastra's word choice in every page, `CLAUDE.md`, the README and replies
+to the user: plain, short, everyday words that are easy to read.
+
+- **Short sentences** in the active voice, with "you" and contractions
+  (`don't`, `it's`).
+- **Plain words** over formal ones: "use" not "utilise", "about" not
+  "approximately", "so" not "therefore".
+- **No em dashes (—) or en dashes (–).** Use a period, comma, colon or
+  parentheses instead. In "link: description" lists, use a colon.
+- **No filler or hype**: no "simply", "just", "easy", "seamless", "powerful",
+  "please note" or exclamation marks.
+
+[Guide pages follow the Mastra docs style](#guide-pages-follow-the-mastra-docs-style)
+covers page structure.
 
 ## The premise
 
@@ -16,7 +62,7 @@ independently derive the same booking lifecycle. This project specifies the
 shared ground once, per domain concept, and keeps it versioned. Companies layer
 their own 20% on top.
 
-Do not market this as "80% solved" — the exact share varies a lot by domain
+Do not market this as "80% solved". The exact share varies a lot by domain
 (patient registration is standardised; insurance claims and clinical workflows
 are not). Position it as a canonical foundation to build from.
 
@@ -27,7 +73,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 
 | Path | Role |
 |---|---|
-| `source.config.ts` | The graph schema. Zod frontmatter definition — the heart of the project. |
+| `source.config.ts` | The graph schema. Zod frontmatter definition, and the heart of the project. |
 | `content/docs/core/<module>.mdx` | Core layer of a module, industry-neutral. |
 | `content/docs/<industry>/` | Industry: `index.mdx` overview, `<module>.mdx` industry layers, `<domain>/` folders. |
 | `src/lib/spec-inherit.ts` | Resolves a page's `extends` chain into one merged spec tagged with provenance. |
@@ -36,7 +82,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `src/app/llms.txt/route.ts` | Agent entry point: a "How agents should use" guide, then every page as an absolute `.md` link. |
 | `src/components/module-spec.tsx` | Renders frontmatter to HTML for humans. |
 | `src/lib/spec-markdown.ts` | Renders the same frontmatter to Markdown for AI. |
-| `src/lib/source.ts` | `getLLMText()` — joins spec markdown + prose for `llms.txt` routes. |
+| `src/lib/source.ts` | `getLLMText()` joins spec markdown + prose for `llms.txt` routes. |
 | `src/proxy.ts` | Serves markdown for `/docs/<page>.md` and `Accept: text/markdown`. Must stay in `src/`, or Next.js skips it. |
 | `src/lib/shared.ts` | `siteUrl`: this deployment's address, from `NEXT_PUBLIC_SITE_URL`, else Vercel's production domain, else localhost. |
 | `src/lib/remark-site-url.ts` | Replaces `%SITE_URL%` (https URL) and `%SITE_HOST%` (hostname, for allowlists) in MDX at compile time, in the HTML and in the AI markdown. Changing it needs a dev server restart. |
@@ -63,12 +109,12 @@ token.
 Every structured fact (data model, rules, API, events, dependencies, decisions)
 lives in frontmatter. The MDX body carries only narrative that does **not**
 repeat it. Structure is what makes company overrides, version diffing and
-machine queries possible — prose cannot be addressed programmatically. A rule
+machine queries possible. Prose cannot be addressed programmatically. A rule
 with id `BR-2` can be overridden by a company layer; paragraph four cannot.
 
 **Both renderers must stay in sync.** Adding a section to `source.config.ts`
 means updating `module-spec.tsx` *and* `spec-markdown.ts`. If only the React one
-is updated, the section becomes invisible to AI — which defeats the entire
+is updated, the section becomes invisible to AI, which defeats the entire
 premise. This bug already happened once: `llms.mdx` was serving prose only until
 `spec-markdown.ts` was written.
 
@@ -112,7 +158,7 @@ Rules:
 
 - **Extend, never fork.** A domain page declares what it extends
   (`core/appointment → healthcare/appointment → dental/appointment`) and writes
-  only its delta — extra fields, rules, endpoints, dependencies. The site
+  only its delta: extra fields, rules, endpoints and dependencies. The site
   renders the merged result so the reader still sees the full picture.
 - **Industry base is real content, not a folder.** A rule that applies to every
   domain in an industry is written once at the industry level. Never copy it
@@ -155,7 +201,7 @@ found those confusing.
 - Inside a domain: shared modules first (Patients, Appointments) in the **same
   order in every domain**, then domain-only modules. A reader moving between
   domains always knows where they are.
-- A domain sidebar shows only that domain — no sibling domains leak in.
+- A domain sidebar shows only that domain. No sibling domains leak in.
 - Every rule carries a provenance label (`core` · `healthcare` · `dental`) so
   readers know what is universal and companies know which rule id to override.
 - Each domain page links "Based on" its parent. Each core page lists the
@@ -195,7 +241,7 @@ its own sidebar tab. Inside an industry, `---Shared across <industry>---` and
 ## Writing conventions
 
 The target is a senior technical writer at a Meta/Google-scale company. These
-rules were established by explicit user feedback — follow them.
+rules were established by explicit user feedback. Follow them.
 
 ### Titles name the reader's world, not the system's structure
 
@@ -233,7 +279,7 @@ decide when a check runs by what failure costs", belong in
 
 ### Headings are claims, not labels (domain pages)
 
-`Consent gates completion, not booking` — not `What this layer adds`. A reader
+`Consent gates completion, not booking`, not `What this layer adds`. A reader
 skimming headings should absorb the actual content. This applies to module
 narrative. Guide pages use task headings instead (see below).
 
@@ -272,7 +318,7 @@ pages correct but not written like an expert technical writer.
 
 ### Argue from consequence
 
-State the domain rule, then why it holds — in terms of what failure costs.
+State the domain rule, then why it holds, in terms of what failure costs.
 "Refusing to schedule a patient because a payer's API was slow is a worse
 outcome than a delayed claim" explains more than restating the rule.
 
@@ -324,7 +370,7 @@ business development and content:
 
 Amber/orange accent, defined in `src/app/global.css` over the fumadocs neutral
 base. Only accent-carrying variables are overridden so long spec tables stay
-readable. Light mode uses a deeper amber than dark — the same hue loses contrast
+readable. Light mode uses a deeper amber than dark, because the same hue loses contrast
 on a light background. Logo mark is three linked nodes in
 `src/lib/layout.shared.tsx`.
 
@@ -351,7 +397,7 @@ scaffold's own pages fail validation.
   against a second, structurally different concept.
 - No validator yet for cross-references (e.g. an endpoint raising an error code
   absent from `errors`, or a dependency naming a service with no page).
-- Company-layer overrides are designed for but not implemented — no merge or
+- Company-layer overrides are designed for but not implemented. No merge or
   precedence semantics exist yet for a private 20% layer on top of a public
   module.
 - Only one domain exists (`healthcare/dental`, appointment module only). EHR,

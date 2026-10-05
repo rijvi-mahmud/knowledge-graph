@@ -5,7 +5,7 @@ description: A versioned specification of the domain knowledge most software tea
 
 Most product requirements are not novel. A team building patient scheduling and
 a team building advisor scheduling will independently derive the same booking
-lifecycle, the same status transitions, the same reminder logic — and each will
+lifecycle, the same status transitions, the same reminder logic, and each will
 spend weeks doing it, arriving at subtly different answers to questions that
 have a settled answer.
 
@@ -69,7 +69,7 @@ to absorb.
 
 Every page is also served as structured markdown. `/llms.txt` indexes the
 knowledge base, `/llms-full.txt` returns all of it, and any page's spec is
-available by appending its content route — for example
+available by appending its content route, for example
 [the Appointment module as markdown](/llms.mdx/docs/core/appointment/content.md).
 
 An assistant loading those routes gets the full specification, not a summary of

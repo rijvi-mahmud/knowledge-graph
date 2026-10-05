@@ -257,7 +257,7 @@ below sits around it.
 
 ## Consent gates completion, not booking
 
-Consent is collected at check-in, not at the time of booking — a front desk
+Consent is collected at check-in, not at the time of booking. A front desk
 takes the appointment over the phone weeks earlier. Modelling consent as a
 booking requirement would contradict how a clinic actually runs.
 
@@ -286,8 +286,8 @@ A completed appointment is what causes an encounter to exist. Appointment emits
 the resulting `encounter_id` is written back.
 
 Appointment never writes clinical data itself. Keeping that boundary strict
-means scheduling storage holds times, participants and consent state — but no
-diagnoses, notes or results — which narrows the surface subject to HIPAA
+means scheduling storage holds times, participants and consent state, but no
+diagnoses, notes or results. That narrows the surface subject to HIPAA
 controls to a service that does not handle clinical content at all.
 
 ## Duplicate same-day bookings

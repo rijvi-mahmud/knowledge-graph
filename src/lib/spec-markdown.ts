@@ -15,7 +15,7 @@ const has = (v: unknown[] | undefined): v is unknown[] => Array.isArray(v) && v.
 /** Markdown table from a header row and pre-stringified cells. */
 function table(head: string[], rows: (string | number | undefined)[][]): string {
   const esc = (c: string | number | undefined) =>
-    String(c ?? '—')
+    String(c ?? '-')
       .replace(/\|/g, '\\|')
       .replace(/\n+/g, ' ');
 
@@ -313,7 +313,7 @@ export function specToMarkdown(data: ModuleSpecData): string {
       data
         .changelog!.map((c) =>
           [
-            `**v${c.version}${c.date ? ` (${c.date})` : ''}**${c.breaking ? ' — BREAKING' : ''}`,
+            `**v${c.version}${c.date ? ` (${c.date})` : ''}**${c.breaking ? ' (breaking)' : ''}`,
             bullets(c.changes),
           ].join('\n'),
         )
