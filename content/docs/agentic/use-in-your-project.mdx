@@ -64,6 +64,29 @@ touches. Cite the rule id for every violation, and list behaviour the change
 adds that the spec doesn't specify.
 ```
 
+## Reach other modules through their contracts
+
+Each module's Dependencies page lists what it asks of other modules and what it
+gives them. Ask your agent to build against those contracts rather than
+reaching into another module:
+
+```text title="Prompt"
+Which other modules does appointment check-in depend on, according to the
+Knowledge Graph contracts? Build only against those contracts.
+```
+
+## Build for your jurisdiction
+
+Rules that differ between the United States and the European Union, such as
+record retention or response deadlines, depend on the `jurisdiction` setting.
+Record it under **Project context** in `AGENTS.md`, and the agent applies the
+right rules:
+
+```text title="Prompt"
+Our jurisdiction is eu. Which appointment rules and settings differ from the
+us defaults, and does our code follow the eu ones?
+```
+
 ## Override a rule
 
 When your product needs to differ from the Knowledge Graph, add the rule under
@@ -73,8 +96,8 @@ use a new id to add one:
 ```md title="AGENTS.md"
 ### Project rules
 
-- **BR-4** Hygienists may not be double-booked. Why: Our hygiene chairs have no
-  assistant cover.
+- **BR-4** Oncology practitioners are never overbooked. Why: Infusion
+  appointments need the practitioner's full attention.
 ```
 
 Always give the reason. It's what tells a later reader whether the override

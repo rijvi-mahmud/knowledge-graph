@@ -1,55 +1,87 @@
 ---
 title: Introduction
-description: A versioned specification of the domain knowledge most software teams rebuild from scratch.
+description: Complete, versioned requirements for the domain knowledge software teams rebuild on every project, written once and inherited.
 ---
 
-Most product requirements are not novel. A team building patient scheduling and
-a team building advisor scheduling will independently derive the same booking
-lifecycle, the same status transitions, the same reminder logic, and each will
-spend weeks doing it, arriving at subtly different answers to questions that
-have a settled answer.
+Most product requirements are not novel. Two teams building patient
+scheduling will each work out the same booking lifecycle, the same reminder
+rules and the same edge cases, and arrive at slightly different answers to
+questions that have a settled answer.
 
-This knowledge base specifies that shared ground once, per domain concept, and
-keeps it versioned.
+The Knowledge Graph specifies that shared ground once, as complete and
+versioned requirements, and lets each industry and kind of application add
+only what's different. It's currently focused on hospital software: the core
+modules, the healthcare industry, and the electronic health record (EHR).
 
-## What a module contains
+## Knowledge is written once and inherited
 
-Each module is a complete specification of one domain concept: its data model,
-the rules that govern it, the workflows it participates in, its API surface,
-the events it emits, and the services it depends on. Rules carry their
-rationale, and significant decisions are recorded alongside the alternatives
-that were rejected.
+Every module is specified at up to three levels, each building on the one
+above:
 
-That last part matters more than it sounds. The reason behind a constraint is
-usually the first thing lost when knowledge moves between people, and it is the
-thing you most need when deciding whether a constraint still applies.
+- **Core** describes a concept in industry-neutral terms, such as the
+  [core Appointment specification](/docs/core/appointment).
+- **Industry** layers add what every application in an industry needs, such as
+  [clinical appointments](/docs/healthcare/appointment) for healthcare.
+- **Domain** layers add what one kind of application needs, such as
+  [hospital appointments](/docs/healthcare/ehr/appointment) for an EHR.
 
-## Core, industries and domains
+A layer writes only what it adds. It can also replace an inherited item by
+reusing its id, the way a subclass overrides a method. Every page shows the
+merged result, with each item labelled by the layer it comes from, so an EHR
+team reads one complete specification and still knows which rules are
+universal.
 
-Knowledge is specified at three levels, each building on the one above.
+## Every module is a complete requirements specification
 
-- **Core** describes a concept in industry-neutral terms. The booking lifecycle
-  is the same whether the participants are a patient and a clinician or a
-  customer and a consultant.
-- **Industries** such as healthcare add the obligations every application in
-  that industry shares.
-- **Domains** such as an electronic health record (EHR) add what only that kind
-  of application needs, and the concepts that exist nowhere else.
+Each module follows ISO/IEC/IEEE 29148, the standard for software requirements
+specifications, and is split into short pages in the sidebar:
 
-Each level declares only what it adds. A page shows its own additions merged
-with everything it inherits, and labels each rule with the level it comes from,
-so an EHR team reads one complete specification instead of three partial ones,
-and still knows which rules are universal.
+| Folder | What it holds |
+|---|---|
+| Introduction | Purpose, scope, actors, assumptions and a context diagram |
+| Variants | Pages for kinds of the module that differ in a few items, such as outpatient and inpatient appointments |
+| Functions | Business rules, state machine, workflows, validations and edge cases |
+| Data | Data model and relationships |
+| External interfaces | API (with HTTP methods, paths and status codes), events, delivery guarantees, errors and dependencies |
+| Security | Permission matrix, permissions, privacy and retention |
+| Requirements | Functional and performance requirements, quality attributes, design constraints and configuration |
+| Reference implementation | One way to build it: storage design and implementation notes |
+| Verification | Acceptance criteria and a traceability matrix |
+| Supporting information | Glossary, decisions, risks, references and version history |
+
+Every rule has a reason, every requirement says how it's verified, and every
+acceptance criterion names the ids it verifies. Ids such as BR-4 are links, and
+`pnpm check:specs` checks that each one exists.
+
+## Requirements say what, never how it's stored or coded
+
+The HTTP interface is part of the requirements, because HTTP is a standard
+rather than a vendor choice. Storage and code are not: the Reference
+implementation folder shows one way to build a module, and no requirement
+depends on it. A team on another database or language replaces only that
+folder.
+
+## Modules stay inside their own boundaries
+
+A module specifies only its own job. Where it needs another module, its
+Dependencies page lists only the contract between them: what it asks, and what
+it gives. Appointments needs to know a patient exists, but not how patients
+are registered.
+
+## What varies is a setting, not a rule
+
+Rules that differ between places or organisations are settings, never one
+country's answer. Healthcare modules support the United States and the
+European Union through a `jurisdiction` setting, with retention, code systems
+and response deadlines set per jurisdiction.
 
 ## Reading this as a machine
 
-Every page is also served as structured markdown. `/llms.txt` indexes the
-knowledge base, `/llms-full.txt` returns all of it, and any page's spec is
-available by appending its content route, for example
-[the Appointment module as markdown](/llms.mdx/docs/core/appointment/content.md).
-
-An assistant loading those routes gets the full specification, not a summary of
-the prose.
+Every page is also plain markdown. Add `.md` to any page URL: a module page
+returns its complete merged specification, and a section or variant page
+returns only that part. [`/llms.txt`](/llms.txt) lists every page and explains
+how to navigate. See [Agentic development](/docs/agentic) to connect a coding
+agent.
 
 ## Start here
 
@@ -57,12 +89,12 @@ the prose.
   <Card
     title="Appointment"
     href="/docs/core/appointment"
-    description="The scheduling lifecycle, specified in industry-neutral terms."
+    description="The core scheduling lifecycle, specified in industry-neutral terms."
   />
   <Card
     title="Electronic health record (EHR)"
     href="/docs/healthcare/ehr"
-    description="The electronic health record domain, and the order its modules are built in."
+    description="The EHR domain, and the order its modules are built in."
   />
   <Card
     title="Agentic development"

@@ -59,9 +59,11 @@ billing. Treat it as the source of truth for domain behaviour.
    project: the domain page if it exists, otherwise the industry page,
    otherwise the module's core page. A more specific page already includes everything
    above it.
-4. Fetch pages as markdown by adding `.md` to the URL, for example
-   %SITE_URL%/docs/core/appointment.md. Don't fetch /llms-full.txt; it's too
-   large.
+4. Fetch pages as markdown by adding `.md` to the URL. A module page, such as
+   %SITE_URL%/docs/core/appointment.md, returns its complete merged spec. A
+   section page, such as .../functions/business-rules.md, or a variant page,
+   such as .../inpatient.md, returns only that part. Don't fetch
+   /llms-full.txt; it's too large.
 5. If no page covers the concept, say so and follow the project's own
    requirements.
 
@@ -73,8 +75,17 @@ billing. Treat it as the source of truth for domain behaviour.
   [healthcare] or [ehr]. "overrides core" means a more specific layer
   replaced the item with the same id. Only the replacement applies.
 - Ids are stable: BR- business rules, FR- functional requirements, AC-
-  acceptance criteria, ADR- decisions. Error codes are part of the API
-  contract.
+  acceptance criteria, EC- edge cases, CON- design constraints, AS-
+  assumptions, DG- delivery guarantees, ADR- decisions. Error codes, HTTP
+  methods, paths and status codes are part of the API contract.
+- Dependencies list contracts: only what this module asks of another module
+  or gives it. Other modules' internals are out of scope.
+- The Reference implementation folder (storage design, implementation notes)
+  is non-normative: one way to build it, not a requirement.
+- Variants, such as outpatient and inpatient, list the items that apply only
+  to them; everything else applies to every variant.
+- Settings decide what varies, such as jurisdiction (us or eu) and code
+  systems.
 - "Why:" gives the reason for a rule or decision. "Considered:" lists
   alternatives a decision rejected.
 - The top of each spec shows its version and status.
@@ -98,13 +109,17 @@ billing. Treat it as the source of truth for domain behaviour.
    the decision you're going against.
 8. If existing code contradicts the spec, report the conflict with the id.
    Don't silently change either side.
-9. If the spec's status is draft, mention any code that depends on it in your
+9. Reach other modules only through the contracts on the Dependencies page.
+   Don't build another module's rules into this one.
+10. Apply the rules for the jurisdiction under "Project context".
+11. If the spec's status is draft, mention any code that depends on it in your
    summary.
 
 ### Project context
 
 - Industry:
 - Domain:
+- Jurisdiction:
 
 ### Project rules
 

@@ -34,13 +34,16 @@ The agent records the industry and domain under **Project context** in
 ## How a spec is structured
 
 Each module page opens with its module, layers, version and status, then a
-short guide on how to read it. The rest is grouped into rules and behaviour,
-data, interface, requirements, terms and history:
+short guide on how to read it. The rest follows ISO/IEC/IEEE 29148: functions,
+data, external interfaces, security, requirements, a non-normative reference
+implementation, verification and supporting information. In the sidebar each
+of those is a folder of short pages; as markdown, the module page returns all
+of it in one file:
 
 ```md title="core/appointment.md (excerpt)"
 - module: appointment
 - layer: core
-- version: 0.9.0
+- version: 0.9.1
 - status: stable
 
 **BR-4** A participant cannot have two active appointments whose slots
@@ -56,13 +59,17 @@ The same conventions apply to every module:
 
 | In the spec | Meaning |
 |---|---|
-| `BR-`, `FR-`, `AC-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria and decisions. Ids are stable, so code, tests and commits can cite them. |
+| `BR-`, `FR-`, `AC-`, `EC-`, `CON-`, `AS-`, `DG-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria, edge cases, design constraints, assumptions, delivery guarantees and decisions. Ids are stable, so code, tests and commits can cite them. |
 | `[core]`, `[healthcare]`, `[ehr]` | The layer an item comes from. `core` items apply to every industry. |
 | `overrides core` | A more specific layer replaced the item with the same id. Only the replacement applies. |
 | `Why:` | The reason for a rule or decision, usually the failure it prevents. |
 | `Considered:` | Alternatives a decision rejected. |
 | Open questions | Behaviour that hasn't been decided yet. |
 | `status` | `draft` specs can still change. `stable` specs change only through a new version. |
+| Contract (on Dependencies) | What the module asks of another module or gives it. The other module's internals are out of scope. |
+| Variant | A kind of the module, such as inpatient, with its own page listing the items that apply only to it. |
+| Reference implementation | Storage design and implementation notes. Non-normative: one way to build it. |
+| Settings | What varies by deployment, such as `jurisdiction` (us or eu) or a code system. |
 
 ## What each instruction prevents
 
@@ -77,6 +84,8 @@ The same conventions apply to every module:
 | Read `Why:` first | Simplify away a rule that prevents a costly failure |
 | Respect `Considered:` | Reintroduce an approach a decision already rejected |
 | Report conflicts | Silently rewrite working code, or silently ignore the spec |
+| Use contracts | Rebuild another module's rules inside this one, so the two drift apart |
+| Apply the jurisdiction | Follow US rules for an EU deployment, or the other way round |
 
 ## Project context and project rules
 
@@ -88,16 +97,17 @@ fills them in, they look like this:
 
 - Industry: healthcare
 - Domain: ehr
+- Jurisdiction: us
 
 ### Project rules
 
 Rules listed here override the Knowledge Graph. An id that exists in the spec
 replaces that item; a new id adds a rule.
 
-- **BR-4** Hygienists may not be double-booked. Why: Our hygiene chairs have no
-  assistant cover.
-- **BR-ACME-1** Same-day emergency slots are held until 10:00, then released.
-  Why: Most emergency calls arrive before 10:00.
+- **BR-4** Oncology practitioners are never overbooked. Why: Infusion
+  appointments need the practitioner's full attention.
+- **BR-ACME-1** Same-day urgent slots are held until 10:00, then released.
+  Why: Most urgent requests arrive before 10:00.
 ```
 
 Project rules work the same way layers do in the Knowledge Graph: reusing an
@@ -122,7 +132,9 @@ being edited. A direct instruction in chat overrides it.
 | URL | Returns |
 |---|---|
 | `/llms.txt` | How agents should use the Knowledge Graph, then every page with a markdown link and description |
-| `/docs/<page>.md` | One page as markdown, merged with everything it inherits |
+| `/docs/<page>.md` | One module page as markdown: the complete spec, merged with everything it inherits |
+| `/docs/<page>/<group>/<section>.md` | One section of a module, such as `functions/business-rules` |
+| `/docs/<page>/<variant>.md` | One variant of a module, such as `inpatient` |
 | `/llms-full.txt` | Every page in one file. Useful for research, too large to keep in context |
 
 Requests to any docs URL with an `Accept: text/markdown` header also return

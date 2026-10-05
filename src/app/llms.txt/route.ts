@@ -15,7 +15,10 @@ const guide = `# ${appName}
 - Work out the project's industry and domain (for example healthcare > ehr) before choosing a page.
 - For each domain concept a task touches, use the deepest page that matches the project: the domain page, otherwise the industry page, otherwise the module's core page. A deeper page already includes everything above it.
 - Industry overview pages list the domains in that industry and which ones are specified yet.
-- A module page's markdown is its complete spec. The pages listed under it (Rules & behaviour, Data, Interface, Requirements, Verification, Terms & history) are parts of the same spec, for when you need only one.
+- A module page's markdown is its complete spec. The pages listed under it are parts of the same spec: variants (such as outpatient and inpatient) and sections (such as functions/business-rules), for when you need only one.
+- A module's Dependencies page lists contracts: what it asks of other modules and gives them. Reach other modules only through those.
+- The Reference implementation pages (storage design, implementation notes) are non-normative: one way to build it.
+- Settings decide what varies, such as jurisdiction (us or eu). Apply the rules for the project's jurisdiction.
 - Every link below is markdown. Add \`.md\` to any other docs URL, such as \`${siteUrl}/docs/core/appointment.md\`, for the same.
 - Each module page starts with a "How to read this spec" section. Anything a spec doesn't list is unspecified: ask instead of inventing it.
 - Cite rule ids such as BR-4 in code, tests and commits, with the spec version.
