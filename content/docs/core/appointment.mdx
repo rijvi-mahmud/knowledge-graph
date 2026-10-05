@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle - booking, rescheduling, cancellation, reminders and attendance - specified in industry-neutral terms.
 module: appointment
-version: 0.2.0
+version: 0.3.0
 status: stable
 
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
@@ -10,7 +10,7 @@ scope:
   - Book, reschedule, cancel and complete an appointment, and record a no-show
   - Own the status lifecycle and its legal transitions
   - Prevent overlapping appointments for the same participant
-  - Store times so they stay correct across time zones and daylight saving changes
+  - Keep times correct across time zones and daylight saving changes, and show them in each participant's own time zone
   - Schedule reminders relative to the start time
   - Emit lifecycle events other modules react to
 nonGoals:
@@ -43,13 +43,17 @@ glossary:
   - term: Revision
     definition: A counter that increases each time an appointment's time changes. Equivalent to SEQUENCE in iCalendar (RFC 5545).
   - term: Wall-clock time
-    definition: The local date and time participants see, such as 09:00 on 3 March, interpreted in a named time zone.
+    definition: A local date and time, such as 09:00 on 3 March, read in a named time zone.
+  - term: Reference time zone
+    definition: The IANA time zone the appointment's time was agreed in. Usually where it takes place, or the host's zone for a remote appointment.
+  - term: Participant time zone
+    definition: The IANA time zone a participant sees times in. It can differ from the reference time zone.
 
 concepts:
   - name: Appointment
     description: A reserved time slot between two or more participants, with a status lifecycle.
   - name: Participant
-    description: An identity taking part in the appointment, with a role such as host or guest. Industry layers define their own roles.
+    description: An identity taking part in the appointment, with a role such as host or guest, and the time zone they see times in. Industry layers define their own roles.
   - name: Reminder
     description: A scheduled notification derived from the appointment. Not independently bookable.
   - name: Reschedule
@@ -61,10 +65,10 @@ dataModel:
     required: true
     description: Stable identifier, immutable for the life of the appointment.
   - name: participants
-    type: 'array<{ identity_id, role }>'
+    type: 'array<{ identity_id, role, time_zone? }>'
     required: true
-    description: The parties involved. role is a label such as host or guest; industry layers define their own roles.
-    constraints: at least 2 entries; identity_id values are distinct and resolvable
+    description: The parties involved. role is a label such as host or guest; industry layers define their own roles. time_zone is the IANA zone the participant sees times in, and defaults to the appointment's time_zone.
+    constraints: at least 2 entries; identity_id values are distinct and resolvable; each time_zone is a valid IANA name
   - name: start_time
     type: local datetime
     required: true
@@ -78,7 +82,7 @@ dataModel:
   - name: time_zone
     type: string
     required: true
-    description: IANA time zone name in which start_time and end_time are interpreted, for example Europe/Zurich.
+    description: The reference time zone. start_time and end_time are read in this IANA zone, for example America/New_York.
     constraints: a valid IANA tz database name, not a UTC offset
   - name: start_at
     type: instant
@@ -172,8 +176,11 @@ businessRules:
     text: Completed, cancelled and no_show are terminal. An appointment in a terminal state never changes again.
     rationale: Terminal states let downstream consumers treat the record as immutable and cache it without invalidation.
   - id: BR-6
-    text: Times are stored as wall-clock time plus an IANA time zone. Absolute instants are derived from them, and recomputed for future appointments when time zone rules change.
-    rationale: Participants agree to 09:00 local time, not to a UTC instant. Governments change daylight saving rules with little notice, and an instant computed before the change would move the appointment.
+    text: Every appointment has one reference time zone. Its times are stored as wall-clock time in that zone, and absolute instants are derived from them and recomputed for future appointments when time zone rules change.
+    rationale: People agree to a time in a particular place, such as 09:00 in New York. Governments change daylight saving rules with little notice, and an instant computed before the change would move the appointment.
+  - id: BR-9
+    text: Every participant sees the appointment, and receives its reminders, in their own time zone. Times shown to a participant are converted from the absolute instant and always include the zone or offset.
+    rationale: Participants in different countries share one moment, not one clock reading. The gap between two zones also changes during the year because countries switch daylight saving time on different dates, so a fixed offset per participant would be wrong for weeks at a time.
   - id: BR-7
     text: A reminder whose dispatch time has already passed when the appointment is booked or rescheduled is skipped. It never causes the booking to fail.
     rationale: With a 24-hour default, rejecting such bookings would block every same-day appointment. The remaining reminders still fire.
@@ -193,6 +200,9 @@ validations:
     error: APPOINTMENT_INVALID_LOCAL_TIME
   - field: time_zone
     rule: must be a valid IANA time zone name
+    error: APPOINTMENT_INVALID_TIME_ZONE
+  - field: participants
+    rule: each participant time_zone, when given, must be a valid IANA time zone name
     error: APPOINTMENT_INVALID_TIME_ZONE
   - field: participants
     rule: at least 2 entries, all resolvable identity ids, no duplicates
@@ -299,7 +309,13 @@ functionalRequirements:
     text: The service must emit a lifecycle event for every status change and every reschedule.
     priority: must
   - id: FR-7
-    text: The service must store wall-clock times with an IANA time zone, and recompute derived instants for future appointments when the time zone database changes.
+    text: The service must store wall-clock times with an IANA reference time zone, and recompute derived instants for future appointments when the time zone database changes.
+    priority: must
+  - id: FR-11
+    text: The service must return start_at and end_at as RFC 3339 timestamps in UTC, and start and end as RFC 9557 timestamps that carry both the offset and the reference zone, so any client can convert them to its own time zone.
+    priority: must
+  - id: FR-12
+    text: The service must give Notification each participant's time zone with every reminder, so the reminder shows the time in the participant's zone.
     priority: must
   - id: FR-8
     text: The service must accept an Idempotency-Key on book, reschedule, cancel, complete and record-no-show requests, and return the original result when a request is retried with the same key.
@@ -370,6 +386,14 @@ acceptanceCriteria:
     given: an appointment at 09:00 Europe/Zurich, booked before a change to the zone's daylight saving rules
     when: the time zone database is updated
     then: start_time stays 09:00 and start_at is recomputed under the new rules
+  - id: AC-13
+    given: an appointment at 09:00 America/New_York on 3 March 2026, with participants in Europe/Zurich and Asia/Tokyo
+    when: each participant views it
+    then: the Zurich participant sees 15:00 and the Tokyo participant sees 23:00, and start_at is 14:00 UTC for everyone
+  - id: AC-14
+    given: an appointment at 09:00 America/New_York on 10 March 2026, after the United States has switched to daylight saving time but before Europe has
+    when: the Europe/Zurich participant views it
+    then: they see 14:00, not 15:00
   - id: AC-12
     given: an appointment with a pending reminder
     when: it is cancelled
@@ -379,8 +403,8 @@ api:
   - method: POST
     path: /appointments
     description: Book an appointment. Accepts an Idempotency-Key header.
-    request: participants[], start_time, end_time, time_zone, location?, reminder_offsets?, notes?
-    response: the created appointment
+    request: participants[{ identity_id, role, time_zone? }], start_time, end_time, time_zone, location?, reminder_offsets?, notes?
+    response: 'the created appointment, with start_at and end_at in UTC (RFC 3339) and start and end with offset and zone (RFC 9557), for example 2026-03-03T09:00:00-05:00[America/New_York]'
     errors:
       - APPOINTMENT_INVALID_TIME_RANGE
       - APPOINTMENT_START_IN_PAST
@@ -580,9 +604,9 @@ decisions:
     alternatives: Keep rescheduled as a status - rejected for the reasons above.
     date: '2026-10-05'
   - id: ADR-6
-    decision: Times are stored as wall-clock time plus an IANA time zone, with instants derived.
-    rationale: For future events, an instant computed today can be wrong by the time the event happens if time zone rules change. The local time is what participants agreed to.
-    alternatives: Store only UTC instants - rejected because a rule change silently moves future appointments. Store a fixed UTC offset - rejected because offsets carry no daylight saving rules.
+    decision: Each appointment stores wall-clock time in one reference time zone, with instants derived, and each participant has their own display time zone.
+    rationale: For future events, an instant computed today can be wrong by the time the event happens if time zone rules change. One reference zone keeps a single source of truth, and converting from the instant gives every participant the correct local time. Google Calendar and RFC 5545 attach a zone to the event, and Cal.com stores the host's and each attendee's zone separately.
+    alternatives: Store only UTC instants - rejected because a rule change silently moves future appointments. Store a fixed UTC offset - rejected because offsets carry no daylight saving rules. Store each participant's local time - rejected because the copies disagree after a rule change.
     date: '2026-10-05'
   - id: ADR-7
     decision: No-shows are recorded by a Scheduler by default, with automatic recording after a grace period as an opt-in setting.
@@ -598,6 +622,14 @@ openQuestions:
   - Should overlap be checked per resource, such as a room or device, as well as per participant?
 
 changelog:
+  - version: 0.3.0
+    date: '2026-10-05'
+    changes:
+      - Added a time zone per participant, defaulting to the appointment's reference time zone (BR-9).
+      - Every participant sees the appointment and its reminders in their own time zone (BR-9, FR-12).
+      - Responses carry start_at and end_at in UTC (RFC 3339) and start and end with offset and zone (RFC 9557) (FR-11).
+      - Added cross-zone acceptance criteria, including weeks when daylight saving dates differ (AC-13, AC-14).
+    breaking: false
   - version: 0.2.0
     date: '2026-10-05'
     changes:
@@ -647,16 +679,35 @@ check in application code followed by a separate insert lets both requests
 succeed. The check and the write need to be one atomic operation, such as a
 database exclusion constraint on the participant and the slot (FR-2, AC-4).
 
-## Participants agree to a local time, so that's what is stored
+## One moment, shown in every participant's own time zone
 
-An appointment at 09:00 in Zurich is stored as 09:00 plus `Europe/Zurich`.
-The absolute instant is derived from them (BR-6).
+Participants are often in different countries. An appointment at 09:00 in New
+York on 3 March 2026 is 15:00 in Zurich and 23:00 in Tokyo. It's one moment,
+and each participant sees it, and is reminded about it, in their own time zone
+(BR-9, AC-13).
+
+The gap between two zones isn't fixed. The United States switched to daylight
+saving time on 8 March 2026 and Europe on 29 March, so for those three weeks
+the same New York appointment is 14:00 in Zurich, not 15:00 (AC-14). Converting
+from the absolute instant with the time zone database gets this right. A fixed
+offset per participant doesn't.
+
+## The agreed time is stored, not just the instant
+
+Each appointment keeps the time it was agreed in, such as 09:00 plus
+`America/New_York`, and derives the absolute instant from it (BR-6). The agreed
+zone is usually where the appointment happens, or the host's zone when it's
+remote.
 
 Storing only UTC looks simpler, but it fails for future events. When a
 government changes its daylight saving rules, an instant computed before the
 change points to the wrong local time, and the appointment silently moves by an
-hour. Keeping the wall-clock time means the derived instant can be recomputed
-when the time zone database updates (AC-11).
+hour. Keeping the agreed time means the instant can be recomputed when the time
+zone database updates (AC-11).
+
+APIs return both forms: `start_at` in UTC, and `start` in the RFC 9557 format
+that carries the offset and the zone, such as
+`2026-03-03T09:00:00-05:00[America/New_York]` (FR-11).
 
 ## A reschedule changes the time, not the appointment
 
