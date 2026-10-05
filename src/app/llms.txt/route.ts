@@ -12,7 +12,7 @@ const guide = `# ${appName}
 
 ## How agents should use the ${appName}
 
-- Work out the project's industry and domain (for example healthcare > dental) before choosing a page.
+- Work out the project's industry and domain (for example healthcare > ehr) before choosing a page.
 - For each domain concept a task touches, use the deepest page that matches the project: the domain page, otherwise the industry page, otherwise the core page. A deeper page already includes everything above it.
 - Industry overview pages list the domains in that industry and which ones are specified yet.
 - A module page's markdown is its complete spec. The pages listed under it (Rules & behaviour, Data, Interface, Requirements, Verification, Terms & history) are parts of the same spec, for when you need only one.

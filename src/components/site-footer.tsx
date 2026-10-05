@@ -7,8 +7,8 @@ const columns = [
     links: [
       { text: 'Introduction', href: docsRoute },
       { text: 'Appointment', href: `${docsRoute}/core/appointment` },
-      { text: 'Clinical appointments', href: `${docsRoute}/healthcare/appointment` },
-      { text: 'Advisory appointments', href: `${docsRoute}/finance/appointment` },
+      { text: 'Healthcare', href: `${docsRoute}/healthcare` },
+      { text: 'EHR', href: `${docsRoute}/healthcare/ehr` },
     ],
   },
   {

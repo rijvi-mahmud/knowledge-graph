@@ -127,52 +127,47 @@ Knowledge lives at three levels, each inheriting from the one above:
 |---|---|---|
 | **Core** | Domain-neutral concept, no industry vocabulary | Appointment: provider, subject, time, lifecycle |
 | **Industry** | Rules every domain in that industry shares | Healthcare: Person becomes Patient; HIPAA, insurance eligibility, consent |
-| **Domain** | A kind of application inside an industry: what it adds, plus domain-only modules | Dental: chair/operatory booking, recall intervals; Treatment plans |
+| **Domain** | A kind of application inside an industry: what it adds, plus domain-only modules | EHR: hospital outpatient scheduling, the handoff to an encounter; Encounters, Admission/discharge/transfer |
 
-Healthcare and Finance are **industries**. EHR, Dental, Mental health and RCM
-are **domains** under Healthcare; Wealth advisory and Lending are domains under
-Finance.
+**Current focus: a hospital EHR.** The user is building a hospital management
+system, so the content is only what serves that: the core modules, the
+Healthcare industry, and EHR as its one domain. Finance, Productivity, Dental
+and other domains were removed on 2026-10-05; don't add other industries or
+domains unless the user asks.
 
 ```
 Core
- ├─ Appointment, Person, Billing, Notification ...
+ └─ Appointment (complete, the reference example)
 Industries
- ├─ Healthcare
- │   ├─ industry base         shared healthcare rules
- │   └─ domains
- │       ├─ EHR               Patients · Appointments · Encounters
- │       ├─ Dental            Patients · Appointments · Treatment plans
- │       ├─ Mental health     Patients · Appointments · Therapy notes
- │       └─ RCM               Patients · Appointments · Claims · Denials
- └─ Finance
-     ├─ industry base         KYC, compliance, audit
+ └─ Healthcare
+     ├─ industry base         rules every healthcare app shares (privacy of health data, ...)
      └─ domains
-         ├─ Wealth advisory   Clients · Appointments · Portfolios
-         └─ Lending           Borrowers · Appointments · Loans
+         └─ EHR               Patients · Appointments · Encounters · ADT · Clinical documentation
+                              · Orders and results · Medications and allergies
 ```
 
+The EHR overview (`content/docs/healthcare/ehr/index.mdx`) is the build order.
 Each domain covers the shared modules (patients, appointments, ...) **from its
-own purpose**. RCM's Appointments page is about when a visit becomes billable,
-not about booking.
+own purpose**.
 
 Rules:
 
 - **Extend, never fork.** A domain page declares what it extends
-  (`core/appointment → healthcare/appointment → dental/appointment`) and writes
+  (`core/appointment → healthcare/appointment → ehr/appointment`) and writes
   only its delta: extra fields, rules, endpoints and dependencies. The site
   renders the merged result so the reader still sees the full picture.
 - **Industry base is real content, not a folder.** A rule that applies to every
   domain in an industry is written once at the industry level. Never copy it
-  into EHR, Dental and RCM separately.
+  into each domain separately.
 - **Promotion path.** A rule repeated in 2+ domains moves up to the industry.
   A rule repeated in 2+ industries moves up to core.
-- **Domain-only modules have no core.** Encounters, Treatment plans, Claims live
-  only in their domain. Do not invent a fake core for them.
+- **Domain-only modules have no core.** Encounters and admission, discharge and
+  transfer live only in their domain. Do not invent a fake core for them.
 - **Cap at three levels.** Needing a fourth usually means a concept deserves its
   own module.
 - **"Reviewed, nothing to add" gets a page.** Where a domain needs nothing extra
   for a shared module, write the page saying so. It must stay distinguishable
-  from "nobody has looked at this yet." See `productivity/appointment.mdx`.
+  from "nobody has looked at this yet."
 
 ### Spec page layout: one module, several short pages
 
@@ -317,7 +312,7 @@ module and layer.
   order in every domain**, then domain-only modules. A reader moving between
   domains always knows where they are.
 - A domain sidebar shows only that domain. No sibling domains leak in.
-- Every rule carries a provenance label (`core` · `healthcare` · `dental`) so
+- Every rule carries a provenance label (`core` · `healthcare` · `ehr`) so
   readers know what is universal and companies know which rule id to override.
 - Each domain page links "Based on" its parent. Each core page lists the
   layers that extend it, by title and industry only. Cross-industry
@@ -364,16 +359,14 @@ Never `Appointment - Healthcare`. That names the page after the knowledge base's
 internal layering. Use domain-native language the practitioner already uses:
 
 - `Clinical appointments` (healthcare)
-- `Advisory appointments` (fintech)
-- `General scheduling` (productivity)
+- `Outpatient appointments` (EHR)
 
 An engineer scanning a sidebar must recognise their page instantly and ignore
 the rest.
 
 ### Pages never reference sibling industries or domains
 
-A health-tech engineer does not care about KYC, and a dental engineer does not
-care about RCM claims. Industry and domain pages link only up their own
+An engineer on one domain does not care about another domain's concepts. Industry and domain pages link only up their own
 inheritance chain.
 
 References are fine; forcing an irrelevant industry or domain on a reader is not.
@@ -465,7 +458,7 @@ understand. Always fill them.
 ## Positioning and home page copy
 
 The product is **knowledge sharing**: requirements written once and inherited,
-never rewritten. Industries and domains (healthcare, dental, ...) are example
+never rewritten. Industries and domains (healthcare, EHR, ...) are example
 content, never the headline. Rules set by the user, who works in dev-tools
 business development and content:
 
@@ -524,10 +517,9 @@ scaffold's own pages fail validation.
 
 ## Known TODO
 
-- Industry and domain layers inherit every core section but haven't been
-  brought to full SRS depth themselves: their own rules and requirements
-  still have unverified items in the traceability matrix (healthcare 8,
-  dental 19, finance 10 as of 0.6.0 of core). Follow
+- EHR is specified in the order of its overview's build list. Next:
+  Appointments (`healthcare/appointment` and `healthcare/ehr/appointment`),
+  then Patients. Follow
   [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - `pnpm check:specs` isn't run in CI yet. Running it with `--strict` on every
   pull request would stop unverified items from coming back.
@@ -539,7 +531,3 @@ scaffold's own pages fail validation.
 - Company-layer overrides are designed for but not implemented. No merge or
   precedence semantics exist yet for a private 20% layer on top of a public
   module.
-- Only one domain exists (`healthcare/dental`, appointment module only). EHR,
-  Mental health, RCM, Wealth advisory and Lending are listed as "Not yet
-  specified" on their industry overviews and have no pages, so they do not
-  appear in the sidebar.

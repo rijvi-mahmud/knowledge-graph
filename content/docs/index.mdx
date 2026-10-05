@@ -29,41 +29,17 @@ thing you most need when deciding whether a constraint still applies.
 Knowledge is specified at three levels, each building on the one above.
 
 - **Core** describes a concept in industry-neutral terms. The booking lifecycle
-  is identical whether the participants are a patient and a clinician or a
-  client and an advisor.
-- **Industries** such as healthcare and finance add the obligations every
-  application in that industry shares: consent and payer eligibility in one,
-  client verification and audit in the other.
-- **Domains** such as dental, mental health or revenue cycle management add
-  what only that kind of application needs, and the concepts that exist nowhere
-  else.
+  is the same whether the participants are a patient and a clinician or a
+  customer and a consultant.
+- **Industries** such as healthcare add the obligations every application in
+  that industry shares.
+- **Domains** such as an electronic health record (EHR) add what only that kind
+  of application needs, and the concepts that exist nowhere else.
 
 Each level declares only what it adds. A page shows its own additions merged
 with everything it inherits, and labels each rule with the level it comes from,
-so a dental team reads one complete specification instead of three partial
-ones, and still knows which rules are universal.
-
-## Industries decide when a check runs by what failure costs
-
-Industry layers often attach an external check to a shared module. The
-[clinical](/docs/healthcare/appointment) and
-[advisory](/docs/finance/appointment) appointment layers both check a booking,
-and resolve it in opposite directions:
-
-| | Clinical eligibility | Advisory verification |
-|---|---|---|
-| Runs | after booking, asynchronously | before booking, synchronously |
-| On failure | flags billing, the booking stands | the booking is rejected |
-| On outage | degrades to pending | fails closed |
-
-The difference follows from what failure costs. Refusing to schedule a patient
-because a payer's API was slow is worse than a delayed claim. An advice session
-booked for an unverified client is a reportable breach that can't be corrected
-afterwards.
-
-A new industry layer is derived the same way: identify the checks the industry
-requires, then decide when each runs by asking which failure is more expensive
-to absorb.
+so an EHR team reads one complete specification instead of three partial ones,
+and still knows which rules are universal.
 
 ## Reading this as a machine
 
@@ -84,13 +60,13 @@ the prose.
     description="The scheduling lifecycle, specified in industry-neutral terms."
   />
   <Card
-    title="Clinical appointments"
-    href="/docs/healthcare/appointment"
-    description="Consent, payer eligibility and the handoff into a clinical record."
+    title="EHR"
+    href="/docs/healthcare/ehr"
+    description="The electronic health record domain, and the order its modules are built in."
   />
   <Card
-    title="Advisory appointments"
-    href="/docs/finance/appointment"
-    description="Client verification, advisor licensing and compliance overrides."
+    title="Agentic development"
+    href="/docs/agentic"
+    description="Connect your coding agent with one AGENTS.md section."
   />
 </Cards>

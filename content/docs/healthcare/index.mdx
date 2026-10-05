@@ -3,29 +3,25 @@ title: Healthcare
 description: Rules every healthcare application shares, and the domains built on them.
 ---
 
-Every healthcare application handles protected health information, works with
-payers, and needs a patient's consent before care is recorded. Those
-obligations do not change between an EHR, a dental practice system or a billing
-platform, so they are specified once here and inherited by every domain below.
+Healthcare applications share obligations that general software doesn't have,
+above all around the data they hold. Rules every healthcare domain needs are
+written once at this level, and each domain below inherits them.
 
-## Shared across healthcare
+## Health data is protected almost everywhere, under different laws
 
-<Cards>
-  <Card
-    title="Clinical appointments"
-    href="/docs/healthcare/appointment"
-    description="Consent, payer eligibility and the handoff into a clinical record."
-  />
-</Cards>
+In the United States, the HIPAA Privacy Rule protects health information that
+identifies a person, which 45 CFR 160.103 calls protected health information.
+It applies to health plans, healthcare clearinghouses and providers that
+transmit health information electronically. In the European Union, GDPR
+Article 9 makes data concerning health a special category of personal data,
+which can be processed only under one of the exceptions in Article 9(2).
+
+The laws differ in scope, so a healthcare spec states the protection every
+jurisdiction needs, and models the parts that differ by jurisdiction as
+settings, never as one country's rule.
 
 ## Domains
 
-Each domain covers patients, appointments and the rest from its own purpose,
-and adds the modules that exist only in that kind of application.
-
-| Domain | Builds on the shared layer with | Status |
-|---|---|---|
-| EHR | Encounters, clinical notes | Not yet specified |
-| [Dental](/docs/healthcare/dental) | Treatment plans, chair scheduling, recall | In progress |
-| Mental health | Recurring sessions, therapy notes | Not yet specified |
-| RCM | Claims, denials, remittance | Not yet specified |
+| Domain | Status |
+|---|---|
+| [EHR](/docs/healthcare/ehr): the electronic health record for hospitals and clinics | In progress |

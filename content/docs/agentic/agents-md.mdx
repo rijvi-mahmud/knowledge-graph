@@ -12,20 +12,21 @@ so you can predict its behaviour and adjust the section if you need to.
 
 The Knowledge Graph is layered. **Core** pages describe a concept in
 industry-neutral terms. **Industry** pages, such as healthcare, add what every
-application in that industry needs. **Domain** pages, such as dental, add what
+application in that industry needs. **Domain** pages, such as EHR, add what
 only that kind of application needs. Each page shows its own items merged with
 everything it inherits.
 
-For a dental practice system working on appointments, the agent:
+For a hospital EHR working on appointments, the agent:
 
 1. Reads `%SITE_URL%/llms.txt` and finds the healthcare industry.
-2. Fetches the healthcare overview and sees that dental is a specified domain.
-3. Fetches `%SITE_URL%/docs/healthcare/dental/appointment.md`, which already
-   includes the core and healthcare rules.
+2. Fetches the healthcare overview and sees that EHR is one of its domains.
+3. Fetches the EHR appointments page, which already includes the core and
+   healthcare rules.
 
-If the dental domain had no appointments page, the agent would use the
-healthcare page instead, and the core page if the project weren't in a covered
-industry. It never needs two pages for the same concept.
+If the EHR domain has no appointments page yet, the agent uses the healthcare
+page instead, and the core page (`%SITE_URL%/docs/core/appointment.md`) if
+there's no healthcare page either. It never needs two pages for the same
+concept.
 
 The agent records the industry and domain under **Project context** in
 `AGENTS.md`, so later sessions skip the first two steps.
@@ -36,25 +37,27 @@ Each module page opens with its module, layers, version and status, then a
 short guide on how to read it. The rest is grouped into rules and behaviour,
 data, interface, requirements, terms and history:
 
-```md title="healthcare/dental/appointment.md (excerpt)"
+```md title="core/appointment.md (excerpt)"
 - module: appointment
-- layer: core > healthcare > dental
-- version: 0.1.0
-- status: draft
+- layer: core
+- version: 0.9.0
+- status: stable
 
-**BR-4** A patient cannot be double-booked, and an operatory cannot be unless
-the practice allows overlap. ... _[dental (overrides core)]_
-  - Why: A dentist runs several chairs while assistants and hygienists work ...
-**BR-H1** An appointment cannot transition to completed unless
-consent_status = granted. _[healthcare]_
+**BR-4** A participant cannot have two active appointments whose slots
+overlap. Slots are half-open, so an appointment ending at 10:00 and one
+starting at 10:00 do not overlap.
+  - Why: Double booking is a data-integrity failure, not a user preference ...
 ```
+
+On an industry or domain page, every item also carries the layer it comes
+from, such as `_[core]_` or `_[ehr (overrides core)]_`.
 
 The same conventions apply to every module:
 
 | In the spec | Meaning |
 |---|---|
 | `BR-`, `FR-`, `AC-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria and decisions. Ids are stable, so code, tests and commits can cite them. |
-| `[core]`, `[healthcare]`, `[dental]` | The layer an item comes from. `core` items apply to every industry. |
+| `[core]`, `[healthcare]`, `[ehr]` | The layer an item comes from. `core` items apply to every industry. |
 | `overrides core` | A more specific layer replaced the item with the same id. Only the replacement applies. |
 | `Why:` | The reason for a rule or decision, usually the failure it prevents. |
 | `Considered:` | Alternatives a decision rejected. |
@@ -69,7 +72,7 @@ The same conventions apply to every module:
 | Fetch before changing code | Work from a stale memory of a spec that has since changed |
 | Unspecified means ask | Fill a deliberate gap with a confident default. Specs leave behaviour open where practice varies between companies. |
 | Open questions are undecided | Pick an answer the domain hasn't settled |
-| Items are merged and tagged by layer | Read a `[core]` rule next to a `[dental]` override as a conflict, or "fix" the override back to the core behaviour |
+| Items are merged and tagged by layer | Read a `[core]` rule next to an `[ehr]` override as a conflict, or "fix" the override back to the core behaviour |
 | Cite ids with the spec version | Make changes nobody can trace back to a requirement or to the version it was built against |
 | Read `Why:` first | Simplify away a rule that prevents a costly failure |
 | Respect `Considered:` | Reintroduce an approach a decision already rejected |
@@ -84,7 +87,7 @@ fills them in, they look like this:
 ### Project context
 
 - Industry: healthcare
-- Domain: dental
+- Domain: ehr
 
 ### Project rules
 

@@ -1,0 +1,33 @@
+---
+title: EHR
+description: The electronic health record for hospitals and clinics, from registration to discharge.
+---
+
+An electronic health record (EHR) holds a patient's record across every visit
+and stay: who they are, when they're seen, what was found, and what was done.
+The modules below are specified in the order a hospital system is usually
+built, because each one depends on the ones before it.
+
+## Patients and appointments come first
+
+Every clinical module refers to a patient, and most clinical work starts from a
+visit. So the shared modules come first, and each later module builds on them.
+
+| Order | Module | Covers | Status |
+|---|---|---|---|
+| 1 | Patients | Registration, demographics, identifiers and duplicate records | Not yet specified |
+| 2 | Appointments | Outpatient scheduling, built on the [core Appointment](/docs/core/appointment) | Next |
+| 3 | Encounters | A visit or stay as a clinical record, started from an appointment or an admission | Not yet specified |
+| 4 | Admission, discharge and transfer | Inpatient admission, bed and ward assignment, transfers and discharge | Not yet specified |
+| 5 | Clinical documentation | Notes, vital signs and assessments recorded during an encounter | Not yet specified |
+| 6 | Orders and results | Laboratory and imaging orders, and their results | Not yet specified |
+| 7 | Medications and allergies | Prescribing, administration records and allergy lists | Not yet specified |
+
+The list follows the functional areas of the HL7 EHR System Functional Model
+(ISO 10781:2023): care provision, its support, administration, and the record
+and trust infrastructure every module relies on.
+
+## References
+
+- [HL7 EHR System Functional Model, Release 2.1](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=528)
+- [ISO 10781:2023, HL7 EHR System Functional Model](https://www.iso.org/standard/84722.html)

@@ -17,7 +17,7 @@ adding `.md` to its URL.
 1. You add the Knowledge Graph section to `AGENTS.md`. It's the same for every
    project.
 2. Your agent works out the project's industry and domain, for example
-   healthcare > dental, and records them in the same section.
+   healthcare > ehr, and records them in the same section.
 3. When a task touches a domain concept such as appointments, the agent
    fetches the most specific page for your project and implements against its
    rules.
@@ -70,7 +70,7 @@ billing. Treat it as the source of truth for domain behaviour.
 - A module page is the complete spec for this industry and domain. Items it
   inherits from the core and industry layers are already merged in.
 - Each item is tagged with the layer it comes from, such as [core],
-  [healthcare] or [dental]. "overrides core" means a more specific layer
+  [healthcare] or [ehr]. "overrides core" means a more specific layer
   replaced the item with the same id. Only the replacement applies.
 - Ids are stable: BR- business rules, FR- functional requirements, AC-
   acceptance criteria, ADR- decisions. Error codes are part of the API
@@ -121,7 +121,7 @@ Which Knowledge Graph pages apply to this project?
 ```
 
 The agent fills in **Project context** and lists the pages it would use, for
-example the dental appointments page for a dental practice system.
+for example the EHR pages for a hospital management system.
 
 > **Note:** Some agents ask before fetching a web page or block internet
 > access by default. See [Claude Code](/docs/agentic/claude-code) and

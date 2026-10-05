@@ -8,7 +8,8 @@ export interface BentoData {
   chain: { path: string; title: string; url: string; kind: LayerKind; added: number }[];
   /** A few merged rules from the deepest page, each with the layer it came from. */
   provenance: { id: string; text: string; layer: string; kind: LayerKind }[];
-  override: { id: string; before: string; after: string; layer: string; replaced: string };
+  /** The first rule a layer overrides, if any layer overrides one yet. */
+  override?: { id: string; before: string; after: string; layer: string; replaced: string };
   /** Lines from the merged markdown an assistant receives for the deepest page. */
   resolved: { url: string; lines: string[] };
 }
@@ -96,6 +97,7 @@ export function Bento({ data }: { data: BentoData }) {
         </ul>
       </Card>
 
+      {data.override && (
       <Card
         icon={Replace}
         title="Override one rule, keep the rest"
@@ -119,6 +121,7 @@ export function Bento({ data }: { data: BentoData }) {
           </div>
         </div>
       </Card>
+      )}
 
       <Card
         icon={ArrowUp}

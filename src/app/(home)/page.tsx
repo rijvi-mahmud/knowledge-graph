@@ -36,11 +36,23 @@ const ruleOf = (path: string, id: string) => {
   return page ? dataOf(page).businessRules?.find((r) => r.id === id) : undefined;
 };
 
-const HERO_CHAIN = ['core/appointment', 'healthcare/appointment', 'healthcare/dental/appointment'];
-
-const DEEPEST = HERO_CHAIN[HERO_CHAIN.length - 1];
+/**
+ * The hero shows the deepest module page and the chain it inherits from, so
+ * it stays true as content changes. Deepest = the longest inheritance chain.
+ */
+function heroChain(): string[] {
+  const pages = specPages();
+  const depth = (p: Page) => getResolvedSpec(p).lineage?.basedOn.length ?? 0;
+  const deepest = pages.sort((x, y) => depth(y) - depth(x))[0];
+  if (!deepest) return [];
+  const lineage = getResolvedSpec(deepest).lineage;
+  const paths = (lineage?.basedOn ?? []).map((l) => l.url.replace(/^\/docs\//, ''));
+  return [...paths, deepest.slugs.join('/')];
+}
 
 function bentoData(): BentoData {
+  const HERO_CHAIN = heroChain();
+  const DEEPEST = HERO_CHAIN[HERO_CHAIN.length - 1] ?? '';
   const chain = HERO_CHAIN.flatMap((path) => {
     const page = byPath(path);
     if (!page) return [];
@@ -71,7 +83,7 @@ function bentoData(): BentoData {
   });
 
   const markdown = merged ? specToMarkdown(merged).split('\n') : [];
-  // "**BR-4** text _[dental (overrides core)]_" -> "BR-4 [dental (overrides core)] text",
+  // "**BR-4** text _[ehr (overrides core)]_" -> "BR-4 [ehr (overrides core)] text",
   // so the provenance tag survives truncation.
   const ruleLine = (l: string) => {
     const m = l.match(/^\*\*(\S+)\*\* (.*?)(?: _\[(.+)\]_)?$/);
@@ -84,9 +96,13 @@ function bentoData(): BentoData {
       .filter((l) => l.includes('overrides'))
       .slice(0, 1)
       .map(ruleLine),
-    ...ruleLines
-      .filter((l) => l.includes('[healthcare]'))
-      .slice(0, 1)
+    // One rule from each layer between core and the deepest page.
+    ...chain
+      .slice(1, -1)
+      .flatMap((c) => {
+        const layer = c.path.split('/').at(-2) ?? '';
+        return ruleLines.filter((l) => l.includes(`[${layer}]`)).slice(0, 1);
+      })
       .map(ruleLine),
     ...ruleLines
       .filter((l) => l.includes('[core]'))
@@ -94,16 +110,24 @@ function bentoData(): BentoData {
       .map(ruleLine),
   ];
 
+  // The first rule any layer overrides, shown before and after.
+  const overridden = rules.find((r) => r.overrides);
+  const owner = overridden && chain.find((c) => (c.path.split('/').at(-2) ?? 'core') === overridden.layer);
+  const replacedPath = overridden && chain.find((c) => (c.path.split('/').at(-2) ?? 'core') === overridden.overrides);
+
   return {
     chain,
     provenance,
-    override: {
-      id: 'BR-4',
-      before: ruleOf('core/appointment', 'BR-4')?.text ?? '',
-      after: ruleOf(DEEPEST, 'BR-4')?.text ?? '',
-      layer: 'dental',
-      replaced: 'core',
-    },
+    override:
+      overridden && owner && replacedPath
+        ? {
+            id: overridden.id,
+            before: ruleOf(replacedPath.path, overridden.id)?.text ?? '',
+            after: overridden.text,
+            layer: overridden.layer ?? '',
+            replaced: overridden.overrides ?? 'core',
+          }
+        : undefined,
     resolved: { url: deepest ? getPageMarkdownUrl(deepest).url : '', lines: resolvedLines },
   };
 }
