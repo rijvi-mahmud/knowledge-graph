@@ -242,6 +242,52 @@ is what surfaces the edge cases. Before calling a module done, check it has:
 `core/appointment.mdx` is the reference example. Bring other modules to the
 same depth with the same pattern.
 
+### How to bring a module to full SRS depth
+
+This is the approach that produced `core/appointment.mdx`. Follow it for every
+module and layer.
+
+1. **Read before you change.** Read the page and every layer that extends it.
+   Check which fields, error codes and ids the layers use, because a change to
+   core reaches all of them through inheritance.
+2. **Research from official sources** (see [Working rules](#working-rules)):
+   standards (ISO/IEC/IEEE 29148, ISO/IEC 25010, the relevant RFCs),
+   regulators, and the docs of leading products in the domain. Check concrete
+   facts against real data. For example, compute daylight saving dates and
+   durations with the IANA database (`python3` and `zoneinfo`) instead of
+   writing them from memory.
+3. **Run a gap check.** Compare the page with the checklist above and the
+   standards. List the gaps by risk, worst first: bugs and legal exposure
+   before missing sections. Ask the user before changing the structure
+   (schema, sections, sidebar); content inside the agreed structure doesn't
+   need approval.
+4. **Add a new kind of section in all five places**, or it disappears
+   somewhere: the field in `source.config.ts`, its key in `KEYS` in
+   `spec-inherit.ts`, the section and group in `spec-sections.ts`, and a
+   renderer in both `module-spec.tsx` and `spec-markdown.ts`.
+5. **Write the content.**
+   - Keep ids in numeric order, and never reuse or renumber one.
+   - Every rule has a rationale, every functional requirement a verification
+     method, every acceptance criterion a `verifies` list, every edge case a
+     `covers` list, and every reference an official URL.
+   - Core stays industry-neutral. No em or en dashes, and no spaced hyphens
+     used as dashes.
+   - YAML: quote any value that contains `: `, starts with `[`, or is a number
+     meant as text (`'0'`). An unquoted colon in a description broke the build
+     once.
+6. **Validate** before reporting done:
+   - Every module page parses against the schema, and inheritance resolves for
+     each layer.
+   - Every id in a `verifies` or `covers` list exists.
+   - The traceability matrix of the finished page has no "not verified" rows.
+   - `pnpm exec tsc --noEmit` passes.
+   - The module page, a few section pages and their `.md` render on the dev
+     server. Use the user's running server; if none is running, validate
+     without one rather than starting your own.
+7. **Ship.** Bump `version`, add a changelog entry (mark `breaking` honestly),
+   commit, push to `main` (the user's usual flow), check the pages on
+   production, and tell the user which sources you used.
+
 ### Navigation and UX
 
 - Top level: **Core** plus one entry per industry.
@@ -424,6 +470,15 @@ on a light background. Logo mark is three linked nodes in
 
 ## Development gotchas
 
+**Don't stop or restart the user's dev server.** The user runs it in their own
+terminal. If a cache has to be cleared, tell them the command, or ask before
+doing it. To find a server, use `ss -ltnp` and the port. Never use `pkill -f`
+with a pattern that also appears in your own command: it kills your own shell.
+
+**Fumadocs folders are closed by default.** Spec folders set `defaultOpen:
+true` in the generated `meta.json` (`src/lib/source.ts`), or a module's pages
+are hidden until you click it.
+
 **Never run `pnpm build` while a dev server is running.** Both write to `.next`,
 and the build clobbers the dev chunks, producing misleading
 `Cannot find module 'fumadocs-ui/provider/next'` errors. Recovery: stop dev,
@@ -440,6 +495,15 @@ to `/docs` lights up on every docs page. The `/docs` link uses `active: 'url'`
 scaffold's own pages fail validation.
 
 ## Known TODO
+
+- Industry and domain layers inherit every core section but haven't been
+  brought to full SRS depth themselves: their own rules and requirements
+  still have unverified items in the traceability matrix (healthcare 8,
+  dental 19, finance 10 as of 0.6.0 of core). Follow
+  [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
+- The validation in step 6 is run by hand. A `scripts/check-specs.ts` that
+  does it (schema, dangling ids, unverified items) would make it repeatable
+  and could run in CI.
 
 - Only one module exists (`appointment`). The schema has not been stress-tested
   against a second, structurally different concept.
