@@ -442,8 +442,8 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
       'access-matrix',
       [
         table(
-          head(['Action', ...roles]),
-          rows(rowsIn, (r) => [r.action, ...roles.map((role) => r.roles[role] ?? 'none')]),
+          head(['Action', ...roles, 'Permission']),
+          rows(rowsIn, (r) => [r.action, ...roles.map((role) => r.roles[role] ?? 'none'), r.permission]),
         ),
         'any: every appointment. own: appointments the actor takes part in. none: not allowed.',
         ...rowsIn.filter((r) => r.note).map((r) => `- ${r.action}: ${r.note}`),

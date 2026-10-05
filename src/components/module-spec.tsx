@@ -105,6 +105,7 @@ interface Statement extends Provenance {
 interface AccessRow extends Provenance {
   action: string;
   roles: Record<string, string>;
+  permission?: string;
   note?: string;
 }
 
@@ -1299,12 +1300,13 @@ export function ModuleSpec({
       return (
         <>
           <Grid
-            head={['Action', ...roles]}
+            head={['Action', ...roles, 'Permission']}
             rows={rows.map((r) => [
               <span key="a" className="font-medium">
                 {r.action} {origin(r)}
               </span>,
               ...roles.map((role) => <AccessCell key={role} value={r.roles[role]} />),
+              r.permission ? <code key="p">{r.permission}</code> : '',
             ])}
           />
           {rows.some((r) => r.note) && (

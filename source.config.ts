@@ -144,6 +144,7 @@ const constraintSchema = z.object({
 const accessSchema = z.object({
   action: z.string(), // e.g. "Reschedule"
   roles: z.record(z.string(), z.string()), // actor name -> any | own | none | condition
+  permission: z.string().optional(), // the named permission that grants it, e.g. "appointment.manage"
   note: z.string().optional(),
 });
 
