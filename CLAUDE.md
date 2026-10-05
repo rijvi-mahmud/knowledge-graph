@@ -158,9 +158,9 @@ found those confusing.
 - A domain sidebar shows only that domain — no sibling domains leak in.
 - Every rule carries a provenance label (`core` · `healthcare` · `dental`) so
   readers know what is universal and companies know which rule id to override.
-- Each domain page links "Based on" its parent. Each core page lists "Used in"
-  with links to every domain version — that is where cross-domain comparison
-  lives.
+- Each domain page links "Based on" its parent. Each core page lists the
+  layers that extend it, by title and industry only. Cross-industry
+  comparison lives in `content/docs/index.mdx`.
 - A domain overview doubles as a roadmap.sh-style build order (shared modules →
   must-have → nice-to-have). This replaces the earlier "industry roadmap view"
   plan.
@@ -212,12 +212,24 @@ the rest.
 ### Pages never reference sibling industries or domains
 
 A health-tech engineer does not care about KYC, and a dental engineer does not
-care about RCM claims. Cross-industry and cross-domain comparisons belong on the
-**core page** ("Used in"), where someone extending the module to a new domain
-would look — see "How the industry layers diverge" in `core/appointment.mdx`.
-Industry and domain pages link only up their own inheritance chain.
+care about RCM claims. Industry and domain pages link only up their own
+inheritance chain.
 
 References are fine; forcing an irrelevant industry or domain on a reader is not.
+
+### Core pages use no industry vocabulary
+
+A core page must read as industry-neutral: no patients, clinicians, payers,
+KYC or advisors in its spec, examples or narrative, and no healthcare-only
+standards (such as FHIR) as evidence. Use neutral examples (host and guest,
+customer and consultant) and cross-industry sources (iCalendar, Google
+Calendar, Cal.com). The user flagged a core page that read like a healthcare
+page. The only industry content allowed is the neutral list of layers that
+extend it ("Industry layers": title plus industry name).
+
+Cross-industry comparisons that teach how to design a layer, such as "Industries
+decide when a check runs by what failure costs", belong in
+`content/docs/index.mdx`, not on a core page.
 
 ### Headings are claims, not labels (domain pages)
 

@@ -16,7 +16,7 @@ scope:
 nonGoals:
   - Owning participant identity - that belongs to the Identity module
   - Owning payment or billing - that belongs to the Billing module
-  - Owning what happens during the appointment, such as clinical notes or meeting minutes
+  - Owning what happens during the appointment, such as notes or outcomes
   - Computing availability, working hours, buffers or minimum booking notice - Appointment asks Calendar
   - Recurring series - see open questions
   - Delivering notifications - Appointment emits reminder_due and Notification delivers it
@@ -49,7 +49,7 @@ concepts:
   - name: Appointment
     description: A reserved time slot between two or more participants, with a status lifecycle.
   - name: Participant
-    description: An identity taking part in the appointment, with a role defined by the industry layer, such as patient and provider.
+    description: An identity taking part in the appointment, with a role such as host or guest. Industry layers define their own roles.
   - name: Reminder
     description: A scheduled notification derived from the appointment. Not independently bookable.
   - name: Reschedule
@@ -63,7 +63,7 @@ dataModel:
   - name: participants
     type: 'array<{ identity_id, role }>'
     required: true
-    description: The parties involved. role is defined by the industry layer, for example patient and provider.
+    description: The parties involved. role is a label such as host or guest; industry layers define their own roles.
     constraints: at least 2 entries; identity_id values are distinct and resolvable
   - name: start_time
     type: local datetime
@@ -563,7 +563,7 @@ decisions:
   - id: ADR-2
     decision: Rescheduling changes the existing appointment and increases its revision instead of creating a successor.
     rationale: Attendance history and no-show statistics must follow one appointment across time changes, and the revision gives clients the same signal as iCalendar's SEQUENCE.
-    alternatives: Cancel the original and book a linked replacement, as Cal.com, Calendly and FHIR do - rejected because every reschedule then counts as a cancellation and history is split across records. Integrations with those systems map each revision to a new linked booking.
+    alternatives: Cancel the original and book a linked replacement, as Cal.com and Calendly do - rejected because every reschedule then counts as a cancellation and history is split across records. Integrations with those systems map each revision to a new linked booking.
     date: '2026-01-15'
   - id: ADR-3
     decision: Reminders are delegated to a durable scheduler rather than in-process timers.
@@ -576,7 +576,7 @@ decisions:
     date: '2026-02-02'
   - id: ADR-5
     decision: Rescheduled is an event and a revision, not a status.
-    rationale: A rescheduled appointment is still booked. A separate status forced a confirm step back to booked, and left completion and no-shows undefined for rescheduled appointments. iCalendar, Google Calendar and FHIR have no rescheduled status either.
+    rationale: A rescheduled appointment is still booked. A separate status forced a confirm step back to booked, and left completion and no-shows undefined for rescheduled appointments. iCalendar and Google Calendar have no rescheduled status either.
     alternatives: Keep rescheduled as a status - rejected for the reasons above.
     date: '2026-10-05'
   - id: ADR-6
@@ -591,8 +591,8 @@ decisions:
     date: '2026-10-05'
 
 openQuestions:
-  - Should recurring appointments be modelled here, or as a separate Recurrence module that books individual appointments? FHIR supports both a recurrence template and a chain of linked appointments.
-  - Should core include a pending state for slots held while awaiting confirmation or payment? Cal.com and FHIR have one; Calendly and Google Calendar's default flow do not.
+  - Should recurring appointments be modelled here, or as a separate Recurrence module that books individual appointments? iCalendar models a series as one event with a recurrence rule (RRULE).
+  - Should core include a pending state for slots held while awaiting confirmation or payment? Cal.com holds bookings that need confirmation as pending, and iCalendar has a TENTATIVE status; Calendly's standard flow books immediately.
   - Should attendance be recorded per participant rather than for the whole appointment? Cal.com records absence separately for the host and each attendee.
   - How is a wrongly recorded no-show corrected, given that no_show is terminal?
   - Should overlap be checked per resource, such as a room or device, as well as per participant?
@@ -618,8 +618,8 @@ changelog:
 
 An appointment reserves a time slot between two or more participants. Booking,
 rescheduling, cancelling, reminding and closing it out work the same way
-whether the participants are a patient and a clinician, a client and an
-advisor, or two colleagues.
+whether it's a customer meeting a consultant, a candidate meeting an
+interviewer, or two colleagues meeting each other.
 
 What changes between industries is what must be true before a slot can be held
 and what happens after it closes. Those obligations live in the industry
@@ -665,7 +665,7 @@ revision (BR-3). Its attendance history stays on one record, and the revision
 tells clients and calendar integrations that the time changed, the same signal
 iCalendar carries in `SEQUENCE`.
 
-Cal.com, Calendly and FHIR take the other approach: they cancel the original
+Cal.com and Calendly take the other approach: they cancel the original
 and book a linked replacement. Every reschedule then also counts as a
 cancellation. Integrations with those systems can map each revision to a new
 linked booking (ADR-2).
@@ -675,9 +675,9 @@ can still be completed, cancelled or recorded as a no-show (ADR-5).
 
 ## A reminder that's already due is skipped, not refused
 
-Each appointment can have several reminders. Studies of outpatient clinics
-found that patients reminded both 3 days and 1 day ahead missed fewer
-appointments than patients reminded once.
+Each appointment can have several reminders. In a randomised trial, people
+reminded both 3 days and 1 day ahead missed fewer appointments than people
+reminded once.
 
 When an appointment is booked closer to its start than a reminder's offset,
 that reminder is skipped (BR-7). Rejecting the booking instead would make the
@@ -705,26 +705,6 @@ appointment id (BR-2).
 Each industry layer adds only what its industry requires and inherits
 everything else unchanged.
 
-- [Clinical appointments](/docs/healthcare/appointment) - consent, payer eligibility, and the handoff into an encounter record
-- [Advisory appointments](/docs/finance/appointment) - client verification, advisor licensing, and compliance overrides
-- [General scheduling](/docs/productivity/appointment) - uses this specification unchanged
-
-## Regulated industries put their checks on opposite sides of the booking
-
-Both regulated layers attach an external check to a booking, and they resolve
-it in opposite directions:
-
-| | Clinical eligibility | Advisory verification |
-|---|---|---|
-| Runs | after booking, asynchronously | before booking, synchronously |
-| On failure | flags billing, the booking stands | the booking is rejected |
-| On outage | degrades to pending | fails closed |
-
-The difference follows from what failure costs. Refusing to schedule a patient
-because a payer's API was slow is worse than a delayed claim. An advice session
-booked for an unverified client is a reportable breach that can't be corrected
-afterwards.
-
-A new industry layer is derived the same way: identify the checks the industry
-requires, then decide when each runs by asking which failure is more expensive
-to absorb.
+- [Clinical appointments](/docs/healthcare/appointment) - healthcare
+- [Advisory appointments](/docs/finance/appointment) - finance
+- [General scheduling](/docs/productivity/appointment) - productivity, which uses this specification unchanged
