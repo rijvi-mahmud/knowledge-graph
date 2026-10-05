@@ -2,6 +2,7 @@
   "title": "Finance",
   "icon": "Landmark",
   "pages": [
+    "index",
     "appointment"
   ]
 }

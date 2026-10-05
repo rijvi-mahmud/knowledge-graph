@@ -478,9 +478,16 @@ terminal. If a cache has to be cleared, tell them the command, or ask before
 doing it. To find a server, use `ss -ltnp` and the port. Never use `pkill -f`
 with a pattern that also appears in your own command: it kills your own shell.
 
-**Fumadocs folders are closed by default.** Spec folders set `defaultOpen:
-true` in the generated `meta.json` (`src/lib/source.ts`), or a module's pages
-are hidden until you click it.
+**Sidebar folders aren't links.** A folder's overview page is listed first
+inside it as "Introduction" (an `index` entry in `pages`, renamed by the
+`sidebarIntroduction` plugin in `src/lib/source.ts`), and the folder name only
+opens and closes. The user found a folder name that both links and toggles
+confusing. Every folder with an `index.mdx` lists `"index"` first in its
+`meta.json`.
+
+**Which spec folders start open.** A module folder opens by default; of its
+groups, only the first (Functions) does, and the rest start collapsed.
+Fumadocs also opens whichever folder holds the current page.
 
 **Never run `pnpm build` while a dev server is running.** Both write to `.next`,
 and the build clobbers the dev chunks, producing misleading

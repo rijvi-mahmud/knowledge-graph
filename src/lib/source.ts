@@ -1,5 +1,5 @@
 import { docs } from 'collections/server';
-import { loader, update } from 'fumadocs-core/source';
+import { loader, update, type LoaderPlugin } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 import { specToMarkdown } from './spec-markdown';
@@ -61,13 +61,17 @@ const withSpecPages = update(mdx)
       const out: OutFile[] = [
         { ...file, path: `${dir}/index.mdx`, data: { ...file.data, sourcePath: file.path } },
       ];
-      // Open by default, so a module's spec is always visible under it.
-      const folder = (path: string, folderTitle: string, pages: string[]) =>
-        ({ type: 'meta', path, data: { title: folderTitle, defaultOpen: true, pages } }) as MdxMeta;
+      const folder = (path: string, folderTitle: string, pages: string[], defaultOpen: boolean) =>
+        ({ type: 'meta', path, data: { title: folderTitle, defaultOpen, pages } }) as MdxMeta;
 
-      out.push(folder(`${dir}/meta.json`, title, groups.map((g) => g.slug!)));
-      for (const g of groups) {
-        out.push(folder(`${dir}/${g.slug}/meta.json`, g.title, [...g.sections]));
+      // Listing "index" makes the overview a child item instead of the folder's
+      // link, so the folder only opens and closes (see sidebarIntroduction).
+      // The module opens by default so its groups show. Of the groups, only the
+      // first (usually Functions) opens; the rest start collapsed. Fumadocs
+      // still opens whichever folder holds the current page.
+      out.push(folder(`${dir}/meta.json`, title, ['index', ...groups.map((g) => g.slug!)], true));
+      for (const [i, g] of groups.entries()) {
+        out.push(folder(`${dir}/${g.slug}/meta.json`, g.title, [...g.sections], i === 0));
         for (const id of g.sections)
           out.push({
             ...file,
@@ -90,11 +94,26 @@ const withSpecPages = update(mdx)
   })
   .build();
 
+/**
+ * In the sidebar, a folder's overview page is listed as "Introduction" under
+ * the folder, and the folder itself isn't a link. A clickable folder name
+ * that also toggles was confusing. The page keeps its real title.
+ */
+const sidebarIntroduction: LoaderPlugin = {
+  name: 'sidebar-introduction',
+  transformPageTree: {
+    file(node, filePath) {
+      const isFolderIndex = filePath && /\/index\.mdx?$/.test(filePath);
+      return isFolderIndex ? { ...node, name: 'Introduction' } : node;
+    },
+  },
+};
+
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: docsRoute,
   source: withSpecPages,
-  plugins: [lucideIconsPlugin()],
+  plugins: [lucideIconsPlugin(), sidebarIntroduction],
 });
 
 /** The spec view of a sub-page, or undefined for any other page. */

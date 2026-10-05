@@ -2,6 +2,7 @@
   "title": "Productivity",
   "icon": "CalendarDays",
   "pages": [
+    "index",
     "appointment"
   ]
 }
