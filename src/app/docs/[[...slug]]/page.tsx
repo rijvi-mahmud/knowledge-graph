@@ -19,7 +19,8 @@ import { getMDXComponents } from '@/components/mdx';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { gitConfig } from '@/lib/shared';
-import { ModuleSpec, specToc } from '@/components/module-spec';
+import { activeSpecGroups, ModuleSpec, specToc, variantSpec } from '@/components/module-spec';
+import { sectionTitle } from '@/lib/spec-sections';
 import { OpenTarget } from '@/components/open-target';
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
@@ -29,7 +30,9 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
-  const spec = getResolvedSpec(page);
+  const view0 = specViewOf(page);
+  // A variant page shows the spec cut down to that variant's items.
+  const spec = view0?.variant ? variantSpec(getResolvedSpec(page), view0.variant) : getResolvedSpec(page);
   // A spec sub-page shows one section of its module's spec and has no prose.
   const view = specViewOf(page);
   const section = view?.section;
@@ -37,7 +40,11 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 
   // The spec renders outside MDX, so its headings are added to the TOC by
   // hand. On the module's own page they sit under a "Specification" entry.
-  const specEntries = specToc(spec, section);
+  const specEntries = view?.variant
+    ? activeSpecGroups(spec)
+        .flatMap((g) => g.sections)
+        .map((id) => ({ title: sectionTitle(id), url: `#${id}`, depth: 2 }))
+    : specToc(spec, section);
   const toc = view
     ? specEntries
     : [
@@ -68,7 +75,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
             })}
           />
         )}
-        <ModuleSpec data={spec} section={section} baseUrl={baseUrl} />
+        <ModuleSpec data={spec} section={section} variant={view?.variant} baseUrl={baseUrl} />
         <OpenTarget />
       </DocsBody>
     </DocsPage>

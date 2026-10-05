@@ -4,14 +4,16 @@ import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 import { specToMarkdown } from './spec-markdown';
 import { resolveSpec, type SpecNode } from './spec-inherit';
-import { activeSpecGroups, type ModuleSpecData } from '@/components/module-spec';
+import { activeSpecGroups, variantSpec, type ModuleSpecData } from '@/components/module-spec';
 import { sectionSummary, sectionTitle, type SpecSectionId } from './spec-sections';
 
-/** Set on a spec sub-page: which module page it belongs to, and which section it shows. */
+/** Set on a spec sub-page: which module page it belongs to, and the section or variant it shows. */
 export interface SpecView {
   /** Path of the module's own page, relative to content/docs, e.g. "core/appointment". */
   root: string;
-  section: SpecSectionId;
+  section?: SpecSectionId;
+  /** A variant page, such as inpatient appointments. */
+  variant?: string;
 }
 
 type Extra = { view?: SpecView; sourcePath?: string };
@@ -69,7 +71,27 @@ const withSpecPages = update(mdx)
       // The module opens by default so its groups show. Of the groups, only the
       // first (usually Functions) opens; the rest start collapsed. Fumadocs
       // still opens whichever folder holds the current page.
-      out.push(folder(`${dir}/meta.json`, title, ['index', ...groups.map((g) => g.slug!)], true));
+      // Variant pages (such as outpatient and inpatient) come right after the
+      // introduction, before the spec's groups.
+      const variants = resolved.variants ?? [];
+      out.push(
+        folder(`${dir}/meta.json`, title, ['index', ...variants.map((v) => v.id), ...groups.map((g) => g.slug!)], true),
+      );
+      for (const v of variants)
+        out.push({
+          ...file,
+          path: `${dir}/${v.id}.mdx`,
+          data: {
+            ...file.data,
+            module: undefined,
+            title: v.title,
+            description: v.description,
+            toc: [],
+            structuredData: { headings: [], contents: [] },
+            sourcePath: file.path,
+            view: { root: dir, variant: v.id },
+          },
+        });
       for (const [i, g] of groups.entries()) {
         out.push(folder(`${dir}/${g.slug}/meta.json`, g.title, [...g.sections], i === 0));
         for (const id of g.sections)
@@ -170,8 +192,16 @@ export function getResolvedSpec(page: Page): ModuleSpecData {
 }
 
 export async function getLLMText(page: (typeof source)['$inferPage']) {
-  // A sub-page is one section of the spec, with no prose of its own.
+  // A sub-page is one section or one variant of the spec, with no prose of its own.
   const view = specViewOf(page);
+  if (view?.variant) {
+    const full = getResolvedSpec(page);
+    const v = full.variants?.find((x) => x.id === view.variant);
+    const spec = specToMarkdown(variantSpec(full, view.variant));
+    return [`# ${page.data.title} (${page.url})`, v?.summary ?? '', 'Only the items specific to this variant are listed. Every other item in the full specification applies too.', spec]
+      .filter(Boolean)
+      .join('\n\n');
+  }
   if (view) {
     const spec = specToMarkdown(getResolvedSpec(page), view.section);
     return `# ${page.data.title} (${page.url})\n\n${spec}`;

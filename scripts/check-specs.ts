@@ -9,6 +9,7 @@
  * - an id in a `verifies` or `covers` list that doesn't exist
  * - an error code returned by an operation or validation but not defined
  * - an id mentioned in the page (outside its changelog) that doesn't exist
+ * - an item tagged with a variant the module doesn't declare
  * - an em or en dash anywhere in the page
  *
  * Warnings (exit code 0, or 1 with --strict):
@@ -155,6 +156,13 @@ for (const node of all) {
       if (!codes.has(code)) errors.push(`${where}: operation "${op.name}" returns undefined error ${code}`);
   for (const v of spec.validations ?? [])
     if (!codes.has(v.error)) errors.push(`${where}: validation on ${v.field} raises undefined error ${v.error}`);
+
+  // A variant tag must name a variant the module declares.
+  const variantIds = new Set((spec.variants ?? []).map((v) => v.id));
+  for (const list of ['dataModel', 'businessRules', 'workflows', 'edgeCases', 'functionalRequirements', 'acceptanceCriteria', 'operations'] as const)
+    for (const item of ((spec as Record<string, unknown>)[list] ?? []) as { variant?: string; id?: string; name?: string }[])
+      if (item.variant && !variantIds.has(item.variant))
+        errors.push(`${where}: ${item.id ?? item.name} is tagged with variant "${item.variant}", which isn't declared`);
 
   // Every dependency states its contract: what this module needs or gives.
   for (const dep of spec.dependencies ?? [])

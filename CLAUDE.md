@@ -194,6 +194,13 @@ are defined only in `spec-sections.ts`:
 | Verification | Acceptance criteria, traceability matrix (derived from each criterion's `verifies`) |
 | Supporting information | Concepts, glossary, acronyms, decisions, risks, open questions, references, version history |
 
+**Variants.** When kinds of one module differ in only a few items, such as
+outpatient and inpatient appointments, don't split the module. Declare
+`variants` (id, title, description, summary) and tag the items that apply to
+only one with `variant:`. Each variant gets its own sidebar page right after
+the Introduction, listing its summary and its tagged items; untagged items
+apply to every variant. `pnpm check:specs` fails on a tag that isn't declared.
+
 Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
 both renderers) gives it a page in every module. URLs are
 `/docs/<module>/<group>/<section>`.
@@ -391,7 +398,7 @@ Never `Appointment - Healthcare`. That names the page after the knowledge base's
 internal layering. Use domain-native language the practitioner already uses:
 
 - `Clinical appointments` (healthcare)
-- `Hospital appointments` (EHR)
+- `Appointments` (EHR), with `Outpatient appointments` and `Inpatient appointments` variant pages
 
 An engineer scanning a sidebar must recognise their page instantly and ignore
 the rest.

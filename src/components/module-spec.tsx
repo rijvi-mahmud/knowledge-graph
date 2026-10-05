@@ -52,6 +52,7 @@ interface GlossaryEntry extends Provenance {
 }
 
 interface Field extends Provenance {
+  variant?: string;
   name: string;
   type: string;
   required: boolean;
@@ -60,6 +61,7 @@ interface Field extends Provenance {
 }
 
 interface BusinessRule extends Provenance {
+  variant?: string;
   id: string;
   text: string;
   rationale?: string;
@@ -83,6 +85,7 @@ interface StateMachine extends Provenance {
 }
 
 interface Workflow extends Provenance {
+  variant?: string;
   name: string;
   trigger?: string;
   actor?: string;
@@ -91,6 +94,7 @@ interface Workflow extends Provenance {
 }
 
 interface Requirement extends Provenance {
+  variant?: string;
   id: string;
   text: string;
   priority: 'must' | 'should' | 'could';
@@ -128,6 +132,7 @@ interface Table extends Provenance {
 }
 
 interface EdgeCase extends Provenance {
+  variant?: string;
   id: string;
   situation: string;
   behaviour: string;
@@ -188,6 +193,7 @@ interface Nfr extends Provenance {
 }
 
 interface Acceptance extends Provenance {
+  variant?: string;
   id: string;
   given: string;
   when: string;
@@ -196,6 +202,7 @@ interface Acceptance extends Provenance {
 }
 
 interface Operation extends Provenance {
+  variant?: string;
   name: string;
   actor?: string;
   description: string;
@@ -247,8 +254,16 @@ export interface Lineage {
   extendedBy: LineageLink[]; // every page that inherits from this one
 }
 
+export interface Variant {
+  id: string;
+  title: string;
+  description: string;
+  summary: string;
+}
+
 export interface ModuleSpecData {
   module?: string;
+  variants?: Variant[];
   version?: string;
   status?: string;
   industry?: string;
@@ -343,6 +358,30 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     references: has(data.references),
   };
   return new Set(SPEC_SECTIONS.filter((s) => present[s.id]).map((s) => s.id));
+}
+
+const VARIANT_LISTS = [
+  'dataModel',
+  'businessRules',
+  'workflows',
+  'edgeCases',
+  'functionalRequirements',
+  'acceptanceCriteria',
+  'operations',
+] as const;
+
+/**
+ * The spec cut down to one variant (such as inpatient): only the items tagged
+ * with it. Untagged items apply to every variant and stay on the full spec.
+ */
+export function variantSpec(data: ModuleSpecData, variant: string): ModuleSpecData {
+  const out: Record<string, unknown> = { module: data.module, version: data.version, status: data.status, lineage: data.lineage };
+  for (const list of VARIANT_LISTS)
+    out[list] = ((data[list] ?? []) as { variant?: string }[]).filter((i) => i.variant === variant);
+  out.variants = data.variants;
+  out.industry = data.industry;
+  out.domain = data.domain;
+  return out as ModuleSpecData;
 }
 
 /** Reference groups that have content, in render order. */
@@ -736,11 +775,14 @@ const PROSE_FIELDS = ['text', 'detail', 'body', 'note', 'def', 'steps', 'descrip
 export function ModuleSpec({
   data,
   section,
+  variant,
   baseUrl,
 }: {
   data: ModuleSpecData;
   /** The section a sub-page shows. Unset on the module's own page. */
   section?: SpecSectionId;
+  /** The variant a variant page shows; `data` is then already cut down by variantSpec. */
+  variant?: string;
   /** URL of the module's own page, for links between the spec's pages. */
   baseUrl: string;
 }) {
@@ -1622,6 +1664,32 @@ export function ModuleSpec({
   };
 
   const groups = activeSpecGroups(data);
+
+  // A variant page: its summary, then each section that has items for it.
+  if (variant) {
+    const v = data.variants?.find((x) => x.id === variant);
+    const ids = groups.flatMap((g) => g.sections);
+    return (
+      <div className="mt-2">
+        <SubPageNote data={data} baseUrl={baseUrl} />
+        {v && <p>{link(v.summary)}</p>}
+        <p>
+          Below are the items that apply only to {v?.title.toLowerCase() ?? variant}. Everything else in
+          the specification, such as the{' '}
+          <Link href={`${baseUrl}/functions/business-rules`}>business rules</Link> without a setting,
+          applies to them too.
+        </p>
+        {ids.map((id) => (
+          <section key={id}>
+            <h2 id={id} className="scroll-m-20">
+              {sectionTitle(id)}
+            </h2>
+            {lists[id]}
+          </section>
+        ))}
+      </div>
+    );
+  }
 
   // A section page: just that section, with a line saying which spec it belongs to.
   if (section) {

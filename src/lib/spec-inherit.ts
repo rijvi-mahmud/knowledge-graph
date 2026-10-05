@@ -42,6 +42,7 @@ const KEYS = {
   nonFunctionalRequirements: (i: Item) => `${str(i.category)}:${str(i.text)}`,
   acceptanceCriteria: (i: Item) => str(i.id),
   operations: (i: Item) => str(i.name),
+  variants: (i: Item) => str(i.id),
   apiConventions: (i: Item) => str(i.topic),
   tables: (i: Item) => str(i.name),
   technicalNotes: (i: Item) => str(i.id),

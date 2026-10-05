@@ -71,6 +71,7 @@ const fieldSchema = z.object({
   required: z.boolean().default(false),
   description: z.string().optional(),
   constraints: z.string().optional(), // e.g. "must be in the future"
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 
 // --- rules, validation, lifecycle ------------------------------------------
@@ -81,6 +82,7 @@ const businessRuleSchema = z.object({
   id: z.string(), // e.g. "BR-1"
   text: z.string(),
   rationale: z.string().optional(),
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 
 // Field-level validation, kept separate from business rules: these are
@@ -112,6 +114,7 @@ const workflowSchema = z.object({
   actor: z.string().optional(),
   steps: z.array(z.string()),
   outcome: z.string().optional(),
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 
 // --- requirements ----------------------------------------------------------
@@ -124,6 +127,7 @@ const requirementSchema = z.object({
   text: z.string(),
   priority: z.enum(['must', 'should', 'could']).default('must'),
   verification: verificationMethod.optional(),
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 
 // Something the spec takes as true but does not enforce. If it stops being
@@ -160,6 +164,7 @@ const edgeCaseSchema = z.object({
   situation: z.string(),
   behaviour: z.string(),
   covers: z.array(z.string()).default([]),
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 
 // A setting a deployment can change, with its default.
@@ -229,6 +234,7 @@ const acceptanceSchema = z.object({
   when: z.string(),
   then: z.string(),
   verifies: z.array(z.string()).default([]), // rule and requirement ids, e.g. ["BR-4", "FR-2"]
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 
 // --- interface -------------------------------------------------------------
@@ -246,6 +252,7 @@ const operationSchema = z.object({
   input: z.string().optional(),
   output: z.string().optional(),
   errors: z.array(z.string()).default([]), // error codes this operation can return
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 
 // A convention every endpoint follows: authentication, errors, paging...
@@ -334,6 +341,13 @@ const graphSchema = pageSchema.extend({
   // "healthcare/appointment". Unset for core and for modules that exist only
   // at this level (e.g. a domain-only concept with no core counterpart).
   extends: z.string().optional(),
+
+  // Variants: kinds of the same module that differ in a few items, such as
+  // outpatient and inpatient appointments. Each gets its own sidebar page
+  // listing the items tagged with it; untagged items apply to every variant.
+  variants: z
+    .array(z.object({ id: z.string(), title: z.string(), description: z.string(), summary: z.string() }))
+    .default([]),
 
   // 1. overview
   purpose: z.string().optional(),
