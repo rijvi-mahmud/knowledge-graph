@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.3.1
+version: 0.3.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -458,6 +458,13 @@ acceptanceCriteria:
   then: the alias is listed as overdue with its age
   verifies:
   - FR-E10
+- id: AC-E18
+  given: a patient who is already identified
+  when: Identify a patient is sent for them
+  then: it fails with PATIENT_NOT_UNIDENTIFIED and HTTP 409
+  verifies:
+  - BR-E3
+  - FR-E2
 operations:
 - name: Search patients
   actor: Registrar
@@ -669,6 +676,11 @@ references:
   title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
 changelog:
+- version: 0.3.2
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - Acceptance criterion for PATIENT_NOT_UNIDENTIFIED.
 - version: 0.3.1
   date: '2026-10-06'
   breaking: false

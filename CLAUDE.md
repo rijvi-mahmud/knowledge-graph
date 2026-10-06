@@ -317,8 +317,10 @@ every module and layer, and for every "is there any gap?" request.
    - **Structural**: a short Python audit over the merged frontmatter. Look
      for errors no operation or validation raises, events nothing emits,
      settings nothing references, permissions unused, fields missing from
-     Privacy and retention or from the storage design, and operations with no
-     permission matrix row.
+     Privacy and retention or from the storage design, operations with no
+     permission matrix row, events no contract consumes, coded fields with no
+     `codes:`, and error codes or events no acceptance criterion tests (each
+     error needs one naming its code and HTTP status).
    - **Domain**: compare against the SRS checklist above and the sources.
      For healthcare, the ONC SAFER Guides are the best checklist of what
      hospitals get wrong.
@@ -630,8 +632,8 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Patients (`healthcare/patient` 0.4.0, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.3.1) and Appointments
+  drafts: Patients (`healthcare/patient` 0.5.0, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.3.2) and Appointments
   (`healthcare/appointment` 0.3.1, `healthcare/ehr/appointment` 0.4.0). Both
   support the US and EU through the `jurisdiction` setting. Next: Encounters.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).

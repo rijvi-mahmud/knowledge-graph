@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.4.0
+version: 0.5.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -33,6 +33,7 @@ scope:
 - Limits and alerts on patient searches
 - Passing accepted corrections on to those who received the data
 - Address confidentiality program addresses
+- Patients' immediate electronic access to their own record
 nonGoals:
 - Clinical facts about the patient, such as allergies, problems, sex for clinical use or care plans. Clinical modules own them.
 - Insurance and coverage. They belong to the Coverage module, which refers to the patient by id.
@@ -446,6 +447,12 @@ businessRules:
 - id: BR-H47
   text: Fields the service sets, such as replaced_by, last_care_at, revision, similar_name_alert, import_batch and external_links, cannot be written by clients.
   rationale: A client writing replaced_by could hide a record behind another one, and a forged last_care_at would change retention.
+- id: BR-H48
+  text: A patient, or their representative within their scope, can read their own record electronically as soon as it is saved. No policy holds data back for review first. A patient can ask for their own access to be delayed (patient_requested_delay). access_request_deadline applies only to copies in another form.
+  rationale: In the United States, patient demographics in the record are electronic health information (45 CFR 171.102), and ONC says a delay in making it available through a portal, for any period, is likely an interference under the information blocking rule (45 CFR 171.103), while following a patient's own request to delay is not.
+- id: BR-H49
+  text: In the European Union, from 26 March 2029, the Exchange module gives the patient's personal details to the national electronic health data access service whenever they change, so the patient can see them at once.
+  rationale: The EHDS gives patients access to their patient summary, which includes personal details and contact information, immediately after it is registered, through the access services (Articles 3 and 4, Annex I), applying to patient summaries from 26 March 2029 (Article 105).
 validations:
 - field: names
   rule: at least one usual, official or temp name; a name may have only a given name or only a family name
@@ -952,6 +959,18 @@ edgeCases:
   covers:
   - BR-H20
   - DG-H1
+- id: EC-H48
+  situation: A patient updates their address at the desk and opens the portal a minute later.
+  behaviour: The new address is already visible to them.
+  covers:
+  - BR-H48
+  - AC-H57
+- id: EC-H49
+  situation: An EU patient corrects their phone number in 2030.
+  behaviour: Exchange gives the change to the national access service, where the patient sees it at once.
+  covers:
+  - BR-H49
+  - AC-H58
 functionalRequirements:
 - id: FR-H1
   text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
@@ -1057,6 +1076,10 @@ functionalRequirements:
   text: The service must reject client writes to fields only the service sets.
   priority: must
   verification: test
+- id: FR-H27
+  text: The service must let a patient and their representatives read the patient's own record electronically with no review delay, and honour a patient's request to delay their own access.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Only roles that need it can read a patient record, and every read is logged (BR-H19).
@@ -1141,7 +1164,7 @@ settings:
   description: Whether patient photographs are collected (BR-H29).
 - name: access_request_deadline
   type: duration
-  description: 'Time to answer a request for a copy. Defaults by jurisdiction: 30 days in the US (45 CFR 164.524), one month in the EU (GDPR Article 12(3)).'
+  description: 'Time to answer a request for a copy in another form, such as paper. Electronic access to the patient''s own record is immediate (BR-H48). Defaults by jurisdiction: 30 days in the US (45 CFR 164.524), one month in the EU (GDPR Article 12(3)).'
 - name: max_import_batch
   type: integer
   description: The most records one import accepts. Set by each deployment.
@@ -1160,6 +1183,9 @@ settings:
 - name: acp_acceptance
   type: required | voluntary
   description: Whether this hospital must accept address confidentiality program addresses. Washington and California require state and local agencies to accept them; private businesses may choose to. Set with legal advice per state. Required in the United States.
+- name: patient_requested_delay
+  type: duration per patient
+  description: 'A delay the patient asked for before their own data is shown to them. Unset by default: no delay.'
 performanceTargets:
 - id: PERF-H1
   indicator: Duplicate rate
@@ -1565,6 +1591,135 @@ acceptanceCriteria:
   then: it fails with PATIENT_INVALID_CODE
   verifies:
   - BR-H26
+- id: AC-H57
+  given: a patient who can sign in
+  when: their record changes and they read it, and later they ask for a 3-day delay before new data is shown to them
+  then: the change is visible at once; after the request, new data appears to them only after 3 days
+  verifies:
+  - BR-H48
+  - FR-H27
+- id: AC-H58
+  given: jurisdiction eu and a date after 26 March 2029
+  when: the patient's phone number changes
+  then: Exchange receives the change for the national access service
+  verifies:
+  - BR-H49
+- id: AC-H59
+  given: no patient with id P-404
+  when: it is read
+  then: the request fails with PATIENT_NOT_FOUND and HTTP 404
+  verifies:
+  - FR-H2
+- id: AC-H60
+  given: a search with only a given name
+  when: it is sent
+  then: it fails with PATIENT_INVALID_QUERY and HTTP 422
+  verifies:
+  - FR-H2
+- id: AC-H61
+  given: a registration without a search id
+  when: it is sent
+  then: it fails with PATIENT_SEARCH_REQUIRED and HTTP 422
+  verifies:
+  - BR-H1
+  - FR-H1
+- id: AC-H62
+  given: a registration with a birth date next year
+  when: it is sent
+  then: it fails with PATIENT_INVALID_BIRTH_DATE and HTTP 422
+  verifies:
+  - BR-H26
+- id: AC-H63
+  given: a record marked entered in error
+  when: an update is sent
+  then: it fails with PATIENT_NOT_IN_USE and HTTP 409
+  verifies:
+  - BR-H11
+- id: AC-H64
+  given: record A
+  when: A is merged into A
+  then: it fails with PATIENT_MERGE_SAME_RECORD and HTTP 422
+  verifies:
+  - BR-H7
+  - FR-H5
+- id: AC-H65
+  given: an active record that was never merged
+  when: an unmerge is sent
+  then: it fails with PATIENT_NOT_MERGED and HTTP 409
+  verifies:
+  - BR-H10
+  - FR-H5
+- id: AC-H66
+  given: a patient with a recorded death
+  when: a second death is recorded, and a death is retracted for another patient with none
+  then: the first fails with PATIENT_ALREADY_DECEASED and the second with PATIENT_NOT_DECEASED, both HTTP 409
+  verifies:
+  - BR-H12
+  - FR-H6
+- id: AC-H67
+  given: a patient with no representative R-9
+  when: R-9 is changed
+  then: it fails with PATIENT_REPRESENTATIVE_NOT_FOUND and HTTP 404
+  verifies:
+  - FR-H7
+- id: AC-H68
+  given: patient A signed in
+  when: they request a correction to patient B's record
+  then: it fails with PATIENT_NOT_AUTHORISED_FOR_PATIENT and HTTP 403
+  verifies:
+  - BR-H17
+  - FR-H9
+- id: AC-H69
+  given: a duplicate pair already marked not a duplicate, and an id with no pair
+  when: each is marked not a duplicate
+  then: the first fails with PATIENT_DUPLICATE_PAIR_CLOSED (409), the second with PATIENT_DUPLICATE_PAIR_NOT_FOUND (404)
+  verifies:
+  - FR-H4
+- id: AC-H70
+  given: a decided correction request, an extended one, and an unknown request id
+  when: each is decided again, extended again, or decided
+  then: they fail with PATIENT_CORRECTION_CLOSED (409), PATIENT_EXTENSION_USED (409) and PATIENT_CORRECTION_NOT_FOUND (404)
+  verifies:
+  - BR-H17
+  - FR-H9
+- id: AC-H71
+  given: a contact with a relationship and nothing else
+  when: it is saved
+  then: it fails with PATIENT_INVALID_CONTACT and HTTP 422
+  verifies:
+  - BR-H26
+- id: AC-H72
+  given: max_import_batch 10000
+  when: a batch of 10001 records is imported
+  then: it fails with PATIENT_IMPORT_TOO_LARGE and HTTP 413
+  verifies:
+  - BR-H34
+  - FR-H19
+- id: AC-H73
+  given: a valid registration
+  when: it succeeds
+  then: patient.registered is emitted with the patient id and revision, and no demographics
+  verifies:
+  - FR-H1
+  - DG-H3
+- id: AC-H74
+  given: a patient whose address changes
+  when: the update succeeds
+  then: patient.updated is emitted naming the changed field, never its old or new value
+  verifies:
+  - DG-H3
+- id: AC-H75
+  given: a record with no care
+  when: it is marked entered in error
+  then: patient.entered_in_error is emitted
+  verifies:
+  - BR-H11
+- id: AC-H76
+  given: a record
+  when: a legal hold is placed and later released
+  then: patient.legal_hold_changed is emitted each time with the hold state
+  verifies:
+  - BR-H24
 operations:
 - name: Search patients
   actor: Registrar
@@ -2551,6 +2706,7 @@ dependencies:
   - Cross-border identification under EHDS Article 16 is Exchange's concern
   - Uses IHE PIXm (identifier cross-referencing), PDQm (demographics query) or PMIR (master identity registry) with outside patient indexes
   - 'Receives: patient.corrected and patient.disagreement_filed, for records it has sent elsewhere'
+  - 'Gives: the patient''s personal details to the EU national electronic health data access service on every change, from 26 March 2029 (EHDS Article 3)'
 - service: clinical-modules
   direction: downstream
   reason: orders and results, medications, documentation and every module holding clinical data
@@ -2786,7 +2942,19 @@ references:
 - id: REF-H42
   title: GDPR Article 19, notification of rectification, erasure or restriction
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
+- id: REF-H43
+  title: 45 CFR 171.102 and 171.103, electronic health information and information blocking
+  url: https://www.ecfr.gov/current/title-45/part-171
+- id: REF-H44
+  title: 'ONC FAQ: when a delay in fulfilling a request for EHI is an interference'
+  url: https://healthit.gov/faq/when-would-delay-fulfilling-request-access-exchange-or-use-ehi-be-considered-interference-under/
 changelog:
+- version: 0.5.0
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - Patients read their own record electronically at once, as the US information blocking rule expects (BR-H48), and EU personal details reach the national access service from 2029 (BR-H49).
+  - Acceptance criteria for every error code and event, each with its HTTP status.
 - version: 0.4.0
   date: '2026-10-06'
   breaking: false
