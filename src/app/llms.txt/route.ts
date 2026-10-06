@@ -8,21 +8,34 @@ export const revalidate = false;
 // before listing them.
 const guide = `# ${appName}
 
-> An open, versioned specification of domain requirements: the business rules, data, API, events and acceptance criteria that teams in the same industry rebuild on every project. Knowledge is layered core > industry > domain, and each page shows its own items merged with everything it inherits.
+> An open, versioned specification of domain requirements, written for coding agents first and people second: business rules, validations, data with its standard codes, API, events, contracts with other modules and acceptance criteria. Knowledge is layered core > industry > domain, and each page shows its own items merged with everything it inherits.
 
-## How agents should use the ${appName}
+## Ground every domain decision in a fetched page
+
+- Never implement or describe domain behaviour from memory or general knowledge, even if you have read this spec before. Fetch the page for the task, in this session.
+- If a fetched page doesn't list a behaviour, it's unspecified. Say "The ${appName} doesn't specify this", then ask or record it as an open question. Don't invent it.
+- Cite every rule you implement or state: its id (such as BR-H1), the spec version and the page URL.
+- Before you finish, check each cited id against the text you fetched. Remove or flag any claim you can't find there.
+- If your fetch tool summarises pages instead of returning them in full, fetch section pages, which are small, and quote from them.
+
+## Find the right page
 
 - Work out the project's industry and domain (for example healthcare > ehr) before choosing a page.
-- For each domain concept a task touches, use the deepest page that matches the project: the domain page, otherwise the industry page, otherwise the module's core page. A deeper page already includes everything above it.
-- Industry overview pages list the domains in that industry and which ones are specified yet.
-- A module page's markdown is its complete spec. The pages listed under it are parts of the same spec: variants (such as outpatient and inpatient) and sections (such as functions/business-rules), for when you need only one.
-- A module's Dependencies page lists contracts: what it asks of other modules and gives them. Reach other modules only through those.
-- The Reference implementation pages (storage design, implementation notes) are non-normative: one way to build it.
-- Settings decide what varies, such as jurisdiction (us or eu). Apply the rules for the project's jurisdiction.
+- For each domain concept a task touches, use the deepest page that matches the project: the domain page, otherwise the industry page, otherwise the module's core page. A deeper page already includes everything above it. Some modules start at the industry level and have no core page.
+- Industry overview pages list the domains in that industry and which modules are specified yet.
+- A module page's markdown is its complete spec, often over 100 KB. Fetch only the sections a task needs. The pages listed under a module are its sections (such as functions/business-rules, functions/validations, data/data-model, interfaces/operations, interfaces/errors, interfaces/dependencies, verification/acceptance) and its variants (such as outpatient and inpatient).
+- A module's Dependencies page lists contracts: what it asks of other modules and gives them. If the other module has a page below, fetch its contract side too. If not, build against the contract text alone and don't invent that module's rules.
 - Every link below is markdown. Add \`.md\` to any other docs URL, such as \`${siteUrl}/docs/core/appointment.md\`, for the same.
-- Each module page starts with a "How to read this spec" section. Anything a spec doesn't list is unspecified: ask instead of inventing it.
-- Cite rule ids such as BR-4 in code, tests and commits, with the spec version.
 - Don't load \`/llms-full.txt\` into context. It contains every page and is too large.
+
+## Read a spec
+
+- Each module page starts with a "How to read this spec" section.
+- Items are tagged with the layer they come from, such as [core], [healthcare] or [ehr]. "overrides" means a deeper layer replaced the item with the same id; only the replacement applies.
+- Validations give each field's rule and error code. A data model field's "codes:" names its standard code system, such as HL7, LOINC or SNOMED CT. Use those codes.
+- Operations carry their HTTP method, path and success status; errors carry their HTTP status. Acceptance criteria are Given / When / Then and map one to one onto tests.
+- Settings decide what varies, such as jurisdiction (us or eu). Apply the rules for the project's jurisdiction.
+- The Reference implementation pages (storage design, implementation notes) are non-normative: one way to build it.
 
 ## Pages`;
 

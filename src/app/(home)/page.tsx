@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Bot, Sparkles } from 'lucide-react';
 import { INHERITED_FIELDS } from '@/lib/spec-inherit';
 import { getPageMarkdownUrl, getResolvedSpec, source } from '@/lib/source';
 import { specToMarkdown } from '@/lib/spec-markdown';
@@ -248,39 +248,40 @@ export default function HomePage() {
 
         <div className="mx-auto flex w-full max-w-fd-container flex-col items-center px-4 pt-20 pb-16 text-center sm:pt-28">
           <Link
-            href={`${docsRoute}#core-industries-and-domains`}
+            href={`${docsRoute}/agentic#quickstart`}
             className="group inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-background/80 py-1 pr-3 pl-1 text-sm backdrop-blur transition-colors duration-150 hover:border-fd-primary/40"
           >
             <span className="inline-flex items-center gap-1 rounded-full bg-fd-primary/10 px-2 py-0.5 text-xs font-medium text-fd-primary">
               <Sparkles className="size-3" />
               New
             </span>
-            Requirements now inherit across three levels
+            Patients and Appointments for hospital EHRs
             <ArrowRight className="size-3.5 text-fd-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5" />
           </Link>
 
           <h1 className="font-display mt-8 max-w-3xl text-5xl leading-[1.02] font-semibold tracking-tight text-balance sm:text-6xl">
-            Stop rewriting requirements.{' '}
+            Your AI agent guesses domain rules.{' '}
             <span className="bg-gradient-to-r from-fd-primary to-orange-500 bg-clip-text text-transparent">
-              Inherit them.
+              Give it the spec.
             </span>
           </h1>
 
           <p className="mt-5 text-lg text-fd-muted-foreground">
-            Open, layered specs your team and your AI build from.
+            Versioned domain specs your coding agent fetches for each task and cites by rule id.
+            Your team reads the same pages.
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <PrimaryButton href={docsRoute} icon={ArrowRight}>
-              Browse the graph
+            <PrimaryButton href={`${docsRoute}/agentic#quickstart`} icon={Bot}>
+              Connect your agent
             </PrimaryButton>
-            <SecondaryButton href={`${docsRoute}#core-industries-and-domains`} icon={BookOpen}>
-              How it works
+            <SecondaryButton href={docsRoute} icon={BookOpen}>
+              Browse the specs
             </SecondaryButton>
           </div>
 
           <div className="mt-6">
-            <CopyUrl path="/llms-full.txt" label="Add to your AI" />
+            <CopyUrl path="/llms.txt" label="Agent entry point" />
           </div>
         </div>
       </section>
@@ -288,7 +289,7 @@ export default function HomePage() {
       <div className="mx-auto w-full max-w-fd-container px-4">
         {/* Bento */}
         <section className="py-16 sm:py-20">
-          <SectionHeading claim="Extend. Override." rest="Never copy." />
+          <SectionHeading claim="Fetched, not remembered." rest="Inherited, not copied." />
           <div className="mt-10">
             <Bento data={bentoData()} />
           </div>
@@ -296,7 +297,7 @@ export default function HomePage() {
 
         {/* Industries */}
         <section className="py-16 sm:py-20">
-          <SectionHeading claim="Don't start from a blank PRD." />
+          <SectionHeading claim="Start from a spec, not a blank prompt." />
           <div className="mt-10">
             <IndustryTabs industries={industryTabs()} />
           </div>
@@ -326,13 +327,13 @@ export default function HomePage() {
         <section className="relative py-24 text-center sm:py-32">
           <Glow className="top-1/2 left-1/2 h-72 w-[40rem] -translate-x-1/2 -translate-y-1/2" />
           <h2 className="font-display mx-auto max-w-2xl text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
-            Write only what's yours.
+            Your agent reads the spec. You write only what's yours.
           </h2>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <PrimaryButton href={docsRoute} icon={ArrowRight}>
-              Browse the graph
+            <PrimaryButton href={`${docsRoute}/agentic#quickstart`} icon={Bot}>
+              Connect your agent
             </PrimaryButton>
-            <SecondaryButton href={`${docsRoute}#core-industries-and-domains`} icon={BookOpen}>
+            <SecondaryButton href={`${docsRoute}#knowledge-is-written-once-and-inherited`} icon={ArrowRight}>
               How inheritance works
             </SecondaryButton>
           </div>

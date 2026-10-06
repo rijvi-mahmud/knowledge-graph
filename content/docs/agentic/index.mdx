@@ -1,11 +1,12 @@
 ---
 title: Agentic development
-description: Connect your coding agent to the Knowledge Graph with one AGENTS.md section, so it finds and follows the domain rules your project needs.
+description: Connect your coding agent to the Knowledge Graph with one AGENTS.md section, so it fetches the domain rules for each task instead of guessing them.
 ---
 
-The Knowledge Graph is published as markdown that coding agents can read. Add
-one section to your project's `AGENTS.md`, and your agent looks up the domain
-rules a task needs, follows them, and cites them in code, tests and commits.
+The Knowledge Graph is written for coding agents first. Add one section to
+your project's `AGENTS.md`, and your agent fetches the domain rules a task
+needs from the live specs, builds against them, and cites every rule it uses.
+It doesn't work from memory.
 
 **For AI agents:** If you're setting up a project, add the section in the
 [Quickstart](#quickstart) to the project's `AGENTS.md`. To use the Knowledge
@@ -16,24 +17,44 @@ adding `.md` to its URL.
 
 1. You add the Knowledge Graph section to `AGENTS.md`. It's the same for every
    project.
-2. Your agent works out the project's industry and domain, for example
-   healthcare > ehr, and records them in the same section.
-3. When a task touches a domain concept such as appointments, the agent
-   fetches the most specific page for your project and implements against its
-   rules.
+2. Your agent works out the project's industry, domain and jurisdiction, for
+   example healthcare > ehr in the us, and records them in the same section.
+3. For every task that touches a domain concept, such as patient registration,
+   the agent fetches the matching spec sections, builds against them, and
+   cites the rule ids it followed.
 
 There's nothing to install or download. Your agent reads pages with its own
-web tools when a task needs them, so it always reads the current version.
+web tools, so it always reads the current version.
+
+## Why your agent fetches instead of remembering
+
+A model's memory of a spec is a guess: it may be from an older version, from
+another project, or not there at all. The section in the Quickstart makes the
+agent ground every domain decision in text it fetched for this task:
+
+- **Fetch every time.** The agent fetches the spec for each task, even if it
+  read it yesterday.
+- **Unlisted means unspecified.** If a page doesn't list a behaviour, the agent
+  says so and asks, instead of filling the gap with a plausible default.
+- **Cite everything.** Every rule it implements or states carries its id,
+  version and page URL, so you can check it.
+- **Check before finishing.** The agent looks up each id it cited in the text
+  it fetched, and removes or flags any claim it can't find.
+
+These follow [Anthropic's guidance on reducing hallucinations](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-hallucinations): allow the model
+to say it doesn't know, ground answers in quoted sources, and verify claims
+with citations.
 
 ## When to use the Knowledge Graph
 
 Use it when your product implements a concept the Knowledge Graph specifies,
-such as booking, rescheduling or cancelling appointments. Your agent gets the
-business rules, state transitions, error codes and acceptance criteria for that
-concept, along with the reason behind each rule.
+such as patient registration or appointments. Your agent gets the business
+rules, field validations, standard codes, API with HTTP status codes,
+contracts with other modules and acceptance criteria for that concept, along
+with the reason behind each rule.
 
-For concepts the Knowledge Graph doesn't cover yet, the instructions tell your
-agent to say so and follow your project's own requirements.
+For concepts the Knowledge Graph doesn't cover yet, the agent says so and
+follows your project's own requirements.
 
 ## Quickstart
 
@@ -44,75 +65,86 @@ this section:
 ## Knowledge Graph
 
 This project follows the Knowledge Graph (%SITE_URL%), an open, versioned
-specification of domain requirements such as appointments, patients and
-billing. Treat it as the source of truth for domain behaviour.
+specification of domain requirements such as patients and appointments. It is
+the source of truth for domain behaviour.
+
+### Ground every domain decision in a fetched page
+
+1. Never implement, review or describe domain behaviour from memory or general
+   knowledge, even if you've read the spec before. Fetch the page for this
+   task, in this session.
+2. If a fetched page doesn't list a behaviour, it's unspecified. Say "The
+   Knowledge Graph doesn't specify this", then ask, or list it as an open
+   question in your summary. Don't invent it.
+3. Cite every rule you implement or state: its id, the spec version and the
+   page URL.
+4. Before you finish, check each id you cited against the text you fetched.
+   Remove or flag any claim you can't find there.
+5. If your fetch tool summarises pages instead of returning them in full,
+   fetch the smaller section pages and quote from them.
 
 ### Find the right page
 
-1. Use the industry and domain under "Project context" below. If they're
-   empty, work them out from the README and code, confirm them with the user,
-   and fill them in.
-2. Use your web fetch or web search tool. Start at %SITE_URL%/llms.txt,
-   which lists every page and explains how to navigate. Industry overview
-   pages list the domains in that industry.
+1. Use the industry, domain and jurisdiction under "Project context" below. If
+   they're empty, work them out from the README and code, confirm them with
+   the user, and fill them in.
+2. Start at %SITE_URL%/llms.txt with your web fetch tool. It explains how to
+   navigate and lists every page, including modules added since your last
+   session.
 3. For each domain concept a task touches, use the most specific page for this
    project: the domain page if it exists, otherwise the industry page,
-   otherwise the module's core page. A more specific page already includes everything
-   above it.
-4. Fetch pages as markdown by adding `.md` to the URL. A module page, such as
-   %SITE_URL%/docs/core/appointment.md, returns its complete merged spec. A
-   section page, such as .../functions/business-rules.md, or a variant page,
-   such as .../inpatient.md, returns only that part. Don't fetch
-   /llms-full.txt; it's too large.
-5. If no page covers the concept, say so and follow the project's own
+   otherwise the module's core page. A more specific page already includes
+   everything above it.
+4. Fetch only what the task needs, as markdown, by adding `.md` to the URL.
+   Module pages are complete specs and can pass 100 KB, so prefer their
+   sections: functions/business-rules, functions/validations,
+   data/data-model, interfaces/operations, interfaces/errors,
+   interfaces/dependencies and verification/acceptance. Don't fetch
+   /llms-full.txt.
+5. When a task crosses into another module, read this module's
+   interfaces/dependencies page first. If the other module has a page in
+   llms.txt, fetch its side of the contract. If it doesn't, build against the
+   contract text alone and don't invent that module's rules.
+6. If no page covers the concept, say so and follow the project's own
    requirements.
 
 ### Read a spec
 
-- A module page is the complete spec for this industry and domain. Items it
-  inherits from the core and industry layers are already merged in.
-- Each item is tagged with the layer it comes from, such as [core],
-  [healthcare] or [ehr]. "overrides core" means a more specific layer
-  replaced the item with the same id. Only the replacement applies.
+- Items are tagged with the layer they come from, such as [core],
+  [healthcare] or [ehr]. "overrides" means a more specific layer replaced the
+  item with the same id. Only the replacement applies.
 - Ids are stable: BR- business rules, FR- functional requirements, AC-
   acceptance criteria, EC- edge cases, CON- design constraints, AS-
-  assumptions, DG- delivery guarantees, ADR- decisions. Error codes, HTTP
-  methods, paths and status codes are part of the API contract.
-- Dependencies list contracts: only what this module asks of another module
-  or gives it. Other modules' internals are out of scope.
+  assumptions, DG- delivery guarantees, ADR- decisions.
+- Validations give each field's rule and error code. A data model field's
+  "codes:" names its standard code system, such as HL7, LOINC or SNOMED CT.
+- Operations carry their HTTP method, path and success status, and errors
+  their HTTP status. These are part of the API contract.
+- Acceptance criteria are Given / When / Then and map one to one onto tests.
+- Settings decide what varies, such as jurisdiction (us or eu) or a retention
+  period.
 - The Reference implementation folder (storage design, implementation notes)
   is non-normative: one way to build it, not a requirement.
-- Variants, such as outpatient and inpatient, list the items that apply only
-  to them; everything else applies to every variant.
-- Settings decide what varies, such as jurisdiction (us or eu) and code
-  systems.
 - "Why:" gives the reason for a rule or decision. "Considered:" lists
   alternatives a decision rejected.
-- The top of each spec shows its version and status.
 
 ### Follow a spec
 
-1. Fetch the spec before you write, change or review code for that concept.
-   Don't rely on what you remember from an earlier session.
-2. Implement business rules, validations, the state machine, permissions and
-   error codes exactly.
-3. If a behaviour isn't in the spec, it's unspecified. Ask, or list it as an
-   open question in your summary. Don't invent it.
-4. If the behaviour is listed under "Open questions", it hasn't been decided.
+1. Implement business rules, validations, the state machine, permissions,
+   codes and error codes exactly as fetched.
+2. If the behaviour is listed under "Open questions", it hasn't been decided.
    Ask before choosing an answer.
-5. Cite ids in a comment next to the code that enforces them, in test names,
+3. Cite ids in a comment next to the code that enforces them, in test names,
    and in commit messages with the spec version, for example
-   "Enforce BR-4 (appointment 0.1.0): block patient double-booking".
-6. Read a rule's "Why:" before relaxing or working around it. If you think it
+   "Enforce BR-H3 (patient 0.5.0): one active record per identifier".
+4. Read a rule's "Why:" before relaxing or working around it. If you think it
    should change, say so and cite the id.
-7. Don't reintroduce an alternative listed under "Considered:" without naming
+5. Don't reintroduce an alternative listed under "Considered:" without naming
    the decision you're going against.
-8. If existing code contradicts the spec, report the conflict with the id.
+6. If existing code contradicts the spec, report the conflict with the id.
    Don't silently change either side.
-9. Reach other modules only through the contracts on the Dependencies page.
-   Don't build another module's rules into this one.
-10. Apply the rules for the jurisdiction under "Project context".
-11. If the spec's status is draft, mention any code that depends on it in your
+7. Apply the rules and settings for the jurisdiction under "Project context".
+8. If the spec's status is draft, mention any code that depends on it in your
    summary.
 
 ### Project context
@@ -135,8 +167,9 @@ Then ask your agent:
 Which Knowledge Graph pages apply to this project?
 ```
 
-The agent fills in **Project context** and lists the pages it would use, for
-for example the EHR pages for a hospital management system.
+The agent fetches `llms.txt`, fills in **Project context**, and lists the
+pages it would use, for example the EHR Patients and Appointments pages for a
+hospital management system.
 
 > **Note:** Some agents ask before fetching a web page or block internet
 > access by default. See [Claude Code](/docs/agentic/claude-code) and
@@ -146,7 +179,7 @@ for example the EHR pages for a hospital management system.
 
 | Goal | Start here |
 |---|---|
-| Understand how your agent navigates pages and reads a spec | [How agents use the Knowledge Graph](/docs/agentic/agents-md) |
+| Understand how your agent navigates pages and stays grounded | [How agents use the Knowledge Graph](/docs/agentic/agents-md) |
 | Build, test and review features against rule ids | [Work with your agent](/docs/agentic/use-in-your-project) |
 | Let Claude Code fetch pages without asking | [Claude Code](/docs/agentic/claude-code) |
 | Check Cursor picks up the instructions | [Cursor](/docs/agentic/cursor) |

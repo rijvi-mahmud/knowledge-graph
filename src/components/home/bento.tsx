@@ -53,18 +53,10 @@ export function Bento({ data }: { data: BentoData }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Card
-        icon={GitBranch}
-        title="Extend, don't copy-paste"
-        body="Core, then industry, then domain. Zero duplicates."
-        className="lg:col-span-2"
-      >
-        <InheritanceTree chain={data.chain} />
-      </Card>
-
-      <Card
         icon={Bot}
-        title="Stop your AI guessing domain rules"
-        body="It loads the merged spec instead."
+        title="Fetched per task, never from memory"
+        body="Your agent loads the merged spec for your exact domain."
+        className="lg:col-span-2"
       >
         <div className="rounded-lg bg-neutral-950 p-4 font-code text-xs leading-relaxed text-neutral-400">
           <p className="truncate text-neutral-300">
@@ -79,7 +71,7 @@ export function Bento({ data }: { data: BentoData }) {
         </div>
       </Card>
 
-      <Card icon={Tags} title="Know where every rule came from" body="Core, industry, or yours.">
+      <Card icon={Tags} title="Every rule it uses is citable" body="Id, layer and version. Check the agent.">
         <ul className="flex flex-col divide-y divide-fd-border rounded-lg border border-fd-border bg-fd-background text-sm">
           {data.provenance.map((r) => (
             <li key={`${r.id}-${r.layer}`} className="flex items-center gap-3 px-3 py-2">
@@ -95,6 +87,10 @@ export function Bento({ data }: { data: BentoData }) {
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card icon={GitBranch} title="Extend, don't copy-paste" body="Core, then industry, then domain.">
+        <InheritanceTree chain={data.chain} />
       </Card>
 
       {data.override && (

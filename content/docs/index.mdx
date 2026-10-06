@@ -1,35 +1,49 @@
 ---
 title: Introduction
-description: Complete, versioned requirements for the domain knowledge software teams rebuild on every project, written once and inherited.
+description: Complete, versioned domain requirements that coding agents fetch for each task instead of guessing, written once and inherited.
 ---
 
 Most product requirements are not novel. Two teams building patient
-scheduling will each work out the same booking lifecycle, the same reminder
-rules and the same edge cases, and arrive at slightly different answers to
-questions that have a settled answer.
+registration will each work out the same duplicate checks, the same identity
+rules and the same edge cases. A coding agent asked to build it will guess
+them from its training data, confidently and differently each time.
 
 The Knowledge Graph specifies that shared ground once, as complete and
-versioned requirements, and lets each industry and kind of application add
-only what's different. It's currently focused on hospital software: the core
-modules, the healthcare industry, and the electronic health record (EHR).
+versioned requirements that coding agents fetch and follow, and people can
+read too. Each industry and kind of application adds only what's different.
+It's currently focused on hospital software: the healthcare industry and the
+electronic health record (EHR), with Patients and Appointments specified.
+
+## Agents fetch the spec instead of remembering it
+
+Every page is plain markdown: add `.md` to any page URL. Your agent starts at
+[`/llms.txt`](/llms.txt), finds the page for your project's industry and
+domain, and fetches only the sections a task needs, such as business rules or
+validations. It cites every rule id it follows, and says so when a behaviour
+isn't specified instead of inventing one.
+
+One section in your project's `AGENTS.md` sets this up. See
+[Agentic development](/docs/agentic).
 
 ## Knowledge is written once and inherited
 
-Every module is specified at up to three levels, each building on the one
-above:
+A module is specified at up to three levels, each building on the one above:
 
 - **Core** describes a concept in industry-neutral terms, such as the
   [core Appointment specification](/docs/core/appointment).
 - **Industry** layers add what every application in an industry needs, such as
-  [clinical appointments](/docs/healthcare/appointment) for healthcare.
+  [clinical appointments](/docs/healthcare/appointment) or
+  [patient records](/docs/healthcare/patient) for healthcare.
 - **Domain** layers add what one kind of application needs, such as
-  [hospital appointments](/docs/healthcare/ehr/appointment) for an EHR.
+  [patients](/docs/healthcare/ehr/patient) and
+  [appointments](/docs/healthcare/ehr/appointment) in an EHR.
 
 A layer writes only what it adds. It can also replace an inherited item by
 reusing its id, the way a subclass overrides a method. Every page shows the
 merged result, with each item labelled by the layer it comes from, so an EHR
-team reads one complete specification and still knows which rules are
-universal.
+team, or its agent, reads one complete specification and still knows which
+rules are universal. A module with no industry-neutral concept worth sharing,
+such as patient records, starts at the industry level.
 
 ## Every module is a complete requirements specification
 
@@ -40,26 +54,27 @@ specifications, and is split into short pages in the sidebar:
 |---|---|
 | Introduction | Purpose, scope, actors, assumptions and a context diagram |
 | Variants | Pages for kinds of the module that differ in a few items, such as outpatient and inpatient appointments |
-| Functions | Business rules, state machine, workflows, validations and edge cases |
-| Data | Data model and relationships |
-| External interfaces | API (with HTTP methods, paths and status codes), events, delivery guarantees, errors and dependencies |
+| Functions | Business rules, state machine, workflows, field validations and edge cases |
+| Data | Data model, with the standard code system for every coded field, and relationships |
+| External interfaces | API (with HTTP methods, paths and status codes), events, delivery guarantees, errors and contracts with other modules |
 | Security | Permission matrix, permissions, privacy and retention |
 | Requirements | Functional and performance requirements, quality attributes, design constraints and configuration |
 | Reference implementation | One way to build it: storage design and implementation notes |
 | Verification | Acceptance criteria and a traceability matrix |
 | Supporting information | Glossary, decisions, risks, references and version history |
 
-Every rule has a reason, every requirement says how it's verified, and every
-acceptance criterion names the ids it verifies. Ids such as BR-4 are links, and
-`pnpm check:specs` checks that each one exists.
+Every rule has a reason and a source, every requirement says how it's
+verified, and every error code has an acceptance criterion with its HTTP
+status. Ids such as BR-4 are links, and `pnpm check:specs` checks that each one
+exists.
 
 ## Requirements say what, never how it's stored or coded
 
 The HTTP interface is part of the requirements, because HTTP is a standard
-rather than a vendor choice. Storage and code are not: the Reference
-implementation folder shows one way to build a module, and no requirement
-depends on it. A team on another database or language replaces only that
-folder.
+rather than a vendor choice. So are standard codes, such as HL7, LOINC and
+SNOMED CT, because other systems depend on them. Storage and code are not: the
+Reference implementation folder shows one way to build a module, and no
+requirement depends on it.
 
 ## Modules stay inside their own boundaries
 
@@ -72,24 +87,17 @@ are registered.
 
 Rules that differ between places or organisations are settings, never one
 country's answer. Healthcare modules support the United States and the
-European Union through a `jurisdiction` setting, with retention, code systems
-and response deadlines set per jurisdiction.
-
-## Reading this as a machine
-
-Every page is also plain markdown. Add `.md` to any page URL: a module page
-returns its complete merged specification, and a section or variant page
-returns only that part. [`/llms.txt`](/llms.txt) lists every page and explains
-how to navigate. See [Agentic development](/docs/agentic) to connect a coding
-agent.
+European Union through a `jurisdiction` setting. Values that differ by US
+state or EU member state, such as the age of majority or record retention,
+are settings a deployment sets with legal advice.
 
 ## Start here
 
 <Cards>
   <Card
-    title="Appointment"
-    href="/docs/core/appointment"
-    description="The core scheduling lifecycle, specified in industry-neutral terms."
+    title="Agentic development"
+    href="/docs/agentic"
+    description="Connect your coding agent with one AGENTS.md section."
   />
   <Card
     title="Electronic health record (EHR)"
@@ -97,8 +105,8 @@ agent.
     description="The EHR domain, and the order its modules are built in."
   />
   <Card
-    title="Agentic development"
-    href="/docs/agentic"
-    description="Connect your coding agent with one AGENTS.md section."
+    title="Patients"
+    href="/docs/healthcare/ehr/patient"
+    description="Hospital patient registration, identifiers, duplicates and privacy rights."
   />
 </Cards>

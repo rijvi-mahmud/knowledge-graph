@@ -571,22 +571,46 @@ understand. Always fill them.
 
 ## Positioning and home page copy
 
-The product is **knowledge sharing**: requirements written once and inherited,
-never rewritten. Industries and domains (healthcare, EHR, ...) are example
-content, never the headline. Rules set by the user, who works in dev-tools
-business development and content:
+The project is **for AI agents first, people second**. The headline promise is
+that a coding agent fetches the spec for each task instead of guessing domain
+rules from memory, and cites what it used. Inheritance is how the specs stay
+complete without rewriting; it supports the promise rather than leading it.
+Industries and domains (healthcare, EHR, ...) are example content, never the
+headline. Rules set by the user, who works in dev-tools business development
+and content:
 
-- Lead with what is unique, not what already exists elsewhere: inheritance
-  (core → industry → domain), override by id, per-rule provenance, promotion of
-  repeated rules, and AI receiving the merged spec for one exact domain.
-  Rationale fields, version history and llms.txt exist elsewhere - support
-  points at most.
+- Lead with the agent: fetched not remembered, cite every rule id, say "not
+  specified" instead of inventing, fetch only the sections a task needs. Then
+  what is unique: inheritance (core → industry → domain), override by id,
+  per-rule provenance, promotion of repeated rules, and the merged spec for
+  one exact domain. Rationale fields, version history and llms.txt exist
+  elsewhere: support points at most.
+- The hero's primary action is "Connect your agent" (the Agentic development
+  Quickstart), and the copy button gives `/llms.txt`, never
+  `/llms-full.txt`, which agents are told not to load.
 - Hooks, not paragraphs. Short headlines, one-line card copy, minimal body
   text. Devtool analogies land ("method override", "extend, don't copy-paste").
 - Visual reference: Supabase / Neon / Upstash - bento cards with live mini
   visuals, two-tone headings, tinted glow, small transitions, no shadows.
 - Home page data is read from the specs (`src/app/(home)/page.tsx`), so counts
   and examples stay true as content changes.
+
+### Agents are grounded, not trusted
+
+Everything written for agents (`AGENTS.md` Quickstart, `/llms.txt`, the
+agentic pages) follows Anthropic's guidance on reducing hallucinations: fetch
+the page for this task in this session, treat anything unlisted as
+unspecified, cite id + version + URL, and check each cited id against the
+fetched text before finishing. Module markdown is 100 KB or more, and many
+fetch tools summarise long pages with a smaller model, so agents are told to
+fetch section pages (`/docs/<module>/<group>/<section>.md`, a few KB).
+
+Don't assume agents read `/llms.txt` on their own. llms.txt is a proposal
+agents are expected to consult, but web search lands agents on HTML pages. So
+every docs page also carries `<link rel="alternate" type="text/markdown">` and
+a screen-reader-hidden line pointing to its `.md` and to `/llms.txt`
+(`src/app/docs/[[...slug]]/page.tsx`), and the `AGENTS.md` section tells the
+agent to start at `/llms.txt`. Keep all three.
 
 ## Branding
 

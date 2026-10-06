@@ -1,12 +1,13 @@
 ---
 title: How agents use the Knowledge Graph
-description: How a coding agent finds the right page for your project, what a spec contains, and why each instruction in the AGENTS.md section is there.
+description: How a coding agent finds the right page, fetches only what a task needs, stays grounded in what it fetched, and why each instruction in the AGENTS.md section is there.
 ---
 
 The [Quickstart](/docs/agentic#quickstart) section in `AGENTS.md` tells your
 agent where the Knowledge Graph is, how to find the page a task needs, and how
-to follow it. This page explains what the agent does with those instructions,
-so you can predict its behaviour and adjust the section if you need to.
+to stay grounded in it. This page explains what the agent does with those
+instructions, so you can predict its behaviour and adjust the section if you
+need to.
 
 ## Finding the right page
 
@@ -14,73 +15,100 @@ The Knowledge Graph is layered. **Core** pages describe a concept in
 industry-neutral terms. **Industry** pages, such as healthcare, add what every
 application in that industry needs. **Domain** pages, such as EHR, add what
 only that kind of application needs. Each page shows its own items merged with
-everything it inherits.
+everything it inherits. Some modules, such as Patients, start at the industry
+level because there's no neutral concept worth sharing yet.
 
-For a hospital EHR working on appointments, the agent:
+For a hospital EHR working on patient registration, the agent:
 
 1. Reads `%SITE_URL%/llms.txt` and finds the healthcare industry.
-2. Fetches the healthcare overview and sees that EHR is one of its domains.
-3. Fetches the EHR appointments page, which already includes the core and
-   healthcare appointment rules.
+2. Fetches the healthcare overview and sees that EHR is one of its domains,
+   with Patients and Appointments specified.
+3. Fetches the sections of the EHR Patients page the task needs, which already
+   include the healthcare patient record rules.
 
-If the EHR domain has no appointments page yet, the agent uses the healthcare
-page instead, and the core Appointment page (`%SITE_URL%/docs/core/appointment.md`) if
-there's no healthcare page either. It never needs two pages for the same
-concept.
+If the domain has no page for a concept yet, the agent uses the industry page,
+then the core page. It never needs two pages for the same concept. The agent
+records the industry, domain and jurisdiction under **Project context** in
+`AGENTS.md`, so later sessions skip the first two steps, but it still reads
+`llms.txt` to see modules added since.
 
-The agent records the industry and domain under **Project context** in
-`AGENTS.md`, so later sessions skip the first two steps.
+## Fetching only what a task needs
+
+A module page's markdown is its complete spec, merged across layers, and the
+EHR pages are well over 100 KB. Each section is also its own page of a few
+KB, so the agent fetches the ones a task needs:
+
+| Task | Sections to fetch |
+|---|---|
+| Implement a feature | `functions/business-rules`, `functions/validations`, `data/data-model`, `interfaces/operations`, `interfaces/errors` |
+| Write tests | `verification/acceptance`, `functions/edge-cases` |
+| Call another module | `interfaces/dependencies`, then the other module's page if it exists |
+| Set up storage | `data/data-model`, then `reference-implementation/tables` as one non-normative option |
+| Configure a deployment | `requirements/settings` |
+
+Small pages matter for accuracy as well as size. Many agents' fetch tools
+pass long pages through a smaller model that summarises them, and a summary
+can drop or blur exactly the detail a rule depends on.
+
+## Staying grounded
+
+These instructions keep the agent's domain decisions tied to text it fetched,
+following [Anthropic's guidance on reducing hallucinations](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-hallucinations):
+
+| Instruction | What it does |
+|---|---|
+| Fetch the page for this task, in this session | Replaces memory, which may be from an older version or another project, with the current spec |
+| Unlisted means unspecified | Gives the agent permission to say it doesn't know, instead of filling a gap with a plausible default |
+| Cite id, version and URL | Makes every claim checkable by you, and traceable later |
+| Check each cited id before finishing | Catches a claim the agent can't support from what it fetched |
+| Prefer section pages when the fetch tool summarises | Keeps the agent quoting the spec rather than a summary of it |
 
 ## How a spec is structured
 
 Each module page opens with its module, layers, version and status, then a
 short guide on how to read it. The rest follows ISO/IEC/IEEE 29148: functions,
 data, external interfaces, security, requirements, a non-normative reference
-implementation, verification and supporting information. In the sidebar each
-of those is a folder of short pages; as markdown, the module page returns all
-of it in one file:
+implementation, verification and supporting information.
 
-```md title="core/appointment.md (excerpt)"
-- module: appointment
-- layer: core
-- version: 0.9.1
-- status: stable
+```md title="healthcare/ehr/patient/functions/business-rules.md (excerpt)"
+**BR-H3** An identifier's system and value belong to at most one record that
+is active or inactive. _[healthcare]_
+  - Why: Two people with the same medical record number means a scan or a
+    lookup can open the wrong person's record.
 
-**BR-4** A participant cannot have two active appointments whose slots
-overlap. Slots are half-open, so an appointment ending at 10:00 and one
-starting at 10:00 do not overlap.
-  - Why: Double booking is a data-integrity failure, not a user preference ...
+**BR-E1** Every patient gets an MRN from mrn_system at registration,
+including its check digit. ... _[ehr]_
 ```
-
-On an industry or domain page, every item also carries the layer it comes
-from, such as `_[core]_` or `_[ehr (overrides core)]_`.
 
 The same conventions apply to every module:
 
 | In the spec | Meaning |
 |---|---|
-| `BR-`, `FR-`, `AC-`, `EC-`, `CON-`, `AS-`, `DG-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria, edge cases, design constraints, assumptions, delivery guarantees and decisions. Ids are stable, so code, tests and commits can cite them. |
-| `[core]`, `[healthcare]`, `[ehr]` | The layer an item comes from. `core` items apply to every industry. |
-| `overrides core` | A more specific layer replaced the item with the same id. Only the replacement applies. |
+| `BR-`, `FR-`, `AC-`, `EC-`, `CON-`, `AS-`, `DG-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria, edge cases, design constraints, assumptions, delivery guarantees and decisions. Ids are stable, so code, tests and commits can cite them. A layer letter, such as `BR-H3` or `BR-E1`, shows where the item was written. |
+| `[core]`, `[healthcare]`, `[ehr]` | The layer an item comes from. |
+| `overrides` | A more specific layer replaced the item with the same id. Only the replacement applies. |
+| Validations | Each field's rule and the error code it returns. |
+| `codes:` on a field | The standard code system to use, such as HL7 v2 Table 0203, LOINC or SNOMED CT. |
+| Operations and errors | HTTP method, path and success status, and each error's HTTP status. |
+| Acceptance criteria | Given / When / Then, one test each, naming the ids they verify. |
 | `Why:` | The reason for a rule or decision, usually the failure it prevents. |
 | `Considered:` | Alternatives a decision rejected. |
 | Open questions | Behaviour that hasn't been decided yet. |
 | `status` | `draft` specs can still change. `stable` specs change only through a new version. |
 | Contract (on Dependencies) | What the module asks of another module or gives it. The other module's internals are out of scope. |
 | Variant | A kind of the module, such as inpatient, with its own page listing the items that apply only to it. |
+| Settings | What varies by deployment, such as `jurisdiction` (us or eu), retention or the age of majority. |
 | Reference implementation | Storage design and implementation notes. Non-normative: one way to build it. |
-| Settings | What varies by deployment, such as `jurisdiction` (us or eu) or a code system. |
 
 ## What each instruction prevents
 
 | Instruction | Without it, an agent may |
 |---|---|
-| Use the most specific page | Build from the module's core page and miss industry rules such as consent or eligibility |
-| Fetch before changing code | Work from a stale memory of a spec that has since changed |
-| Unspecified means ask | Fill a deliberate gap with a confident default. Specs leave behaviour open where practice varies between companies. |
+| Use the most specific page | Build from a core page and miss industry rules such as identity checks or retention |
+| Fetch sections, not the whole site | Load more than fits in context, or get a lossy summary |
 | Open questions are undecided | Pick an answer the domain hasn't settled |
-| Items are merged and tagged by layer | Read a `[core]` rule next to an `[ehr]` override as a conflict, or "fix" the override back to the core behaviour |
-| Cite ids with the spec version | Make changes nobody can trace back to a requirement or to the version it was built against |
+| Items are merged and tagged by layer | Read a `[core]` rule next to an `[ehr]` override as a conflict, or "fix" the override back |
+| Use the named codes | Invent local codes that no other system understands |
 | Read `Why:` first | Simplify away a rule that prevents a costly failure |
 | Respect `Considered:` | Reintroduce an approach a decision already rejected |
 | Report conflicts | Silently rewrite working code, or silently ignore the spec |
@@ -124,18 +152,18 @@ Follow the "Knowledge Graph" section of the root AGENTS.md. For code in this
 package, the domain is revenue cycle management.
 ```
 
-Cursor, GitHub Copilot and Claude Code use the `AGENTS.md` nearest to the file
-being edited. A direct instruction in chat overrides it.
+Agents read the nearest `AGENTS.md` in the directory tree, so the closest one
+takes precedence. A direct instruction in chat overrides it.
 
 ## Markdown endpoints
 
 | URL | Returns |
 |---|---|
 | `/llms.txt` | How agents should use the Knowledge Graph, then every page with a markdown link and description |
-| `/docs/<page>.md` | One module page as markdown: the complete spec, merged with everything it inherits |
-| `/docs/<page>/<group>/<section>.md` | One section of a module, such as `functions/business-rules` |
+| `/docs/<page>/<group>/<section>.md` | One section of a module, such as `functions/validations`. Usually a few KB |
 | `/docs/<page>/<variant>.md` | One variant of a module, such as `inpatient` |
-| `/llms-full.txt` | Every page in one file. Useful for research, too large to keep in context |
+| `/docs/<page>.md` | One module page: the complete spec, merged with everything it inherits. Can pass 100 KB |
+| `/llms-full.txt` | Every page in one file. For research, too large to keep in context |
 
 Requests to any docs URL with an `Accept: text/markdown` header also return
 markdown. `/llms.txt` follows the [llms.txt proposal](https://llmstxt.org/);

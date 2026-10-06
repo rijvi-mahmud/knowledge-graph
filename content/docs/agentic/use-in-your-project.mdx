@@ -12,13 +12,13 @@ Referring to rule ids in your prompts makes its work precise and traceable.
 Name the concept, and the agent finds and follows the right page:
 
 ```text title="Prompt"
-Add appointment cancellation. Follow the Knowledge Graph spec for this project.
+Add patient registration. Follow the Knowledge Graph spec for this project.
 ```
 
 To implement specific rules, cite their ids:
 
 ```text title="Prompt"
-Implement BR-4 and BR-D1 from the Knowledge Graph appointment spec.
+Implement BR-H1 and BR-H3 from the Knowledge Graph patient spec.
 ```
 
 The agent cites the ids in comments next to the enforcing code and in its
@@ -26,7 +26,31 @@ commit messages, with the spec version. To find every change to a rule later,
 run:
 
 ```bash title="Terminal"
-git log --grep BR-4
+git log --grep BR-H3
+```
+
+## Check the agent's work against the spec
+
+Before you accept a change, ask the agent to prove each rule it relied on:
+
+```text title="Prompt"
+For every Knowledge Graph id you cited in this change, fetch its section page
+again and quote the line that supports what you did. Remove anything you
+can't support.
+```
+
+The agent quotes the spec text next to each id, so you can see whether the
+code follows the rule or a memory of it.
+
+## Validate fields and use standard codes
+
+Each spec's Validations page gives every field's rule and error code, and the
+data model names the code system for each coded field:
+
+```text title="Prompt"
+Implement the patient field validations from the Knowledge Graph spec, with
+the error codes it lists. Use the code systems named in the data model for
+every coded field.
 ```
 
 ## Find what's missing
@@ -34,14 +58,14 @@ git log --grep BR-4
 To compare existing code with a spec:
 
 ```text title="Prompt"
-List every business rule in the Knowledge Graph appointment spec that our code
+List every business rule in the Knowledge Graph patient spec that our code
 doesn't enforce yet. For each, cite the id and the file where it should live.
 ```
 
 To surface decisions the team still has to make:
 
 ```text title="Prompt"
-Which open questions in the appointment spec does this feature depend on?
+Which open questions in the Knowledge Graph specs does this feature depend on?
 ```
 
 ## Generate tests from acceptance criteria
@@ -50,8 +74,9 @@ Acceptance criteria are written as Given / When / Then, so each one maps onto a
 test:
 
 ```text title="Prompt"
-Write one test per acceptance criterion in the Knowledge Graph appointment
-spec. Name each test after its id. Don't add behaviour the criteria don't state.
+Write one test per acceptance criterion in the Knowledge Graph patient spec.
+Name each test after its id, and assert the error code and HTTP status where
+the criterion names them. Don't add behaviour the criteria don't state.
 ```
 
 ## Review a change
@@ -71,7 +96,7 @@ gives them. Ask your agent to build against those contracts rather than
 reaching into another module:
 
 ```text title="Prompt"
-Which other modules does appointment check-in depend on, according to the
+Which other modules does patient registration depend on, according to the
 Knowledge Graph contracts? Build only against those contracts.
 ```
 
@@ -79,12 +104,14 @@ Knowledge Graph contracts? Build only against those contracts.
 
 Rules that differ between the United States and the European Union, such as
 record retention or response deadlines, depend on the `jurisdiction` setting.
+Values that differ by state or member state, such as the age of majority, are
+settings your team sets with legal advice.
 Record it under **Project context** in `AGENTS.md`, and the agent applies the
 right rules:
 
 ```text title="Prompt"
-Our jurisdiction is eu. Which appointment rules and settings differ from the
-us defaults, and does our code follow the eu ones?
+Our jurisdiction is eu. Which patient and appointment rules and settings
+differ from the us defaults, and does our code follow the eu ones?
 ```
 
 ## Override a rule
@@ -110,8 +137,8 @@ record the version each change was built against. When a spec's version moves
 past the one in your history, check what changed:
 
 ```text title="Prompt"
-The appointment spec is now at a newer version than our commits cite. Compare
-its Version history with our code and list rules we need to revisit.
+The patient spec is now at a newer version than our commits cite. Fetch its
+Version history, compare it with our code, and list rules we need to revisit.
 ```
 
 The **Version history** section at the end of each spec lists what changed in

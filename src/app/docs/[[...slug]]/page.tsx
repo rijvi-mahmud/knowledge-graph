@@ -18,7 +18,7 @@ import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
-import { gitConfig } from '@/lib/shared';
+import { appName, gitConfig, siteUrl } from '@/lib/shared';
 import { activeSpecGroups, ModuleSpec, specToc, variantSpec } from '@/components/module-spec';
 import { sectionTitle } from '@/lib/spec-sections';
 import { OpenTarget } from '@/components/open-target';
@@ -59,6 +59,13 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
     <DocsPage toc={toc} full={page.data.full}>
       <DocsTitle className="font-display tracking-tight">{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
+      {/* Agents often land here from a web search, not from llms.txt. HTML-to-text
+          tools keep this line; people and screen readers don't see it. */}
+      <p className="sr-only" aria-hidden="true">
+        For AI agents: this page is available as markdown at {siteUrl}
+        {page.url}.md. Start at {siteUrl}/llms.txt for how to navigate the {appName}, and
+        fetch only the sections a task needs.
+      </p>
       <div className="flex flex-row gap-2 items-center border-b pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover
@@ -97,6 +104,8 @@ export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): P
   return {
     title: owner ? `${page.data.title} · ${owner.data.title}` : page.data.title,
     description: page.data.description,
+    // Points agents and tools that read <head> to the markdown version.
+    alternates: { types: { 'text/markdown': `${siteUrl}${page.url}.md` } },
     openGraph: {
       images: getPageImageUrl(page).url,
     },
