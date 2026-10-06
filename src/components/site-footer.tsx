@@ -16,7 +16,7 @@ const columns = [
     links: [
       { text: 'llms.txt', href: '/llms.txt' },
       { text: 'llms-full.txt', href: '/llms-full.txt' },
-      { text: 'Module markdown', href: '/llms.mdx/docs/core/appointment/content.md' },
+      { text: 'Module markdown', href: '/docs/core/appointment.md' },
     ],
   },
   {
