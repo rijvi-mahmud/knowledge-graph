@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.3.0
+version: 0.3.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -51,7 +51,7 @@ dataModel:
   type: enum
   required: true
   description: Whether registration still needs completing.
-  constraints: complete | incomplete; default complete
+  constraints: 'complete | incomplete; default complete; codes: none standard, sent as an extension'
 - name: mother_patient_id
   type: string
   required: false
@@ -669,6 +669,11 @@ references:
   title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
 changelog:
+- version: 0.3.1
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - registration_status says it has no standard code.
 - version: 0.3.0
   date: '2026-10-06'
   breaking: false

@@ -630,8 +630,8 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Patients (`healthcare/patient` 0.3.0, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.3.0) and Appointments
+  drafts: Patients (`healthcare/patient` 0.4.0, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.3.1) and Appointments
   (`healthcare/appointment` 0.3.1, `healthcare/ehr/appointment` 0.4.0). Both
   support the US and EU through the `jurisdiction` setting. Next: Encounters.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).

@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.3.0
+version: 0.4.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -31,6 +31,8 @@ scope:
 - Names in more than one script or language
 - Recorded sex, kept apart from administrative gender
 - Limits and alerts on patient searches
+- Passing accepted corrections on to those who received the data
+- Address confidentiality program addresses
 nonGoals:
 - Clinical facts about the patient, such as allergies, problems, sex for clinical use or care plans. Clinical modules own them.
 - Insurance and coverage. They belong to the Coverage module, which refers to the patient by id.
@@ -106,7 +108,7 @@ dataModel:
   type: enum
   required: true
   description: Whether the record is in use.
-  constraints: active | inactive | merged | entered_in_error
+  constraints: 'active | inactive | merged | entered_in_error; codes: FHIR Patient.active is true only for active, and merged adds FHIR LinkType replaced-by'
 - name: identifiers
   type: identifier[]
   required: false
@@ -139,7 +141,7 @@ dataModel:
 - name: addresses
   type: address[]
   required: false
-  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing (Project US@). Unknown parts are left blank.
+  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing (Project US@). Unknown parts are left blank. An address can be marked as an address confidentiality program substitute, with the program and participant number (BR-H46).
   constraints: 'codes: use and type from FHIR AddressUse and AddressType; country ISO 3166-1 alpha-2; US state USPS two-letter code'
 - name: telecoms
   type: contact point[]
@@ -182,8 +184,8 @@ dataModel:
 - name: representatives
   type: representative[]
   required: false
-  description: People allowed to act for the patient, each with kind (parent, guardian, other legal representative or proxy), scope, exclusions, period and the evidence seen (BR-H14). A parent's authority ends at the age of majority (BR-H25).
-  constraints: 'codes: kind from HL7 v3 RoleCode: PRN parent, GUARD guardian, POWATT power of attorney, HPOWATT healthcare power of attorney'
+  description: People allowed to act for the patient, each with kind (parent, guardian, other legal representative, proxy, or estate representative), scope, exclusions, period and the evidence seen (BR-H14). A parent's authority ends at the age of majority (BR-H25).
+  constraints: 'codes: kind from HL7 v3 RoleCode: PRN parent, GUARD guardian, POWATT power of attorney, HPOWATT healthcare power of attorney, EXCEST executor of estate'
 - name: confidential_communication
   type: contact point or address
   required: false
@@ -235,15 +237,17 @@ dataModel:
   type: string
   required: false
   description: The record that replaced this one in a merge (FHIR link replaced-by).
-  constraints: 'set only when status = merged; codes: FHIR LinkType replaced-by, with replaces on the target'
+  constraints: 'set only when status = merged; codes: FHIR LinkType replaced-by, with replaces on the target; set by the service only (BR-H47)'
 - name: last_care_at
   type: instant
   required: false
   description: When another module last reported care for the patient (AS-H4).
+  constraints: set by the service only (BR-H47)
 - name: revision
   type: integer
   required: true
   description: Increases with every change. A change must send the revision it read (BR-H21).
+  constraints: set by the service only (BR-H47)
 - name: emancipated
   type: boolean
   required: false
@@ -264,6 +268,7 @@ dataModel:
   type: boolean
   required: false
   description: Set when another record in use has the same given and family name (BR-H30). Derived, never written by clients.
+  constraints: set by the service only (BR-H47)
 - name: legal_hold
   type: boolean
   required: false
@@ -272,11 +277,12 @@ dataModel:
   type: link[]
   required: false
   description: Records of this patient held by other organisations, as reported by the Exchange module (FHIR link type refer).
-  constraints: 'codes: FHIR LinkType refer or seealso'
+  constraints: 'codes: FHIR LinkType refer or seealso; set by the service only (BR-H47)'
 - name: import_batch
   type: string
   required: false
   description: The import that created the record, if any (BR-H34).
+  constraints: set by the service only (BR-H47)
 relationships:
 - type: has_many
   target: identifier
@@ -348,7 +354,7 @@ businessRules:
   text: A patient can ask to be contacted by other means or at another address, without giving a reason. Every module that contacts the patient asks this one where to.
   rationale: US providers must accommodate reasonable requests for confidential communications and may not ask why (45 CFR 164.522(b)). For some patients an ordinary letter home could be unsafe.
 - id: BR-H17
-  text: A patient can ask for their data to be corrected. The request is decided within correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made and linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which stays with the record. While the patient contests accuracy, they can ask for the data to be restricted, which sets accuracy_contested.
+  text: A patient can ask for their data to be corrected. The request is decided within correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made and linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which stays with the record. While the patient contests accuracy, they can ask for the data to be restricted, which sets accuracy_contested. The patient can name people who received their data and need the correction.
   rationale: HIPAA gives 60 days with one 30-day extension, and requires a written denial and a right to disagree (45 CFR 164.526). GDPR gives a right to rectification (Article 16) answered within one month, extendable by two (Article 12(3)), and to restriction while accuracy is checked (Article 18(1)(a)). The EHDS adds online requests (Article 6).
 - id: BR-H18
   text: A request to erase a patient record is refused while record_retention applies, counted from last_care_at or the date of death, and for a patient who was a minor at their last care, not before they reach minor_retention_until_age. When it ends, and no legal hold applies, identifying fields are removed and the id is kept.
@@ -425,6 +431,21 @@ businessRules:
 - id: BR-H42
   text: 'Sex is recorded apart from administrative gender, each value with its kind: assigned at birth, legal, or other recorded. It is recorded as the patient or their documents report it, never inferred from name or appearance. Sex for clinical use belongs to clinical modules.'
   rationale: FHIR separates administrative gender from recorded sex, legal sex and sex assigned at birth, and a patient can have different legal sex values in different jurisdictions. USCDI v3 names the element Sex (Assigned at Birth), and US certification rules for it changed in 2025, so the values come from the sex_codes setting.
+- id: BR-H43
+  text: When a correction is accepted, or data is erased or restricted at the patient's request, patient.corrected is emitted. The Release of information and Exchange modules pass the change to everyone the patient named and everyone they know received the data. The patient can ask who was told.
+  rationale: HIPAA requires reasonable efforts to inform people who received the data and may rely on it (45 CFR 164.526(c)(3)). GDPR requires telling each recipient of a rectification, erasure or restriction, and telling the patient who they are on request (Article 19).
+- id: BR-H44
+  text: A denied correction, and any statement of disagreement, is given to the Release of information and Exchange modules to include, or summarise, with every later disclosure of that data.
+  rationale: HIPAA requires the statement of disagreement, or an accurate summary, with any later disclosure of the information it relates to (45 CFR 164.526(d)(5)).
+- id: BR-H45
+  text: When a patient dies, their existing representatives' authority ends. After death, a person acts for the patient only as an estate representative (an executor, administrator or other person with authority over the estate), recorded with evidence.
+  rationale: HIPAA treats the executor, administrator or other person with authority over the deceased person or their estate as the personal representative (45 CFR 164.502(g)(4)).
+- id: BR-H46
+  text: An address confidentiality program substitute address is recorded as the patient's address with its program and participant number, and is never used for matching. Whether the hospital must accept it is set by acp_acceptance. The real address is not required.
+  rationale: States such as Washington and California give survivors of abuse a substitute address that state and local agencies must accept, while private businesses may choose to. Many participants share one substitute address, so matching on it would link strangers.
+- id: BR-H47
+  text: Fields the service sets, such as replaced_by, last_care_at, revision, similar_name_alert, import_batch and external_links, cannot be written by clients.
+  rationale: A client writing replaced_by could hide a record behind another one, and a forged last_care_at would change retention.
 validations:
 - field: names
   rule: at least one usual, official or temp name; a name may have only a given name or only a family name
@@ -507,6 +528,30 @@ validations:
 - field: merge
   rule: a value chosen for every field where the source and target differ
   error: PATIENT_MERGE_CONFLICT_UNRESOLVED
+- field: confidential_communication
+  rule: a phone number, email or address that passes the same rules as telecoms and addresses
+  error: PATIENT_INVALID_TELECOM
+- field: identity_evidence
+  rule: government photo ID, other document, known to staff, or none available
+  error: PATIENT_INVALID_CODE
+- field: emancipated
+  rule: true only with the evidence seen recorded
+  error: PATIENT_INVALID_REPRESENTATIVE
+- field: interpreter_needed
+  rule: yes, no or unknown
+  error: PATIENT_INVALID_CODE
+- field: birth_date_estimated
+  rule: only together with a birth date
+  error: PATIENT_INVALID_BIRTH_DATE
+- field: addresses
+  rule: a confidentiality program address names its program and participant number
+  error: PATIENT_INVALID_ADDRESS
+- field: representatives
+  rule: kind estate representative only for a deceased patient; other kinds only for a living one
+  error: PATIENT_INVALID_REPRESENTATIVE
+- field: replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links
+  rule: never sent by clients (BR-H47)
+  error: PATIENT_READ_ONLY_FIELD
 stateMachine:
   initial: active
   states:
@@ -586,6 +631,7 @@ workflows:
   actor: Registrar
   steps:
   - Record deceased_at as precisely as known, and death_source
+  - End every existing representative's authority
   - Emit patient.deceased
   - Other modules stop reminders and review future plans
   outcome: Nobody is contacted or booked as if the patient were alive.
@@ -595,8 +641,8 @@ workflows:
   steps:
   - Record the request and its due date from correction_deadline
   - If the patient asks, set accuracy_contested while it is checked
-  - 'Accept: make the change, link it to the request, and tell the patient'
-  - 'Deny: give the reason in writing, and record any statement of disagreement'
+  - 'Accept: make the change, link it to the request, tell the patient, and emit patient.corrected so recipients are told'
+  - 'Deny: give the reason in writing, and record any statement of disagreement, which goes with later disclosures'
   - Clear accuracy_contested
   outcome: Every request is answered in time, and a disagreement stays with the record.
 - name: End a representative at majority
@@ -870,6 +916,42 @@ edgeCases:
   covers:
   - BR-H42
   - AC-H49
+- id: EC-H42
+  situation: A patient's corrected birth date was sent to a specialist last month.
+  behaviour: patient.corrected lets Exchange send the correction to the specialist, and the patient can ask who was told.
+  covers:
+  - BR-H43
+  - AC-H51
+- id: EC-H43
+  situation: A denied correction with a statement of disagreement is followed by a records request from an insurer.
+  behaviour: Release of information includes the statement, or a summary, with the disclosure.
+  covers:
+  - BR-H44
+  - AC-H52
+- id: EC-H44
+  situation: A patient dies; their adult daughter was their proxy, and their son is executor of the estate.
+  behaviour: The daughter's proxy authority ends at death. The son is recorded as estate representative with evidence and can act.
+  covers:
+  - BR-H45
+  - AC-H53
+- id: EC-H45
+  situation: Two unrelated patients give the same address confidentiality program PO box.
+  behaviour: Both are recorded with it, and matching ignores it, so they are not proposed as duplicates.
+  covers:
+  - BR-H46
+  - AC-H54
+- id: EC-H46
+  situation: An integration sends replaced_by in an update.
+  behaviour: Rejected with PATIENT_READ_ONLY_FIELD.
+  covers:
+  - BR-H47
+  - AC-H55
+- id: EC-H47
+  situation: The privacy officer's alert channel is down when a very restricted record is opened.
+  behaviour: The record still opens; patient.restricted_access is delivered when Notification recovers (DG-H1).
+  covers:
+  - BR-H20
+  - DG-H1
 functionalRequirements:
 - id: FR-H1
   text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
@@ -966,6 +1048,14 @@ functionalRequirements:
 - id: FR-H24
   text: The service must store names in several scripts and languages, and match across them.
   priority: should
+  verification: test
+- id: FR-H25
+  text: The service must emit patient.corrected for every accepted correction, erasure or restriction, and accept the people the patient names to inform.
+  priority: must
+  verification: test
+- id: FR-H26
+  text: The service must reject client writes to fields only the service sets.
+  priority: must
   verification: test
 nonFunctionalRequirements:
 - category: security
@@ -1067,6 +1157,9 @@ settings:
 - name: search_alert_window
   type: duration
   description: The period search_alert_threshold is counted over. Required.
+- name: acp_acceptance
+  type: required | voluntary
+  description: Whether this hospital must accept address confidentiality program addresses. Washington and California require state and local agencies to accept them; private businesses may choose to. Set with legal advice per state. Required in the United States.
 performanceTargets:
 - id: PERF-H1
   indicator: Duplicate rate
@@ -1096,6 +1189,10 @@ performanceTargets:
   indicator: Matching quality
   target: Set by each deployment, and tracked over time
   measurement: On a sample of pairs reviewed by HIM specialists, the share of true duplicates matching proposed, and the share of proposals that were true duplicates.
+- id: PERF-H8
+  indicator: Registration availability
+  target: Set by each deployment as an SLO
+  measurement: Share of registration and search requests that succeed, over a rolling 30 days, excluding planned downtime. Registration is on the emergency department's critical path.
 acceptanceCriteria:
 - id: AC-H1
   given: an existing record for Ana Silva, born 1990-04-02
@@ -1430,6 +1527,44 @@ acceptanceCriteria:
   then: marital status is sent as an HL7 v3 MaritalStatus code; a local code with no mapping fails the export with PATIENT_INVALID_CODE
   verifies:
   - CON-H4
+- id: AC-H51
+  given: a correction request naming a specialist who received the data
+  when: it is accepted
+  then: patient.corrected is emitted with the changed fields and the named people
+  verifies:
+  - BR-H43
+  - FR-H25
+- id: AC-H52
+  given: a denied correction with a statement of disagreement
+  when: the decision is saved
+  then: patient.disagreement_filed is emitted with the request id for Release of information and Exchange
+  verifies:
+  - BR-H44
+- id: AC-H53
+  given: a patient with a proxy
+  when: their death is recorded, and an executor is added with evidence
+  then: the proxy has ended and the executor is an estate representative; adding a parent representative now fails with PATIENT_INVALID_REPRESENTATIVE
+  verifies:
+  - BR-H45
+- id: AC-H54
+  given: acp_acceptance required and an address marked as a confidentiality program address without a participant number
+  when: it is saved, then saved with one
+  then: the first fails with PATIENT_INVALID_ADDRESS; the second is stored and excluded from matching
+  verifies:
+  - BR-H46
+- id: AC-H55
+  given: any patient
+  when: an update sends last_care_at
+  then: it fails with PATIENT_READ_ONLY_FIELD
+  verifies:
+  - BR-H47
+  - FR-H26
+- id: AC-H56
+  given: a record with identity_evidence "passport scan", which isn't an allowed value
+  when: it is saved
+  then: it fails with PATIENT_INVALID_CODE
+  verifies:
+  - BR-H26
 operations:
 - name: Search patients
   actor: Registrar
@@ -1475,6 +1610,7 @@ operations:
   - PATIENT_DUPLICATE_IDENTIFIER
   - PATIENT_FIELD_NOT_COLLECTED
   - PATIENT_IDEMPOTENCY_KEY_REUSED
+  - PATIENT_READ_ONLY_FIELD
   - PATIENT_DEPENDENCY_UNAVAILABLE
 - name: Get a patient
   actor: Clinician
@@ -1512,6 +1648,7 @@ operations:
   - PATIENT_DUPLICATE_IDENTIFIER
   - PATIENT_FIELD_NOT_COLLECTED
   - PATIENT_SELF_SERVICE_NOT_ALLOWED
+  - PATIENT_READ_ONLY_FIELD
   - PATIENT_DEPENDENCY_UNAVAILABLE
 - name: List possible duplicates
   actor: Health information management (HIM) specialist
@@ -1702,7 +1839,7 @@ operations:
   method: POST
   path: /patients/{id}/correction-requests
   success: 201
-  input: patient id, what is wrong, the correct value, whether to restrict meanwhile
+  input: patient id, what is wrong, the correct value, whether to restrict meanwhile, and people who received the data and need the correction
   output: the request with its due date
   errors:
   - PATIENT_NOT_FOUND
@@ -1912,6 +2049,20 @@ events:
   - user
   - search_count
   - window_start
+- name: patient.corrected
+  description: An accepted correction, erasure or restriction to pass on to recipients.
+  payload:
+  - patient_id
+  - request_id
+  - changed_fields
+  - named_recipients
+  - revision
+- name: patient.disagreement_filed
+  description: A correction was denied and the patient filed a statement of disagreement, to go with later disclosures.
+  payload:
+  - patient_id
+  - request_id
+  - revision
 deliveryGuarantees:
 - id: DG-H1
   text: Events are published at least once. Consumers treat an event with a source and id they have already seen as a duplicate.
@@ -2196,6 +2347,10 @@ personalData:
   category: personal; can reveal ethnic origin, a special category in the EU
   purpose: Reporting and care that depends on it, where collected
   retention: record_retention
+- field: address confidentiality program number
+  category: personal; reveals the patient is in a protection program
+  purpose: Using the substitute address lawfully
+  retention: record_retention
 errors:
 - code: PATIENT_NOT_FOUND
   http: 404
@@ -2314,6 +2469,9 @@ errors:
 - code: PATIENT_SEARCH_TOO_BROAD
   http: 422
   message: Too many patients match. Add a birth date, identifier or more of the name.
+- code: PATIENT_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service and can't be written.
 dependencies:
 - service: identity-service
   direction: upstream
@@ -2379,6 +2537,9 @@ dependencies:
   contract:
   - 'Gives: this module''s part of a copy request'
   - Accounting of disclosures (45 CFR 164.528) is its concern
+  - 'Receives: patient.corrected, to pass the correction to recipients (45 CFR 164.526(c)(3), GDPR Article 19)'
+  - 'Receives: patient.disagreement_filed, to include with later disclosures (45 CFR 164.526(d)(5))'
+  - Telling the patient who received their data is Release of information's concern
 - service: exchange-service
   direction: downstream
   reason: exchanges records with other organisations and national services
@@ -2389,14 +2550,22 @@ dependencies:
   - 'Receives: deaths reported from outside, recorded with their source'
   - Cross-border identification under EHDS Article 16 is Exchange's concern
   - Uses IHE PIXm (identifier cross-referencing), PDQm (demographics query) or PMIR (master identity registry) with outside patient indexes
+  - 'Receives: patient.corrected and patient.disagreement_filed, for records it has sent elsewhere'
 - service: clinical-modules
   direction: downstream
   reason: orders and results, medications, documentation and every module holding clinical data
   criticality: soft
   contract:
-  - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error and patient.legal_hold_changed'
+  - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error, patient.inactivated, patient.reactivated and patient.legal_hold_changed'
   - 'Gives: the patient banner details: names, birth date, identifiers, photo, deceased and similar_name_alert'
   - Moving entries recorded on the wrong patient is each module's concern
+- service: notification-service
+  direction: downstream
+  reason: delivers privacy alerts
+  criticality: soft
+  contract:
+  - 'Gives: patient.restricted_access and patient.search_volume_alert, to deliver to the privacy officer'
+  - Delivery channels and on-call rotas are Notification's concern
 risks:
 - id: RISK-H1
   risk: Duplicate records split one person's history.
@@ -2477,6 +2646,10 @@ decisions:
 - id: ADR-H10
   decision: Merge conflicts are resolved by a person field by field, never by a rule such as newest wins.
   rationale: The newest value is often the duplicate's typo. FHIR $merge leaves the result to the caller.
+  date: '2026-10-06'
+- id: ADR-H11
+  decision: Patients announces corrections; Release of information and Exchange tell recipients.
+  rationale: Only the modules that disclose data know who received it. This module knows what changed.
   date: '2026-10-06'
 openQuestions: []
 references:
@@ -2604,7 +2777,23 @@ references:
 - id: REF-H39
   title: IHE ITI profiles PIXm 3.1.0, PDQm 3.2.0 and PMIR 1.6.0
   url: https://profiles.ihe.net/ITI/PMIR/
+- id: REF-H40
+  title: Washington Secretary of State, Address Confidentiality Program for agencies and businesses
+  url: https://www.sos.wa.gov/statewide-programs/address-confidentiality-program-acp/agencies-and-businesses
+- id: REF-H41
+  title: California Secretary of State, Safe at Home
+  url: https://www.sos.ca.gov/registries/safe-home
+- id: REF-H42
+  title: GDPR Article 19, notification of rectification, erasure or restriction
+  url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
 changelog:
+- version: 0.4.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - Accepted corrections, erasures and restrictions are passed on to recipients (BR-H43), and statements of disagreement go with later disclosures (BR-H44).
+  - Representatives end at death, and estate representatives act after it (BR-H45).
+  - Address confidentiality program addresses (BR-H46), read-only fields (BR-H47), validations for the remaining fields, a registration availability target (PERF-H8), and privacy alerts delivered by Notification.
 - version: 0.3.0
   date: '2026-10-06'
   breaking: false
