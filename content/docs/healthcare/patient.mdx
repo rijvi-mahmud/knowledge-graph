@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -19,6 +19,15 @@ scope:
 - Restricted records, such as for staff or public figures
 - Requests to correct, restrict or erase patient data
 - A log of who viewed or changed each record
+- Validating every field a patient record holds
+- How identity was checked at registration, and confirming details on return visits
+- Patient photographs for identification, where the deployment collects them
+- Warnings for patients with the same or similar names
+- Representatives of minors ending at the age of majority or emancipation
+- Patients updating their own contact details
+- Requests for a copy of patient data
+- Legal holds that stop a record being erased
+- Bulk imports, such as from a legacy system
 nonGoals:
 - Clinical facts about the patient, such as allergies, problems, sex for clinical use or care plans. Clinical modules own them.
 - Insurance and coverage. They belong to the Coverage module, which refers to the patient by id.
@@ -27,6 +36,9 @@ nonGoals:
 - Printing documents and sending messages. Other modules ask this one where to send them.
 - Biometric identification, such as palm or face scans.
 - Exchanging records with other organisations or national services. An Exchange module does that, using the patient id and identifiers.
+- Moving entries recorded on the wrong patient (overlays). Each clinical module moves its own entries; this module only reports merges and unmerges.
+- Accounting of disclosures and copies of the whole medical record. They belong to the Release of information module.
+- The Notice of Privacy Practices and its acknowledgment. They belong to the Consent module.
 actors:
 - name: Registrar
   description: Staff who register patients and keep their details up to date, such as front desk or admissions staff.
@@ -55,6 +67,9 @@ assumptions:
 - id: AS-H4
   text: Modules that record care tell this one when they do, so it knows when a patient was last cared for.
   rationale: Retention runs from the last care (BR-H18), and a record with care on it must be merged, not discarded (BR-H11).
+- id: AS-H5
+  text: The Admission, discharge and transfer module can say whether a patient has an active stay.
+  rationale: A merge during a stay needs extra care (BR-H31), and only that module knows who is in hospital.
 glossary:
 - term: Patient record
   definition: The one record of who a patient is. Clinical data lives in other modules and points to it by id.
@@ -98,7 +113,7 @@ dataModel:
   type: name[]
   required: true
   description: Each with use (usual, official, temp, nickname, anonymous, old or maiden), family name, given names, prefix, suffix and period (FHIR HumanName).
-  constraints: at least one usual or official name, or a temp name (BR-H4)
+  constraints: at least one usual or official name, or a temp name (BR-H4); each part validated as in Validations
 - name: birth_date
   type: date
   required: true
@@ -116,11 +131,11 @@ dataModel:
 - name: addresses
   type: address[]
   required: false
-  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period.
+  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing (Project US@). Unknown parts are left blank.
 - name: telecoms
   type: contact point[]
   required: false
-  description: Phone numbers and email addresses, each with use (home, work, mobile, temp or old), rank and period.
+  description: Phone numbers in E.164 form and email addresses, each with use (home, work, mobile, temp or old), rank and period.
 - name: languages
   type: language[]
   required: false
@@ -154,7 +169,7 @@ dataModel:
 - name: representatives
   type: representative[]
   required: false
-  description: People allowed to act for the patient, each with kind, scope, exclusions, period and the evidence seen (BR-H14).
+  description: People allowed to act for the patient, each with kind (parent, guardian, other legal representative or proxy), scope, exclusions, period and the evidence seen (BR-H14). A parent's authority ends at the age of majority (BR-H25).
 - name: confidential_communication
   type: contact point or address
   required: false
@@ -205,6 +220,38 @@ dataModel:
   type: integer
   required: true
   description: Increases with every change. A change must send the revision it read (BR-H21).
+- name: emancipated
+  type: boolean
+  required: false
+  description: Whether a minor is legally an adult, with the evidence seen.
+- name: identity_evidence
+  type: string
+  required: false
+  description: 'How identity was checked at registration: government photo ID, other document, known to staff, or none available. Records the kind of evidence only, never a copy.'
+- name: demographics_confirmed_at
+  type: instant
+  required: false
+  description: When the patient last confirmed their details were correct (BR-H28).
+- name: photo
+  type: image
+  required: false
+  description: A colour photograph for identification. Collected only when collect_photo is on (BR-H29).
+- name: similar_name_alert
+  type: boolean
+  required: false
+  description: Set when another record in use has the same given and family name (BR-H30). Derived, never written by clients.
+- name: legal_hold
+  type: boolean
+  required: false
+  description: Set while the record is involved in litigation or another legal matter (BR-H24).
+- name: external_links
+  type: link[]
+  required: false
+  description: Records of this patient held by other organisations, as reported by the Exchange module (FHIR link type refer).
+- name: import_batch
+  type: string
+  required: false
+  description: The import that created the record, if any (BR-H34).
 relationships:
 - type: has_many
   target: identifier
@@ -279,8 +326,8 @@ businessRules:
   text: A patient can ask for their data to be corrected. The request is decided within correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made and linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which stays with the record. While the patient contests accuracy, they can ask for the data to be restricted, which sets accuracy_contested.
   rationale: HIPAA gives 60 days with one 30-day extension, and requires a written denial and a right to disagree (45 CFR 164.526). GDPR gives a right to rectification (Article 16) answered within one month, extendable by two (Article 12(3)), and to restriction while accuracy is checked (Article 18(1)(a)). The EHDS adds online requests (Article 6).
 - id: BR-H18
-  text: A request to erase a patient record is refused while record_retention applies, counted from last_care_at or the date of death. When it ends, identifying fields are removed and the id is kept.
-  rationale: HIPAA gives no right to erasure, and US hospitals must keep records for at least 5 years (42 CFR 482.24(b)(1)), longer in many states. GDPR Article 17(3)(c) lets health data be kept for care. Keeping the id keeps every other module's references valid.
+  text: A request to erase a patient record is refused while record_retention applies, counted from last_care_at or the date of death, and for a patient who was a minor at their last care, not before they reach minor_retention_until_age. When it ends, and no legal hold applies, identifying fields are removed and the id is kept.
+  rationale: 'HIPAA gives no right to erasure, and US hospitals must keep records for at least 5 years (42 CFR 482.24(b)(1)), longer in many states. Some states count minors'' records from a birthday: Texas lets hospitals dispose of them only after the patient''s 20th birthday or 10 years after last treatment, whichever is later (Health and Safety Code 241.103). GDPR Article 17(3)(c) lets health data be kept for care. Keeping the id keeps every other module''s references valid.'
 - id: BR-H19
   text: Every view and every change of a patient record is logged with who, when, what, and the reason given. Patients can get a report of who accessed their record where the jurisdiction gives that right.
   rationale: HIPAA requires audit controls (45 CFR 164.312(b)). The EHDS gives EU patients information on every access to their health data, kept for at least three years (Article 9).
@@ -296,34 +343,121 @@ businessRules:
 - id: BR-H23
   text: National identifiers and social security numbers are shown in full only to roles that need them, and otherwise masked.
   rationale: GDPR lets member states set conditions for national identification numbers (Article 87), and HIPAA limits use to the minimum necessary (45 CFR 164.502(b)). These numbers enable identity theft.
+- id: BR-H24
+  text: A record under legal hold is never erased or anonymised, even after record_retention ends. Other modules are told when a hold starts or ends.
+  rationale: Texas forbids destroying records involved in unresolved litigation (Health and Safety Code 241.103(c)), and GDPR lets data be kept for legal claims (Article 17(3)(e)).
+- id: BR-H25
+  text: A parent's or guardian's authority over a minor ends when the patient reaches age_of_majority, or earlier when emancipation is recorded. patient.representative_changed is emitted when it ends.
+  rationale: 'HIPAA treats a parent as the personal representative of an unemancipated minor, and an adult or emancipated minor as acting for themselves (45 CFR 164.502(g)(2) and (3)). The age differs by state: 19 in Nebraska (Revised Statutes 43-2101). A parent who keeps access to an adult''s record is a privacy breach.'
+- id: BR-H26
+  text: Every field is validated as listed in Validations before it is saved. A request with several invalid fields reports all of them at once.
+  rationale: Bad data at registration is what creates duplicates later. Reporting every problem at once saves registrars a round trip per field.
+- id: BR-H27
+  text: At a new patient's first registration, identity is checked against a government photo ID where the patient has one, and the kind of evidence is recorded. A patient without ID, such as a child or someone who lost it, is still registered, with the evidence recorded as none available.
+  rationale: The ONC SAFER Guide recommends a picture ID for new patients, with alternatives for minors and others without one. Refusing care for lack of ID is never acceptable.
+- id: BR-H28
+  text: Returning patients are asked to confirm their details at registration or check-in, and demographics_confirmed_at is recorded.
+  rationale: The SAFER Guide recommends asking returning patients to verify their demographic data. Stale phone numbers and addresses make matching and contact fail.
+- id: BR-H29
+  text: When collect_photo is on, a colour photograph is taken at registration with the patient's agreement, and shown wherever the patient is identified. A patient can decline.
+  rationale: The SAFER Guide strongly recommends collecting photographs at registration and showing them across the EHR, and an emergency department study found fewer wrong-patient orders when a photo was shown. GDPR treats a photo as biometric data only when processed by specific technical means to identify someone (Recital 51).
+- id: BR-H30
+  text: When another record in use has the same given and family name, both records carry similar_name_alert. Search results flag patients with the same or similar names.
+  rationale: The SAFER Guide recommends warning users when a new record shares a name with another patient, or a search returns several patients with the same or similar names.
+- id: BR-H31
+  text: A merge is allowed while either record has an active stay, but it is marked during_care so the care team is told, and bands and labels are reprinted with the record in use.
+  rationale: The SAFER Guide says that when temporary or duplicate ids are merged during care, the name must be updated in every system with safeguards against confusion.
+- id: BR-H32
+  text: Unknown values are left blank, partial or marked estimated. Placeholders such as UNKNOWN, a made-up birth date or a dummy phone number are never stored, and matching ignores blank and estimated values.
+  rationale: Project US@ says unknown address parts should be left blank and matching should not match on UNKNOWN. A placeholder makes unrelated patients look alike.
+- id: BR-H33
+  text: Two records both marked as part of a multiple birth, with the same birth date, are proposed as possible duplicates only with a warning that they may be siblings. A pair marked not a duplicate is not proposed again unless one of the compared fields changes.
+  rationale: The SAFER Guide recommends a multiple birth indicator to prevent merging twins' charts because their details are so similar.
+- id: BR-H34
+  text: Bulk imports go through matching like any registration. An imported record with a probable match is held for review, never merged automatically, and every record is tagged with its import_batch.
+  rationale: Imports and health system mergers bring large numbers of duplicates at once. The SAFER Guide asks for such charts to be flagged and resolved on a time-bound plan.
+- id: BR-H35
+  text: An inactive record is still found by search and can be read. Any change to it, or care reported for it, makes it active again and emits patient.reactivated.
+  rationale: A patient returning after years must find their old record, not get a new one (BR-H1).
+- id: BR-H36
+  text: A patient, or their representative, can change their own phone numbers, email, addresses, languages and contacts directly. A change to their name, birth date, administrative gender or identifiers goes through a correction request (BR-H17).
+  rationale: The EHDS lets EU patients request rectification online (Article 6). Contact details change often and only the patient knows them. Names, birth dates and identifiers drive identification, so staff check them against evidence.
+- id: BR-H37
+  text: A patient, or their representative, can ask for a copy of the data this module holds about them. The request is answered within access_request_deadline. A copy of the whole medical record is the Release of information module's job.
+  rationale: HIPAA gives a right of access answered within 30 days (45 CFR 164.524), and GDPR a right to a copy (Article 15) answered within one month (Article 12(3)).
 validations:
 - field: names
-  rule: at least one usual, official or temp name with a family or given name
+  rule: at least one usual, official or temp name; a name may have only a given name or only a family name
+  error: PATIENT_INVALID_NAME
+- field: names
+  rule: each part holds Unicode letters and combining marks, spaces, hyphens, apostrophes and periods; digits and other symbols only in temp names
+  error: PATIENT_INVALID_NAME
+- field: names
+  rule: case and spelling are stored exactly as given; leading and trailing spaces are removed; a single letter is a valid name
+  error: PATIENT_INVALID_NAME
+- field: names
+  rule: a value longer than the storage allows is rejected, never truncated
+  error: PATIENT_INVALID_NAME
+- field: names
+  rule: not a placeholder such as UNKNOWN, TEST or a string of one repeated character (BR-H32)
   error: PATIENT_INVALID_NAME
 - field: birth_date
-  rule: a valid full or partial date, not in the future
+  rule: a valid ISO 8601 date, year and month, or year; not in the future; implies an age no greater than max_age
   error: PATIENT_INVALID_BIRTH_DATE
 - field: administrative_gender
   rule: male, female, other or unknown
   error: PATIENT_INVALID_CODE
 - field: identifiers
-  rule: system listed in identifier_systems, and value in that system's format
+  rule: system listed in identifier_systems, and value matching that system's format and check digit
+  error: PATIENT_INVALID_IDENTIFIER
+- field: identifiers
+  rule: a US social security number has 9 digits and an area number other than 000, 666 or 900 to 999
   error: PATIENT_INVALID_IDENTIFIER
 - field: identifiers
   rule: system and value not held by another record in use
   error: PATIENT_DUPLICATE_IDENTIFIER
+- field: telecoms
+  rule: 'a phone number in E.164 form: a plus sign, a country code, and at most 15 digits in total'
+  error: PATIENT_INVALID_TELECOM
+- field: telecoms
+  rule: an email address with one @, a local part of at most 64 octets, and at most 254 octets in total
+  error: PATIENT_INVALID_TELECOM
+- field: addresses
+  rule: country is an ISO 3166-1 alpha-2 code; in the US, state is a USPS two-letter code and the postal code is a 5-digit ZIP or ZIP+4
+  error: PATIENT_INVALID_ADDRESS
+- field: addresses
+  rule: unknown parts are blank, not UNKNOWN; a general delivery address uses the words GENERAL DELIVERY (Project US@)
+  error: PATIENT_INVALID_ADDRESS
 - field: languages
-  rule: valid BCP 47 tags, at most one preferred
+  rule: well-formed BCP 47 tags, at most one preferred
   error: PATIENT_INVALID_CODE
-- field: race_ethnicity, gender_identity, pronouns, marital_status, occupation
-  rule: accepted only when listed in collected_fields, with codes from the configured lists
+- field: contacts
+  rule: each contact has a name, phone, address or organisation (FHIR pat-1), and a relationship
+  error: PATIENT_INVALID_CONTACT
+- field: multiple_birth
+  rule: true, false, or a birth order of 1 or more
+  error: PATIENT_INVALID_CODE
+- field: race_ethnicity
+  rule: codes from race_ethnicity_categories; declined cannot be combined with a category
+  error: PATIENT_INVALID_CODE
+- field: race_ethnicity, gender_identity, pronouns, marital_status, occupation, photo
+  rule: accepted only when the deployment collects them (collected_fields, collect_photo)
   error: PATIENT_FIELD_NOT_COLLECTED
+- field: confidentiality
+  rule: normal, restricted or very_restricted
+  error: PATIENT_INVALID_CODE
 - field: deceased_at
-  rule: not before birth_date and not in the future
+  rule: not before birth_date and not in the future; death_source present
   error: PATIENT_INVALID_DEATH_DATE
 - field: representatives
-  rule: kind, scope and period present, period end after start
+  rule: kind, scope and period present; period end after start; kind parent only while the patient is under age_of_majority and not emancipated
   error: PATIENT_INVALID_REPRESENTATIVE
+- field: general_practitioner
+  rule: Organization confirms the practitioner or practice exists
+  error: PATIENT_INVALID_CONTACT
+- field: any change by a patient or representative
+  rule: only telecoms, addresses, languages and contacts (BR-H36)
+  error: PATIENT_SELF_SERVICE_NOT_ALLOWED
 stateMachine:
   initial: active
   states:
@@ -363,8 +497,10 @@ workflows:
   actor: Registrar
   steps:
   - Search with name and birth date, plus any identifier, phone or address the patient gives
-  - If a record matches, use it and update what has changed
-  - Otherwise register a new record, with a reason if the search found a probable match
+  - If a record matches, use it, and ask the patient to confirm their details
+  - Otherwise check identity against a government photo ID where the patient has one, and record the kind of evidence
+  - Register a new record, with a reason if the search found a probable match, after every field passes validation
+  - Take a photograph if collect_photo is on and the patient agrees
   - Emit patient.registered
   - Propose duplicates for review if matching finds any after saving
   outcome: The patient has exactly one record, or a possible duplicate is waiting for review.
@@ -382,6 +518,7 @@ workflows:
   actor: Health information management (HIM) specialist
   steps:
   - Check the revisions and that both records are in use
+  - Ask Admission, discharge and transfer whether either record has an active stay, and mark the merge during_care if so
   - Mark the source merged with replaced_by, and copy its identifiers to the target marked old
   - Record who merged, why and how the records differed
   - Emit patient.merged; each module moves its data to the target
@@ -412,6 +549,32 @@ workflows:
   - 'Deny: give the reason in writing, and record any statement of disagreement'
   - Clear accuracy_contested
   outcome: Every request is answered in time, and a disagreement stays with the record.
+- name: End a representative at majority
+  trigger: A minor patient reaches age_of_majority, or emancipation is recorded
+  actor: System
+  steps:
+  - Find parent and guardian representatives of the patient
+  - End each one's period today
+  - Emit patient.representative_changed for each
+  outcome: The new adult controls their own record.
+- name: Import patients
+  trigger: A legacy system or acquired hospital sends its patient records
+  actor: Health information management (HIM) specialist
+  steps:
+  - Validate every record
+  - Match each against existing records
+  - Create records with no probable match, tagged with the import batch
+  - Hold the rest for duplicate review
+  - 'Report the batch: created, held and rejected'
+  outcome: An import adds no unreviewed duplicates.
+- name: End retention
+  trigger: record_retention ends for a record
+  actor: System
+  steps:
+  - Skip the record if it has a legal hold
+  - Remove identifying fields and keep the id
+  - Emit patient.updated
+  outcome: Data is kept as long as the law requires and no longer.
 edgeCases:
 - id: EC-H1
   situation: Twins born the same day share a family name and birth date, and their mother registers both.
@@ -546,6 +709,87 @@ edgeCases:
   covers:
   - BR-H17
   - AC-H19
+- id: EC-H23
+  situation: A patient's name is a single word, such as a mononym common in parts of Indonesia.
+  behaviour: Accepted as a given name with no family name.
+  covers:
+  - AC-H31
+- id: EC-H24
+  situation: A registrar types "Unknown" as the family name, or 01/01/1900 as the birth date, for a patient who does not know theirs.
+  behaviour: Rejected. The birth date is entered as an estimated year instead, and the name left as what is known.
+  covers:
+  - BR-H32
+  - AC-H32
+- id: EC-H25
+  situation: A phone number is entered as 555-1234, without a country code.
+  behaviour: Rejected with PATIENT_INVALID_TELECOM. Clients add the country code before sending.
+  covers:
+  - AC-H33
+- id: EC-H26
+  situation: A patient in Nebraska turns 18, and their parent is a representative.
+  behaviour: With age_of_majority 19 for Nebraska, the parent keeps authority until the 19th birthday, then it ends.
+  covers:
+  - BR-H25
+  - AC-H34
+- id: EC-H27
+  situation: A 16-year-old is legally emancipated.
+  behaviour: Emancipation is recorded with evidence, and the parent's authority ends at once.
+  covers:
+  - BR-H25
+  - AC-H34
+- id: EC-H28
+  situation: A record's retention ends while a lawsuit about the patient's care is open.
+  behaviour: The record is kept unchanged while the legal hold is on.
+  covers:
+  - BR-H24
+  - AC-H35
+- id: EC-H29
+  situation: Two patients named Maria Garcia are registered.
+  behaviour: Both records carry similar_name_alert, so every screen showing either warns staff.
+  covers:
+  - BR-H30
+  - AC-H36
+- id: EC-H30
+  situation: A duplicate is found for a patient who is on a ward today.
+  behaviour: The merge goes ahead marked during_care; the care team is told and the band is reprinted.
+  covers:
+  - BR-H31
+  - AC-H37
+- id: EC-H31
+  situation: Twins are proposed as duplicates of each other.
+  behaviour: The proposal warns they may be siblings. Once marked not a duplicate, they are not proposed again.
+  covers:
+  - BR-H33
+  - AC-H38
+- id: EC-H32
+  situation: An acquired hospital's 200,000 patients are imported.
+  behaviour: Records with probable matches are held for review in the batch report; none are merged automatically.
+  covers:
+  - BR-H34
+  - AC-H39
+- id: EC-H33
+  situation: A patient changes their address in the portal, then tries to change their birth date.
+  behaviour: The address changes at once. The birth date fails with PATIENT_SELF_SERVICE_NOT_ALLOWED and the patient is offered a correction request.
+  covers:
+  - BR-H36
+  - AC-H40
+- id: EC-H34
+  situation: A patient has no government ID.
+  behaviour: They are registered, with identity_evidence none available.
+  covers:
+  - BR-H27
+  - AC-H41
+- id: EC-H35
+  situation: An inactive patient returns after 12 years.
+  behaviour: Search finds the inactive record; registering their visit reactivates it.
+  covers:
+  - BR-H35
+  - AC-H22
+- id: EC-H36
+  situation: A patient's address is a homeless shelter.
+  behaviour: Recorded as a business address with the homeless flag, and matching does not treat other shelter residents as the same person.
+  covers:
+  - AC-H33
 functionalRequirements:
 - id: FR-H1
   text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
@@ -560,7 +804,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-H4
-  text: The service must keep a list of possible duplicates for review, and let an HIM specialist mark a pair not a duplicate.
+  text: The service must keep a list of possible duplicates graded at or above match_review_grade for review, and let an HIM specialist mark a pair not a duplicate.
   priority: must
   verification: test
 - id: FR-H5
@@ -607,6 +851,30 @@ functionalRequirements:
   text: The service must inactivate records with no care for inactive_after, when that setting is set.
   priority: could
   verification: test
+- id: FR-H16
+  text: The service must anonymise records whose retention has ended and that have no legal hold.
+  priority: must
+  verification: test
+- id: FR-H17
+  text: The service must validate every field as listed in Validations and report every failure in one response.
+  priority: must
+  verification: test
+- id: FR-H18
+  text: The service must end parent and guardian authority at age_of_majority or emancipation.
+  priority: must
+  verification: test
+- id: FR-H19
+  text: The service must import patient records in batches through matching, and report each batch.
+  priority: should
+  verification: test
+- id: FR-H20
+  text: The service must let a patient or representative update their own contact details, and request a copy of their data.
+  priority: must
+  verification: test
+- id: FR-H21
+  text: The service must store a patient photograph and return it with the record, when collect_photo is on.
+  priority: should
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Only roles that need it can read a patient record, and every read is logged (BR-H19).
@@ -638,7 +906,7 @@ settings:
   description: Which legal regime applies. Decides defaults for correction deadlines and access reports. Required.
 - name: record_retention
   type: duration
-  description: How long a record is kept after last_care_at or death. At least 5 years for US hospitals (42 CFR 482.24(b)(1)); set per state or member state law. Required.
+  description: How long a record is kept after last_care_at or death. At least 5 years for US hospitals (42 CFR 482.24(b)(1)); set per state or member state law, such as 10 years in Texas. Required.
 - name: identifier_systems
   type: list of identifier systems
   description: The identifier systems accepted, with their format and which roles see them unmasked, such as the hospital's medical record number or a national health identifier. Required.
@@ -665,6 +933,26 @@ settings:
 - name: inactive_after
   type: duration
   description: Inactivate records with no care for this long. Unset means records are never inactivated automatically.
+- name: minor_retention_until_age
+  type: integer
+  description: For a patient who was a minor at their last care, the age before which the record is never erased, such as 20 in Texas (Health and Safety Code 241.103(b)). Unset means no age rule.
+- name: age_of_majority
+  type: integer
+  description: When a parent's authority ends (BR-H25). 18 in most US states, 19 in Nebraska; set per state or member state. Required.
+- name: max_age
+  type: integer
+  default: '122'
+  description: The oldest age a birth date may imply. The oldest verified human lived 122 years.
+- name: collect_photo
+  type: boolean
+  default: 'false'
+  description: Whether patient photographs are collected (BR-H29).
+- name: access_request_deadline
+  type: duration
+  description: 'Time to answer a request for a copy. Defaults by jurisdiction: 30 days in the US (45 CFR 164.524), one month in the EU (GDPR Article 12(3)).'
+- name: max_import_batch
+  type: integer
+  description: The most records one import accepts. Set by each deployment.
 performanceTargets:
 - id: PERF-H1
   indicator: Duplicate rate
@@ -836,9 +1124,10 @@ acceptanceCriteria:
 - id: AC-H22
   given: an inactive record
   when: Appointments reports a check-in for the patient
-  then: last_care_at is updated and the record becomes active
+  then: last_care_at is updated, the record becomes active and patient.reactivated is emitted
   verifies:
   - FR-H13
+  - BR-H35
 - id: AC-H23
   given: Identity unreachable
   when: any request arrives
@@ -888,6 +1177,101 @@ acceptanceCriteria:
   then: it stays year and month, never padded to a full date
   verifies:
   - CON-H3
+- id: AC-H31
+  given: names "Sukarno" (given only), "O'Brien-Smith", "van der Waals", "José" and "X"
+  when: each is registered
+  then: all are accepted and stored exactly as given; "R2D2" as an official name fails with PATIENT_INVALID_NAME
+  verifies:
+  - BR-H26
+  - FR-H17
+- id: AC-H32
+  given: a family name of UNKNOWN, a birth date 2 years in the future, and a birth date implying an age above max_age
+  when: each is submitted in one registration
+  then: the response lists all three failures at once
+  verifies:
+  - BR-H32
+  - BR-H26
+  - FR-H17
+- id: AC-H33
+  given: a phone 555-1234, an email with a 65-character local part, a US address with state "Calif", and an SSN starting 666
+  when: they are submitted
+  then: they fail with PATIENT_INVALID_TELECOM, PATIENT_INVALID_TELECOM, PATIENT_INVALID_ADDRESS and PATIENT_INVALID_IDENTIFIER, reported together
+  verifies:
+  - FR-H17
+- id: AC-H34
+  given: age_of_majority 19 and a parent representative of a patient turning 19 today, and another minor whose emancipation is recorded
+  when: the day starts, and the emancipation is saved
+  then: both parents' authority ends and patient.representative_changed is emitted for each
+  verifies:
+  - BR-H25
+  - FR-H18
+- id: AC-H35
+  given: a record whose retention ended, one with a legal hold, and one without
+  when: the retention job runs
+  then: the one without a hold is anonymised with its id kept; the held one is unchanged, and erasure requests for it fail with PATIENT_LEGAL_HOLD
+  verifies:
+  - BR-H24
+  - BR-H18
+  - FR-H16
+- id: AC-H36
+  given: a record for Maria Garcia
+  when: another Maria Garcia is registered with a reason
+  then: both records have similar_name_alert set
+  verifies:
+  - BR-H30
+- id: AC-H37
+  given: a source record with an active stay
+  when: it is merged
+  then: the merge succeeds and patient.merged carries during_care true
+  verifies:
+  - BR-H31
+- id: AC-H38
+  given: two records with multiple_birth 1 and 2 and the same birth date
+  when: matching proposes them, and they are marked not a duplicate
+  then: the proposal carries a sibling warning, and they are not proposed again until a compared field changes
+  verifies:
+  - BR-H33
+  - FR-H4
+- id: AC-H39
+  given: an import batch of 3 records, one matching an existing patient as probable and one invalid
+  when: it runs
+  then: one is created with import_batch set, one is held for review, one is rejected, and the batch report says so
+  verifies:
+  - BR-H34
+  - FR-H19
+- id: AC-H40
+  given: a patient signed in to the portal
+  when: they change their phone number, then their birth date
+  then: the phone number changes; the birth date fails with PATIENT_SELF_SERVICE_NOT_ALLOWED
+  verifies:
+  - BR-H36
+  - FR-H20
+- id: AC-H41
+  given: a new patient with a passport, and another with no ID
+  when: each is registered
+  then: identity_evidence is government photo ID for the first and none available for the second; both are registered
+  verifies:
+  - BR-H27
+- id: AC-H42
+  given: a returning patient
+  when: they confirm their details at registration
+  then: demographics_confirmed_at is set to now
+  verifies:
+  - BR-H28
+- id: AC-H43
+  given: collect_photo on, and a patient who agrees
+  when: a photo is taken, and then the record is read
+  then: the photo is returned with the record; with collect_photo off, uploading fails with PATIENT_FIELD_NOT_COLLECTED
+  verifies:
+  - BR-H29
+  - FR-H21
+- id: AC-H44
+  given: a patient asks for a copy of their data with jurisdiction us
+  when: the request is recorded
+  then: its due date is 30 days later and the copy holds every field this module stores about them
+  verifies:
+  - BR-H37
+  - FR-H20
 operations:
 - name: Search patients
   actor: Registrar
@@ -925,6 +1309,9 @@ operations:
   - PATIENT_INVALID_NAME
   - PATIENT_INVALID_BIRTH_DATE
   - PATIENT_INVALID_CODE
+  - PATIENT_INVALID_TELECOM
+  - PATIENT_INVALID_ADDRESS
+  - PATIENT_INVALID_CONTACT
   - PATIENT_INVALID_IDENTIFIER
   - PATIENT_DUPLICATE_IDENTIFIER
   - PATIENT_FIELD_NOT_COLLECTED
@@ -937,14 +1324,14 @@ operations:
   path: /patients/{id}
   success: 200
   input: patient id; a reason for restricted records
-  output: the record, as JSON or as a FHIR Patient resource
+  output: the record, as JSON or as a FHIR Patient resource, with similar_name_alert, deceased and photo where present
   errors:
   - PATIENT_NOT_FOUND
   - PATIENT_REASON_REQUIRED
   - PATIENT_DEPENDENCY_UNAVAILABLE
 - name: Update a patient
   actor: Registrar
-  description: Change demographics, identifiers, contacts, confidential communication or confidentiality. Old values are kept.
+  description: Change demographics, identifiers, contacts, confidential communication or confidentiality. Old values are kept. Patients and representatives can change only their contact details (BR-H36).
   method: PATCH
   path: /patients/{id}
   success: 200
@@ -958,9 +1345,13 @@ operations:
   - PATIENT_INVALID_NAME
   - PATIENT_INVALID_BIRTH_DATE
   - PATIENT_INVALID_CODE
+  - PATIENT_INVALID_TELECOM
+  - PATIENT_INVALID_ADDRESS
+  - PATIENT_INVALID_CONTACT
   - PATIENT_INVALID_IDENTIFIER
   - PATIENT_DUPLICATE_IDENTIFIER
   - PATIENT_FIELD_NOT_COLLECTED
+  - PATIENT_SELF_SERVICE_NOT_ALLOWED
   - PATIENT_DEPENDENCY_UNAVAILABLE
 - name: List possible duplicates
   actor: Health information management (HIM) specialist
@@ -991,7 +1382,7 @@ operations:
   path: /patients/merge
   success: 200
   input: source id and revision, target id and revision, reason, optional preview
-  output: the target record, with the differences found; a preview saves nothing
+  output: the target record, with the differences found and whether the merge was during care; a preview saves nothing
   errors:
   - PATIENT_NOT_FOUND
   - PATIENT_MERGE_SAME_RECORD
@@ -1180,6 +1571,7 @@ operations:
   errors:
   - PATIENT_NOT_FOUND
   - PATIENT_RETENTION_REQUIRED
+  - PATIENT_LEGAL_HOLD
   - PATIENT_NOT_AUTHORISED_FOR_PATIENT
   - PATIENT_DEPENDENCY_UNAVAILABLE
 - name: Read the access log
@@ -1193,6 +1585,68 @@ operations:
   errors:
   - PATIENT_NOT_FOUND
   - PATIENT_NOT_AUTHORISED_FOR_PATIENT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Confirm details
+  actor: Registrar
+  description: Record that a returning patient confirmed their details.
+  method: POST
+  path: /patients/{id}/details-confirmed
+  success: 200
+  input: patient id, revision
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Set a photo
+  actor: Registrar
+  description: Store or replace the patient's photograph.
+  method: PUT
+  path: /patients/{id}/photo
+  success: 200
+  input: patient id, revision, image
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGED
+  - PATIENT_FIELD_NOT_COLLECTED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Place or release a legal hold
+  actor: Privacy officer
+  description: Stop or allow erasure of a record because of a legal matter.
+  method: POST
+  path: /patients/{id}/legal-hold
+  success: 200
+  input: patient id, revision, on or off, reason
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Request a copy
+  actor: Patient
+  description: Ask for a copy of the data this module holds about the patient.
+  method: POST
+  path: /patients/{id}/copy-requests
+  success: 201
+  input: patient id, format
+  output: the request with its due date
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_AUTHORISED_FOR_PATIENT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Import patients
+  actor: Health information management (HIM) specialist
+  description: Import a batch of patient records through validation and matching.
+  method: POST
+  path: /patient-imports
+  success: 202
+  input: records and the source system
+  output: the batch id; the report when it finishes
+  errors:
+  - PATIENT_IMPORT_TOO_LARGE
   - PATIENT_DEPENDENCY_UNAVAILABLE
 apiConventions:
 - topic: Authentication
@@ -1237,6 +1691,7 @@ events:
   payload:
   - source_patient_id
   - target_patient_id
+  - during_care
   - revision
 - name: patient.unmerged
   description: A merge was undone. Review data recorded on the target since the merge.
@@ -1284,6 +1739,12 @@ events:
   - accessed_by
   - reason
   - accessed_at
+- name: patient.legal_hold_changed
+  description: A legal hold started or ended. Other modules keep or release their own data for the patient.
+  payload:
+  - patient_id
+  - legal_hold
+  - revision
 deliveryGuarantees:
 - id: DG-H1
   text: Events are published at least once. Consumers treat an event with a source and id they have already seen as a duplicate.
@@ -1308,6 +1769,10 @@ permissions:
   description: See national identifiers and social security numbers in full (BR-H23).
 - name: patient.audit
   description: Read the access log of any record.
+- name: patient.legal_hold
+  description: Place and release legal holds.
+- name: patient.import
+  description: Import patient records in bulk.
 accessMatrix:
 - action: Search and read a patient
   roles:
@@ -1316,6 +1781,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Patient: own
     Privacy officer: any
+    System: none
   permission: patient.read
   note: A restricted record needs a reason (BR-H20). A personal representative reads within their scope (BR-H14).
 - action: Register or update a patient
@@ -1323,10 +1789,11 @@ accessMatrix:
     Registrar: any
     Clinician: none
     Health information management (HIM) specialist: any
-    Patient: none
+    Patient: own
     Privacy officer: none
+    System: none
   permission: patient.register
-  note: Patients ask for changes through a correction request.
+  note: Patients and representatives change only their own contact details (BR-H36); other changes go through a correction request.
 - action: Record a death
   roles:
     Registrar: any
@@ -1334,6 +1801,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Patient: none
     Privacy officer: none
+    System: none
   permission: patient.register
 - action: Add or change a representative
   roles:
@@ -1342,6 +1810,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Patient: none
     Privacy officer: none
+    System: none
   permission: patient.register
 - action: Review duplicates, merge and unmerge
   roles:
@@ -1350,6 +1819,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Patient: none
     Privacy officer: none
+    System: none
   permission: patient.merge
 - action: Mark entered in error, or retract a death
   roles:
@@ -1358,6 +1828,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Patient: none
     Privacy officer: none
+    System: none
   permission: patient.merge
 - action: Request a correction or erasure
   roles:
@@ -1366,6 +1837,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Patient: own
     Privacy officer: none
+    System: none
   permission: patient.read
   note: A personal representative can request for the patient they represent.
 - action: Decide a correction
@@ -1375,6 +1847,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Patient: none
     Privacy officer: none
+    System: none
   permission: patient.merge
 - action: Read the access log
   roles:
@@ -1383,6 +1856,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Patient: own
     Privacy officer: any
+    System: none
   permission: patient.audit
   note: Patients get their own access report where the jurisdiction gives that right (FR-H11).
 - action: See identifiers unmasked
@@ -1392,8 +1866,84 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Patient: own
     Privacy officer: none
+    System: none
   permission: patient.identifiers_unmasked
   note: Deployments grant it to other roles that need it, such as billing.
+- action: Match patient details
+  roles:
+    Registrar: any
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+    System: any
+  permission: patient.read
+- action: Check authority to act, or get contact details
+  roles:
+    Registrar: any
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+    System: any
+  permission: patient.read
+- action: Report care
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: none
+    Patient: none
+    Privacy officer: none
+    System: any
+  permission: patient.read
+  note: Only modules that record care.
+- action: Inactivate or reactivate a patient
+  roles:
+    Registrar: own
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+    System: any
+  permission: patient.merge
+  note: Registrars reactivate only, when a patient returns (BR-H35).
+- action: Confirm details, or set a photo
+  roles:
+    Registrar: any
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+    System: none
+  permission: patient.register
+- action: Request a copy
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: none
+    Patient: own
+    Privacy officer: none
+    System: none
+  permission: patient.read
+  note: A personal representative can request for the patient they represent.
+- action: Place or release a legal hold
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: any
+    System: none
+  permission: patient.legal_hold
+- action: Import patients
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+    System: none
+  permission: patient.import
 personalData:
 - field: names, birth_date, administrative_gender
   category: personal
@@ -1431,6 +1981,38 @@ personalData:
   category: personal
   purpose: Showing who accessed the record
   retention: access_log_retention
+- field: languages, interpreter_needed
+  category: personal; can suggest ethnic origin
+  purpose: Communicating with the patient
+  retention: record_retention
+- field: marital_status, occupation, multiple_birth
+  category: personal
+  purpose: Identification and the patient's context, where collected
+  retention: record_retention
+- field: general_practitioner
+  category: personal; reveals a care relationship
+  purpose: Sharing care with the patient's own doctor
+  retention: record_retention
+- field: last_care_at
+  category: health data; reveals when care happened
+  purpose: Counting retention, and inactivating records
+  retention: record_retention
+- field: accuracy_contested
+  category: personal
+  purpose: Showing a dispute about the patient's data
+  retention: Until the correction request is decided
+- field: photo
+  category: personal; biometric only if processed to identify by technical means (GDPR Recital 51)
+  purpose: Identifying the patient before care
+  retention: record_retention
+- field: identity_evidence, emancipated
+  category: personal
+  purpose: Showing how identity and legal status were checked
+  retention: record_retention
+- field: external_links
+  category: personal; reveals other care providers
+  purpose: Finding the patient's records elsewhere
+  retention: record_retention
 errors:
 - code: PATIENT_NOT_FOUND
   http: 404
@@ -1446,10 +2028,10 @@ errors:
   message: A probable match exists. Use that record, or register with a reason.
 - code: PATIENT_INVALID_NAME
   http: 422
-  message: Give at least one usual, official or temporary name.
+  message: Give at least one usual, official or temporary name, using letters, spaces, hyphens, apostrophes or periods.
 - code: PATIENT_INVALID_BIRTH_DATE
   http: 422
-  message: The birth date must be a full or partial date, not in the future.
+  message: The birth date must be a full or partial date, not in the future, and not older than max_age.
 - code: PATIENT_INVALID_CODE
   http: 422
   message: A code isn't in the allowed list for its field.
@@ -1525,6 +2107,24 @@ errors:
 - code: PATIENT_DEPENDENCY_UNAVAILABLE
   http: 503
   message: A service this request needs is unavailable. Retry later.
+- code: PATIENT_INVALID_TELECOM
+  http: 422
+  message: Phone numbers need E.164 form with a country code; email addresses must be valid and at most 254 characters.
+- code: PATIENT_INVALID_ADDRESS
+  http: 422
+  message: The address has an invalid country, state or postal code, or a placeholder instead of a blank.
+- code: PATIENT_INVALID_CONTACT
+  http: 422
+  message: A contact needs a relationship and a name, phone, address or organisation.
+- code: PATIENT_SELF_SERVICE_NOT_ALLOWED
+  http: 403
+  message: Patients can change only their contact details here. Ask for a correction to change this.
+- code: PATIENT_LEGAL_HOLD
+  http: 409
+  message: This record is under a legal hold and must be kept.
+- code: PATIENT_IMPORT_TOO_LARGE
+  http: 413
+  message: The import batch is larger than max_import_batch. Split it.
 dependencies:
 - service: identity-service
   direction: upstream
@@ -1532,7 +2132,8 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: who is the caller, and do they hold this permission?'
-  - Logins, accounts and the link from a portal account to a patient id are Identity's concern
+  - 'Gives: the patient id to link to a portal account, once Identity has proofed the person'
+  - Logins, accounts and identity proofing for the portal are Identity's concern
 - service: organization-service
   direction: upstream
   reason: owns practitioners and practices named as the general practitioner
@@ -1546,6 +2147,7 @@ dependencies:
   contract:
   - 'Gives: whether a patient exists and is in use, following replaced_by'
   - 'Gives: the identifiers to verify at check-in, and where to contact the patient'
+  - 'Gives: the patient''s preferred language and whether they need an interpreter'
   - 'Gives: whether a person may act for the patient for an appointment'
   - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted and patient.entered_in_error'
   - 'Receives: care reported at check-in'
@@ -1557,6 +2159,54 @@ dependencies:
   - 'Gives: patient.merged, patient.unmerged and patient.deceased'
   - 'Receives: care reported when an encounter starts'
   - Moving clinical data between records after a merge is Encounter's concern
+- service: adt-service
+  direction: upstream
+  reason: knows who is in hospital now
+  criticality: soft
+  contract:
+  - 'Asks: does this patient have an active stay?'
+  - 'Gives: patient.merged (with during_care), patient.unmerged and patient.deceased'
+  - 'Receives: care reported at admission'
+- service: consent-service
+  direction: downstream
+  reason: holds consents, opt-outs and privacy notice acknowledgments
+  criticality: soft
+  contract:
+  - 'Gives: patient.registered, so the Notice of Privacy Practices acknowledgment can be sought at first service (45 CFR 164.520(c)(2)(ii))'
+  - 'Gives: patient.merged, patient.unmerged, patient.deceased and patient.representative_changed'
+  - 'Asks: has the patient opted out of a contact channel? (used when answering where to contact them)'
+  - Restriction requests and EU opt-outs are Consent's concern
+- service: coverage-service
+  direction: downstream
+  reason: holds insurance for the patient
+  criticality: soft
+  contract:
+  - 'Gives: patient.merged, patient.unmerged, patient.deceased and patient.entered_in_error'
+  - Registration never waits for Coverage
+- service: release-of-information-service
+  direction: downstream
+  reason: answers requests for the whole medical record
+  criticality: soft
+  contract:
+  - 'Gives: this module''s part of a copy request'
+  - Accounting of disclosures (45 CFR 164.528) is its concern
+- service: exchange-service
+  direction: downstream
+  reason: exchanges records with other organisations and national services
+  criticality: soft
+  contract:
+  - 'Gives: identifiers and patient.* events for outside patient indexes'
+  - 'Receives: links to this patient''s records elsewhere (external_links)'
+  - 'Receives: deaths reported from outside, recorded with their source'
+  - Cross-border identification under EHDS Article 16 is Exchange's concern
+- service: clinical-modules
+  direction: downstream
+  reason: orders and results, medications, documentation and every module holding clinical data
+  criticality: soft
+  contract:
+  - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error and patient.legal_hold_changed'
+  - 'Gives: the patient banner details: names, birth date, identifiers, photo, deceased and similar_name_alert'
+  - Moving entries recorded on the wrong patient is each module's concern
 risks:
 - id: RISK-H1
   risk: Duplicate records split one person's history.
@@ -1582,6 +2232,18 @@ risks:
   risk: Demographics leak through events and logs.
   impact: Personal data spreads beyond the systems that need it.
   mitigation: Events carry ids only (DG-H3), and personal data is kept out of URLs.
+- id: RISK-H7
+  risk: A parent keeps access after the patient becomes an adult.
+  impact: An adult's health information reaches someone without the right to it.
+  mitigation: Authority ends at age_of_majority or emancipation (BR-H25).
+- id: RISK-H8
+  risk: A legacy import floods the record with duplicates.
+  impact: Split histories for thousands of patients at once.
+  mitigation: Imports go through matching and review (BR-H34).
+- id: RISK-H9
+  risk: Someone receives care under another person's identity.
+  impact: False data in the real patient's record, and bills in their name.
+  mitigation: Photo ID at first registration (BR-H27), confirmation on return (BR-H28) and photos (BR-H29).
 decisions:
 - id: ADR-H1
   decision: Patients start at the healthcare level, with no core page.
@@ -1609,6 +2271,14 @@ decisions:
 - id: ADR-H6
   decision: The matching algorithm is not specified.
   rationale: 'Deterministic, probabilistic and referential matching all exist, and they change with the data. The requirement is the behaviour: grades, review and measurement (FR-H3, PERF-H1).'
+  date: '2026-10-06'
+- id: ADR-H7
+  decision: 'Names are validated loosely: any letters, marks, spaces, hyphens, apostrophes and periods, with case kept as given.'
+  rationale: The W3C warns that strict name rules reject real names, such as single names and names with particles. A rejected real name forces a registrar to invent one, which breaks matching.
+  date: '2026-10-06'
+- id: ADR-H8
+  decision: Photographs and identity checks are deployment settings, on the recommended side, never conditions for care.
+  rationale: The SAFER Guide recommends both, but a patient without ID or who declines a photo must still be treated.
   date: '2026-10-06'
 openQuestions: []
 references:
@@ -1664,13 +2334,58 @@ references:
 - id: REF-H16
   title: Project US@ technical specification for patient addresses (ONC)
   url: https://oncprojectracking.healthit.gov/wiki/download/attachments/180486153/Project%20US@%20FINAL%20Technical%20Specification%20Version%201.0.pdf
+  note: Uppercase, punctuation, unknown parts left blank and not matched, general delivery, and homeless and multi-unit flags.
 - id: REF-H17
   title: CloudEvents specification
   url: https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md
 - id: REF-H18
   title: RFC 9457, problem details for HTTP APIs
   url: https://www.rfc-editor.org/rfc/rfc9457
+- id: REF-H19
+  title: 'ONC SAFER Guide: Patient Identification (2025)'
+  url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
+  note: Photo ID, photographs, similar-name warnings, multiple births, temporary ids and duplicate monitoring.
+- id: REF-H20
+  title: Association of Display of Patient Photographs in the EHR With Wrong-Patient Order Entry Errors (JAMA Network Open, 2020)
+  url: https://doi.org/10.1001/jamanetworkopen.2020.19652
+- id: REF-H21
+  title: W3C, Personal names around the world
+  url: https://www.w3.org/International/questions/qa-personal-names
+- id: REF-H22
+  title: ITU-T E.164, the international public telecommunication numbering plan
+  url: https://www.itu.int/rec/T-REC-E.164/en
+- id: REF-H23
+  title: RFC 5321, SMTP (address length limits), and RFC 3696 erratum 1690 (254 characters)
+  url: https://www.rfc-editor.org/errata/eid1690
+- id: REF-H24
+  title: RFC 5646, tags for identifying languages (BCP 47)
+  url: https://www.rfc-editor.org/rfc/rfc5646
+- id: REF-H25
+  title: Social Security Administration, SSN randomization
+  url: https://www.ssa.gov/employer/randomization.html
+  note: Area numbers 000, 666 and 900 to 999 are never assigned.
+- id: REF-H26
+  title: Texas Health and Safety Code 241.103, preservation of hospital records
+  url: https://statutes.capitol.texas.gov/Docs/HS/htm/HS.241.htm
+- id: REF-H27
+  title: Nebraska Revised Statutes 43-2101, age of majority
+  url: https://nebraskalegislature.gov/laws/statutes.php?statute=43-2101
+- id: REF-H28
+  title: 45 CFR 164.524, access of individuals to protected health information
+  url: https://www.ecfr.gov/current/title-45/section-164.524
+- id: REF-H29
+  title: 45 CFR 164.520, notice of privacy practices
+  url: https://www.ecfr.gov/current/title-45/section-164.520
 changelog:
+- version: 0.2.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - 'Added a full validation layer: names (W3C), birth dates, identifiers, phone numbers (E.164), email (RFC 5321), addresses (Project US@), languages (BCP 47), contacts and representatives, with every failure reported at once (BR-H26).'
+  - Added identity evidence (BR-H27), confirming details (BR-H28), photographs (BR-H29), similar-name alerts (BR-H30), merges during care (BR-H31), no placeholders (BR-H32), twins in matching (BR-H33), imports (BR-H34) and inactive records (BR-H35), from the ONC SAFER Guide.
+  - Representatives of minors end at the age of majority or emancipation (BR-H25). Patients update their own contact details (BR-H36) and can get a copy of their data (BR-H37).
+  - Legal holds stop erasure (BR-H24), and retention can run to a minimum age for minors.
+  - Contracts with ADT, Consent, Coverage, Release of information, Exchange and the clinical modules, and Appointments now asks here for the patient's language.
 - version: 0.1.0
   date: '2026-10-06'
   breaking: false
@@ -1890,3 +2605,12 @@ when (BR-H14). Where the law lets a patient act alone, such as a minor
 consenting to their own care, staff exclude that care from the parent's
 authority (BR-H15). Every module asks this one, so the answer is the same
 everywhere.
+
+## Validation is strict about format, loose about names
+
+Phone numbers, emails, postal codes and identifiers follow their standards
+exactly, because a wrong one fails silently later. Names don't: single names,
+particles such as "van der", and unusual capitals are all real, and a rejected
+real name forces a registrar to invent one (ADR-H7). Unknown values stay
+blank rather than filled with placeholders, so they never make two patients
+look alike (BR-H32).

@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.3.0
+version: 0.3.1
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -86,7 +86,7 @@ dataModel:
 - name: interpreter_language
   type: BCP 47 tag
   required: false
-  description: The language the patient needs an interpreter for.
+  description: The language the patient needs an interpreter for at this appointment. Defaults to the language and interpreter need the Patients module holds; set here only when this visit differs.
 - name: acting_representative
   type: string
   required: false
@@ -103,7 +103,7 @@ dataModel:
 - name: accommodation_needs
   type: string[]
   required: false
-  description: Disability accommodations the patient needs, such as a sign-language interpreter or an accessible room.
+  description: Disability accommodations the patient needs, such as a sign-language interpreter or an accessible room. Recorded per appointment, because needs differ by visit and place.
 - name: patient_location
   type: string
   required: false
@@ -946,6 +946,11 @@ references:
   url: https://medicaid.ncdhhs.gov/providers-billing-beneficiaries/open
   note: 'For the Billing module: quotes the CMS policy that Medicaid beneficiaries may not be billed for missed appointments.'
 changelog:
+- version: 0.3.1
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - interpreter_language now defaults to the language and interpreter need held by the Patients module, so the fact has one source.
 - version: 0.3.0
   date: '2026-10-06'
   breaking: false
@@ -985,6 +990,7 @@ dependencies:
   - 'Asks: does this patient exist and is the record in use? A merged record answers with the record that replaced it'
   - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
   - 'Asks: where to contact the patient, honouring confidential communications'
+  - 'Asks: the patient''s preferred language and whether they need an interpreter'
   - 'Asks: may this person act for this patient on this appointment? (Covers minors, guardians, proxies and confidential care.)'
   - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.death_retracted'
   - 'Gives: care reported at check-in'

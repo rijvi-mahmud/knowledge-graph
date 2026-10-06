@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -15,6 +15,8 @@ scope:
 - The data printed on identification bands
 - Quick registration with minimal data, completed later
 - Registering a patient under a privacy alias
+- Registering patients while the registration system is down, and reconciling them after
+- Stillborn babies, where the hospital records them as patients
 nonGoals:
 - Emergency department arrival, triage and treatment. They belong to the Emergency department module, which registers patients through this one.
 - Admissions and bed assignment. They belong to the Admission, discharge and transfer module.
@@ -58,6 +60,10 @@ dataModel:
   type: instant
   required: false
   description: For a newborn, the time of birth. Tells apart babies with the same birth date.
+- name: downtime_id
+  type: string
+  required: false
+  description: The temporary id used while registration was down, kept until the record is reconciled (BR-E8).
 businessRules:
 - id: BR-H1
   text: Before a new patient is registered, existing records are searched with at least the name and birth date. If the search finds a probable match, the registrar either picks that record or registers a new one with a reason. Unidentified patients and babies born in the hospital are registered without a search.
@@ -66,11 +72,11 @@ businessRules:
   text: A record has at least one usual or official name, a birth date and an administrative gender. The birth date can be partial or estimated, and the gender can be unknown, when that is all anyone knows. An unidentified patient has a temp alias as their only name and an estimated birth year.
   rationale: Name and birth date are what every search and identity check rely on. An unidentified patient still needs both to be told apart, so the alias and an estimate stand in for them.
 - id: BR-E1
-  text: Every patient gets an MRN from mrn_system at registration. An MRN is never reused, including after a merge, where it stays on the target marked old.
-  rationale: The Joint Commission lists an assigned identification number, such as the MRN, as a patient identifier (NPG.01.01.01). Reusing one would make old documents and labels point at the wrong person.
+  text: Every patient gets an MRN from mrn_system at registration, including its check digit. An MRN is never reused, including after a merge, where it stays on the target marked old.
+  rationale: The Joint Commission lists an assigned identification number, such as the MRN, as a patient identifier (NPG.01.01.01), and the ONC SAFER Guide recommends a check digit to catch typing errors. Reusing an MRN would make old documents and labels point at the wrong person.
 - id: BR-E2
-  text: An unidentified patient is registered with an alias from alias_scheme and marked unidentified. An alias is never given to two records.
-  rationale: Placeholder names such as John Doe cause duplicates and mix-ups. A UK trauma centre found a phonetic alias system reduced duplication, but staff confused similar-sounding aliases, so aliases must be unique.
+  text: An unidentified patient is registered with an alias from alias_scheme and marked unidentified. An alias is never given to two records, is recognisable as temporary, and differs in look and sound from every other alias in use, including when shortened on screens and labels.
+  rationale: Placeholder names such as John Doe cause duplicates and mix-ups. The SAFER Guide asks for temporary ids that are recognisable as temporary, distinguishable by look and sound in full and shortened forms, and not dehumanising. A UK trauma centre found staff confused similar-sounding aliases.
 - id: BR-E3
   text: When an unidentified patient is identified, the hospital searches for an existing record. If one is found, the alias record is merged into it. If not, the real details are added, the alias is kept as an old name, and unidentified is cleared. Either way patient.identified is emitted.
   rationale: Care given under the alias must stay with the person. The same study found record merging after identification was done inconsistently, so it is one defined step.
@@ -86,6 +92,21 @@ businessRules:
 - id: BR-E7
   text: A patient can be registered under a privacy alias, recorded as a name with use anonymous, with confidentiality restricted or very restricted. Lists, boards and bands show the alias; the official name is shown only when the record is opened with a reason.
   rationale: FHIR defines the anonymous name use to protect a person's identity for privacy reasons. Public figures and people at risk of harm are found through ward boards and lists, not only through records.
+- id: BR-E8
+  text: While the registration system is unavailable, patients get ids from a pre-allocated downtime_id_pool. When it is back, each downtime registration is entered, searched for, and merged into an existing record or kept as a new one; until then it is listed for follow-up.
+  rationale: The SAFER Guide asks for unique temporary ids when registration is unavailable or overwhelmed, later merged into permanent ones, with their resolution monitored.
+- id: BR-E9
+  text: Matching never treats an alias or a newborn name as evidence that two records are the same person; it compares the other details.
+  rationale: Aliases and newborn names follow a pattern, so two unrelated records can look alike by name alone.
+- id: BR-E10
+  text: A patient who dies before being identified keeps the alias record, with the death recorded on it. They can still be identified later, which merges or renames the record as usual.
+  rationale: Identification after death matters to the family and the medical examiner, and the care given must stay with the person.
+- id: BR-E11
+  text: Whether a stillborn baby is registered as a patient is set by register_stillbirths. When registered, the baby gets a newborn name and mother link, with the death recorded at birth.
+  rationale: 'Practice varies, and fetal death reporting differs by state: most report from 20 weeks of gestation or 350 grams, a few at any gestation (CDC). A deployment chooses, so the record and any care given to the mother stay consistent.'
+- id: BR-E12
+  text: When a temporary name or id is replaced, by identification, naming, reconciliation or merge, every system using it is told, and bands and labels are reprinted.
+  rationale: The SAFER Guide asks that any downstream use of a temporary id, including at transfer facilities, is tracked and corrected in every system.
 validations:
 - field: mother_patient_id
   rule: an existing patient in use
@@ -93,6 +114,15 @@ validations:
 - field: born_at
   rule: not in the future
   error: PATIENT_INVALID_BIRTH_DATE
+- field: identifiers
+  rule: an MRN matches mrn_system's format and check digit
+  error: PATIENT_INVALID_IDENTIFIER
+- field: names
+  rule: an alias follows alias_scheme and has never been used
+  error: PATIENT_INVALID_NAME
+- field: downtime_id
+  rule: from downtime_id_pool and not already entered
+  error: PATIENT_INVALID_DOWNTIME_ID
 workflows:
 - name: Register an unidentified patient
   trigger: A patient arrives who cannot say who they are and has no identification
@@ -129,6 +159,15 @@ workflows:
   - If one exists, merge the quick record into it
   - Otherwise add the missing details and set registration_status complete
   outcome: No quick registration is left as a duplicate.
+- name: Reconcile downtime registrations
+  trigger: Registration comes back after an outage
+  actor: Registrar
+  steps:
+  - Enter each downtime registration with its downtime id
+  - Search for an existing record
+  - Merge into it if found, otherwise keep the new record
+  - Tell every system that used the downtime id, and reprint bands
+  outcome: No downtime id is left unresolved.
 edgeCases:
 - id: EC-E1
   situation: Two unconscious trauma patients arrive within minutes.
@@ -191,6 +230,43 @@ edgeCases:
   covers:
   - BR-E1
   - AC-E1
+- id: EC-E11
+  situation: Registration is down for two hours during a busy evening.
+  behaviour: Patients get downtime ids from the pool, and each is reconciled when the system returns.
+  covers:
+  - BR-E8
+  - AC-E9
+- id: EC-E12
+  situation: An MRN is mistyped by one digit.
+  behaviour: The check digit fails, so the lookup is rejected rather than opening another patient.
+  covers:
+  - BR-E1
+  - AC-E10
+- id: EC-E13
+  situation: An unidentified patient dies, and is identified by a relative two days later.
+  behaviour: The death stays on the record, and identification merges or renames it as usual.
+  covers:
+  - BR-E10
+  - AC-E11
+- id: EC-E14
+  situation: A baby is stillborn at 30 weeks.
+  behaviour: If register_stillbirths is on, the baby is registered with a newborn name, mother link and death at birth; otherwise only the mother's record holds the event.
+  covers:
+  - BR-E11
+  - AC-E12
+- id: EC-E15
+  situation: An unidentified mother gives birth.
+  behaviour: The newborn name is built from the mother's alias, and is renamed when the mother is identified.
+  covers:
+  - BR-E4
+  - BR-E12
+  - AC-E4
+- id: EC-E16
+  situation: Two alias records with similar details exist.
+  behaviour: Matching ignores the aliases and compares other details, so the pattern alone never proposes them as duplicates.
+  covers:
+  - BR-E9
+  - AC-E13
 functionalRequirements:
 - id: FR-E1
   text: The service must assign an MRN to every new patient, unique in mrn_system and never reused.
@@ -216,19 +292,33 @@ functionalRequirements:
   text: The service must show a privacy alias in place of the official name everywhere except an opened record.
   priority: must
   verification: test
+- id: FR-E7
+  text: The service must issue downtime ids from a pre-allocated pool and reconcile them when registration is back.
+  priority: must
+  verification: demonstration
+- id: FR-E8
+  text: The service must tell every system using a temporary name or id when it is replaced.
+  priority: must
+  verification: test
 settings:
 - name: mrn_system
   type: identifier system
-  description: The system MRNs are assigned in, and their format. Required.
+  description: The system MRNs are assigned in, their format and check digit scheme. Required.
 - name: mrn_scope
   type: enterprise | facility
   description: Whether one MRN covers every hospital in the organisation or each hospital assigns its own. Practice varies, so each organisation chooses. Required.
 - name: alias_scheme
   type: pattern
-  description: How aliases for unidentified patients are made, such as a phonetic alphabet word and a number. Must not produce real-looking names. Required.
+  description: How aliases for unidentified patients are made, such as a phonetic alphabet word and a number. Aliases must be recognisable as temporary, distinct by look and sound even when shortened, and not offensive. Required.
 - name: newborn_naming
   type: pattern
   description: How newborn names are built, such as the mother's family and given name, the baby's administrative gender, and a letter for multiples. Required.
+- name: downtime_id_pool
+  type: id range
+  description: Temporary ids set aside for registration outages, distributed to departments in advance. Required.
+- name: register_stillbirths
+  type: boolean
+  description: Whether stillborn babies are registered as patients (BR-E11). Practice varies, so there is no default. Required where the hospital delivers babies.
 acceptanceCriteria:
 - id: AC-E1
   given: MRN 100234 moved to a target as old after a merge
@@ -287,6 +377,50 @@ acceptanceCriteria:
   then: it fails with PATIENT_INVALID_MOTHER
   verifies:
   - BR-E4
+- id: AC-E9
+  given: a downtime registration with downtime id D-0042
+  when: it is entered after the outage and the patient already has a record
+  then: it is merged into that record; entering D-0042 again fails with PATIENT_INVALID_DOWNTIME_ID
+  verifies:
+  - BR-E8
+  - FR-E7
+- id: AC-E10
+  given: an MRN with a wrong check digit
+  when: it is entered on a record
+  then: it fails with PATIENT_INVALID_IDENTIFIER
+  verifies:
+  - BR-E1
+- id: AC-E11
+  given: an unidentified patient with a recorded death
+  when: they are identified
+  then: identification succeeds, the death stays recorded, and patient.identified is emitted
+  verifies:
+  - BR-E10
+- id: AC-E12
+  given: register_stillbirths on
+  when: a stillborn baby is registered
+  then: the record has a newborn name, mother_patient_id and deceased_at equal to born_at
+  verifies:
+  - BR-E11
+- id: AC-E13
+  given: two alias records with different estimated ages and genders
+  when: matching runs
+  then: they are not proposed as duplicates
+  verifies:
+  - BR-E9
+- id: AC-E14
+  given: an unidentified patient with a printed band
+  when: they are identified
+  then: patient.identified is emitted and Printing receives the new band data
+  verifies:
+  - BR-E12
+  - FR-E8
+- id: AC-E15
+  given: an alias in use
+  when: a registration tries to use the same alias, or one not in alias_scheme
+  then: it fails with PATIENT_INVALID_NAME
+  verifies:
+  - BR-E2
 operations:
 - name: Search patients
   actor: Registrar
@@ -335,7 +469,7 @@ operations:
   method: POST
   path: /patients/newborns
   success: 201
-  input: mother patient id, born_at, administrative gender, birth order for multiples
+  input: mother patient id, born_at, administrative gender, birth order for multiples, and whether stillborn where register_stillbirths is on
   output: the record with its newborn name and MRN
   errors:
   - PATIENT_INVALID_MOTHER
@@ -354,6 +488,21 @@ operations:
   errors:
   - PATIENT_NOT_FOUND
   - PATIENT_MERGED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Enter a downtime registration
+  actor: Registrar
+  description: Enter a patient registered on paper during an outage, with its downtime id.
+  method: POST
+  path: /patients/downtime
+  success: 201
+  input: downtime id, and the details recorded during the outage
+  output: the record, with any probable match for reconciliation
+  errors:
+  - PATIENT_INVALID_DOWNTIME_ID
+  - PATIENT_INVALID_NAME
+  - PATIENT_INVALID_BIRTH_DATE
+  - PATIENT_INVALID_CODE
+  - PATIENT_IDEMPOTENCY_KEY_REUSED
   - PATIENT_DEPENDENCY_UNAVAILABLE
 events:
 - name: patient.identified
@@ -386,6 +535,12 @@ accessMatrix:
     Emergency department staff: any
     Maternity staff: any
   permission: patient.read
+- action: Enter a downtime registration
+  roles:
+    Registrar: any
+    Emergency department staff: any
+    Maternity staff: none
+  permission: patient.register
 errors:
 - code: PATIENT_NOT_UNIDENTIFIED
   http: 409
@@ -393,6 +548,9 @@ errors:
 - code: PATIENT_INVALID_MOTHER
   http: 422
   message: The mother must be an existing patient record in use.
+- code: PATIENT_INVALID_DOWNTIME_ID
+  http: 422
+  message: That downtime id isn't from the pool, or was already entered.
 personalData:
 - field: mother_patient_id
   category: personal, about the mother too
@@ -420,6 +578,10 @@ decisions:
   decision: Unidentified, newborn and quick registrations skip the search but always end in a search, at identification, naming or completion.
   rationale: Care can't wait for a search with nothing to search on, but the duplicate check still happens once there is.
   date: '2026-10-06'
+- id: ADR-E3
+  decision: Registering stillborn babies as patients is a setting with no default.
+  rationale: Hospitals and states handle it differently, and neither choice is wrong.
+  date: '2026-10-06'
 references:
 - id: REF-E1
   title: The Joint Commission, National Performance Goals effective January 2026 for the Hospital Program (NPG.01.01.01)
@@ -435,7 +597,20 @@ references:
 - id: REF-E4
   title: HL7 FHIR R5, Patient (mother and newborn relationships)
   url: https://hl7.org/fhir/R5/patient.html
+- id: REF-E5
+  title: 'ONC SAFER Guide: Patient Identification (2025)'
+  url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
+  note: MRN check digits, temporary and downtime ids, newborn naming and pseudonyms.
+- id: REF-E6
+  title: CDC National Vital Statistics System, fetal deaths
+  url: https://www.cdc.gov/nchs/nvss/fetal_death.htm
 changelog:
+- version: 0.2.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - Downtime ids and reconciliation (BR-E8), MRN check digits (BR-E1), stricter alias rules (BR-E2), aliases ignored by matching (BR-E9), deaths before identification (BR-E10), stillbirths (BR-E11) and replacing temporary ids everywhere (BR-E12), from the ONC SAFER Guide.
+  - Contracts with the Emergency department and Printing modules.
 - version: 0.1.0
   date: '2026-10-06'
   breaking: false
@@ -446,6 +621,23 @@ acronyms:
   definition: Emergency Medical Treatment and Labor Act
 - term: NPG
   definition: National Performance Goal, The Joint Commission
+dependencies:
+- service: emergency-department-service
+  direction: downstream
+  reason: registers emergency patients
+  criticality: soft
+  contract:
+  - 'Receives: unidentified and quick registrations through this module''s operations'
+  - 'Gives: patient.identified and patient.merged, so the department board shows the real name'
+  - Triage and treatment are the Emergency department's concern
+- service: printing-service
+  direction: downstream
+  reason: prints identification bands and labels
+  criticality: soft
+  contract:
+  - 'Gives: band data from Get identification band data'
+  - 'Gives: patient.updated, patient.identified and patient.merged, so bands and labels are reprinted'
+  - Printers and label formats are Printing's concern
 ---
 Patients build on the [patient record rules](/docs/healthcare/patient)
 every healthcare application shares. This layer adds what happens at a
