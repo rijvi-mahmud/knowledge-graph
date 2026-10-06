@@ -98,6 +98,16 @@ the source of truth for domain behaviour in this project.
    search led you to a page that doesn't match, go back to /llms.txt and find
    this project's page.
 
+Examples (the second is illustrative; /llms.txt lists what exists):
+
+- A hospital EHR has Industry: healthcare, Domain: ehr. For patient
+  registration it uses %SITE_URL%/docs/healthcare/ehr/patient, never a dental
+  or mental health patient page.
+- A lending app would have Industry: finance, Domain: lending. For loan
+  appointments it would use /docs/finance/lending/appointment, falling back
+  to /docs/finance/appointment, then /docs/core/appointment, never
+  /docs/healthcare/... pages.
+
 ### Find the right page
 
 1. Use the industry, domain and jurisdiction under "Project context" below. If
@@ -127,13 +137,15 @@ the source of truth for domain behaviour in this project.
 ### Read a spec
 
 - Items are tagged with the layer they come from, such as [core],
-  [<industry>] or [<domain>]. "overrides" means a more specific layer
-  replaced the item with the same id. Only the replacement applies.
+  [<industry>] or [<domain>], for example [healthcare] or [ehr]. "overrides"
+  means a more specific layer replaced the item with the same id. Only the
+  replacement applies.
 - Ids are stable: BR- business rules, FR- functional requirements, AC-
   acceptance criteria, EC- edge cases, CON- design constraints, AS-
   assumptions, DG- delivery guarantees, ADR- decisions.
 - Validations give each field's rule and error code. A data model field's
-  "codes:" names the standard code system to use.
+  "codes:" names the standard code system to use, for example HL7 v3
+  MaritalStatus for a healthcare marital status field.
 - Operations carry their HTTP method, path and success status, and errors
   their HTTP status. These are part of the API contract.
 - Acceptance criteria are Given / When / Then and map one to one onto tests.
@@ -151,7 +163,8 @@ the source of truth for domain behaviour in this project.
    Ask before choosing an answer.
 3. Cite ids in a comment next to the code that enforces them, in test names,
    and in commit messages with the module and spec version, for example
-   "Enforce BR-12 (<module> 1.2.0): <what the rule does>".
+   "Enforce BR-12 (<module> 1.2.0): <what the rule does>", such as
+   "Enforce BR-H3 (patient 0.5.0): one active record per identifier".
 4. Read a rule's "Why:" before relaxing or working around it. If you think it
    should change, say so and cite the id.
 5. Don't reintroduce an alternative listed under "Considered:" without naming

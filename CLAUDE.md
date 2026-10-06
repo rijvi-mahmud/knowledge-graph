@@ -96,9 +96,11 @@ and the agent does the rest with its own web fetch or search tools: it works
 out the project's industry and domain, starts at `/llms.txt`, and fetches the
 most specific page as `/docs/<page>.md` when a task needs it. Keep that section
 project-agnostic, module-agnostic and industry-agnostic, so it works pasted
-unedited in any domain: no healthcare words, codes or examples in it or in
-`/llms.txt`'s guide (the user caught this once). Use placeholders such as
-`<industry>` and `<module>`. It must also keep agents on their own path
+unedited in any domain. Write the rules with placeholders such as
+`<industry>` and `<module>`, never healthcare words (the user caught this
+once), then add short examples labelled as examples so agents see the rule
+applied: one real path (such as healthcare > ehr) and one from another
+industry marked illustrative, because it may not exist yet. It must also keep agents on their own path
 (core, their industry, their domain) and never on a sibling domain's page. Don't
 document vendoring specs or per-module setup.
 
