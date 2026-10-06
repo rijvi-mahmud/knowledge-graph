@@ -163,6 +163,10 @@ Rules:
   A rule repeated in 2+ industries moves up to core.
 - **Domain-only modules have no core.** Encounters and admission, discharge and
   transfer live only in their domain. Do not invent a fake core for them.
+- **A module can start at the industry level** when there is no neutral
+  concept worth sharing yet. The user chose this for Patients
+  (`healthcare/patient`, no core page). Add a core page only when a second
+  industry needs the concept.
 - **Cap at three levels.** Needing a fourth usually means a concept deserves its
   own module.
 - **"Reviewed, nothing to add" gets a page.** Where a domain needs nothing extra
@@ -297,51 +301,120 @@ same depth with the same pattern.
 
 ### How to bring a module to full SRS depth
 
-This is the approach that produced `core/appointment.mdx`. Follow it for every
-module and layer.
+This is the approach that produced Appointments and Patients. Follow it for
+every module and layer, and for every "is there any gap?" request.
 
 1. **Read before you change.** Read the page and every layer that extends it.
    Check which fields, error codes and ids the layers use, because a change to
-   core reaches all of them through inheritance.
+   a parent reaches all of them through inheritance.
 2. **Research from official sources** (see [Working rules](#working-rules)):
    standards (ISO/IEC/IEEE 29148, ISO/IEC 25010, the relevant RFCs),
    regulators, and the docs of leading products in the domain. Check concrete
    facts against real data. For example, compute daylight saving dates and
    durations with the IANA database (`python3` and `zoneinfo`) instead of
-   writing them from memory.
-3. **Run a gap check.** Compare the page with the checklist above and the
-   standards. List the gaps by risk, worst first: bugs and legal exposure
-   before missing sections. Ask the user before changing the structure
-   (schema, sections, sidebar); content inside the agreed structure doesn't
-   need approval.
-4. **Add a new kind of section in all five places**, or it disappears
+   writing them from memory. See [Research sources that worked](#research-sources-that-worked).
+3. **Run a gap check** in two parts, then report before fixing:
+   - **Structural**: a short Python audit over the merged frontmatter. Look
+     for errors no operation or validation raises, events nothing emits,
+     settings nothing references, permissions unused, fields missing from
+     Privacy and retention or from the storage design, and operations with no
+     permission matrix row.
+   - **Domain**: compare against the SRS checklist above and the sources.
+     For healthcare, the ONC SAFER Guides are the best checklist of what
+     hospitals get wrong.
+   - Report a table, worst first (patient safety, legal exposure, then
+     missing sections), split into: gaps inside this module, gaps that belong
+     to another module (contract only), and internal inconsistencies. Say
+     which items still need research. Then wait for the user's go-ahead.
+   - Ask before changing the structure (schema, sections, sidebar); content
+     inside the agreed structure doesn't need approval beyond the go-ahead.
+4. **Touch only what the module needs.** A feature that deserves its own
+   module (theatre, waitlist, consent, coverage, printing, ...) gets a
+   non-goal and a dependency `contract` here ("Asks: ...", "Gives: ...",
+   "Receives: ..."), and is specified later in its own module. Add it to the
+   domain roadmap as "Not yet specified". When this module's change affects
+   another written module, update that module's contract and rules too (for
+   example Patients merges made Appointments follow patient.merged).
+5. **Write a validation layer.** Every field gets a validation rule with its
+   error code, from the field's own standard, and a request reports every
+   failing field at once. What worked for Patients:
+   - Names: loose (W3C "Personal names around the world"): any letters and
+     marks, spaces, hyphens, apostrophes, periods; single names and
+     single letters valid; case kept; never truncate.
+   - Phone E.164, email RFC 5321 (64 and 254 octets), address Project US@
+     (US) and ISO 3166-1, language BCP 47, identifiers by their system's
+     format and check digit.
+   - No placeholders such as UNKNOWN or 1900-01-01: leave blank, partial or
+     estimated, and never match on them.
+   - Values a person must decide (merge conflicts) are chosen field by field,
+     never by a rule such as newest wins.
+6. **Name the standard codes.** Every coded field ends its `constraints`
+   with `codes: ...`: the code system and, where useful, the codes (HL7 v2
+   tables, HL7 v3 code systems, FHIR value sets, LOINC, SNOMED CT, CDCREC,
+   ISO). Name the exchange profiles (US Core for the US, HL7 Europe Base for
+   the EU), and message mappings such as HL7 v2 ADT events, as constraints
+   or compatibility requirements. Verify every code before writing it.
+7. **Model what varies as a setting.** Law that differs by US state or EU
+   member state (age of majority, retention, minors' records) is a setting,
+   never one place's answer. Say in the setting which places you verified
+   from the statute, and that the rest need legal advice.
+8. **Add a new kind of section in all five places**, or it disappears
    somewhere: the field in `source.config.ts`, its key in `KEYS` in
    `spec-inherit.ts`, the section and group in `spec-sections.ts`, and a
    renderer in both `module-spec.tsx` and `spec-markdown.ts`.
-5. **Write the content.**
-   - Keep ids in numeric order, and never reuse or renumber one.
-   - Every rule has a rationale, every functional requirement a verification
-     method, every acceptance criterion a `verifies` list, every edge case a
-     `covers` list, and every reference an official URL.
+9. **Write the content.**
+   - Edit frontmatter with a PyYAML script in the scratchpad (load, change
+     the dict, dump with `sort_keys=False`, `width=100000`), keeping the MDX
+     body. Never hand-edit long YAML.
+   - Keep ids in numeric order, and never reuse or renumber one. A module
+     that starts at the industry level (no `extends`) uses `-H` ids and must
+     be complete on its own; a domain layer uses `-E` ids and overrides a
+     parent item by reusing its id.
+   - Every rule has a rationale citing its source, every functional
+     requirement a verification method, every acceptance criterion a
+     `verifies` list, every edge case a `covers` list, and every reference an
+     official URL you checked returns 200.
+   - Keep the storage design and Privacy and retention in step with the data
+     model, and add implementation notes (`TN-`) for anything hard to build.
    - Core stays industry-neutral. No em or en dashes, and no spaced hyphens
      used as dashes.
    - YAML: quote any value that contains `: `, starts with `[`, or is a number
      meant as text (`'0'`). An unquoted colon in a description broke the build
      once.
-6. **Validate** before reporting done:
-   - `pnpm check:specs` reports no errors, and no warning for the page you
-     finished. It checks every module page: the schema, inheritance chains,
-     duplicate ids, `verifies` and `covers` ids that don't exist, error codes
-     raised but not defined, em and en dashes, and rules, requirements and
-     constraints that no acceptance criterion verifies (warnings;
-     `--strict` makes them errors).
-   - `pnpm exec tsc --noEmit` passes.
-   - The module page, a few section pages and their `.md` render on the dev
-     server. Use the user's running server; if none is running, validate
-     without one rather than starting your own.
-7. **Ship.** Bump `version`, add a changelog entry (mark `breaking` honestly),
-   commit, push to `main` (the user's usual flow), check the pages on
-   production, and tell the user which sources you used.
+10. **Validate** before reporting done:
+    - `pnpm check:specs --strict` reports 0 errors and 0 warnings. It checks
+      every module page: the schema, inheritance chains, duplicate ids,
+      `verifies` and `covers` ids that don't exist, error codes raised but
+      not defined, ids mentioned that don't exist, em and en dashes, and
+      rules, requirements and constraints no acceptance criterion verifies.
+    - Rerun the structural audit from step 3.
+    - `pnpm exec tsc --noEmit` passes, if code changed.
+    - The module page, a few section pages and their `.md` render on the dev
+      server. Use the user's running server; if none is running, validate
+      without one rather than starting your own.
+11. **Ship.** Bump `version`, add a changelog entry (mark `breaking` honestly),
+    update the versions in [Known TODO](#known-todo), commit, push to `main`
+    (the user's usual flow), check the pages on production, and tell the user
+    what changed, which judgment calls need their review, and which sources
+    you used.
+
+### Research sources that worked
+
+- **eCFR** (US regulations): `https://www.ecfr.gov/api/versioner/v1/full/<date>/title-45.xml?part=164&section=164.526`
+  with `curl --compressed`. Get `<date>` from `/api/versioner/v1/titles.json`.
+- **Journal abstracts**: the Europe PMC API
+  (`/europepmc/webservices/rest/search?query=PMCID:...&resultType=core&format=json`),
+  because PMC and publishers block automated reads.
+- **HL7 code systems**: `https://terminology.hl7.org/CodeSystem-<name>.json`.
+  **LOINC and CDCREC lookups**: `https://tx.fhir.org/r4/CodeSystem/$lookup?system=...&code=...`
+  with `Accept: application/fhir+json` (loinc.org blocks scripts).
+- **Blocked sites** (hhs.gov, ssa.gov, state legislatures): read through
+  `https://web.archive.org/web/2025/<url>`.
+- **GDPR article text**: gdpr-info.eu mirrors it; cite EUR-Lex as the
+  reference URL. The EHDS Regulation (EU) 2025/327 text is in the
+  scratchpad as `ehds.txt` when available.
+- **Patient identification**: ONC SAFER Guide 6 (2025) and The Joint
+  Commission's 2026 hospital goals (NPG.01.01.01).
 
 ### Navigation and UX
 
@@ -557,8 +630,8 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Patients (`healthcare/patient` 0.2.0, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.2.0) and Appointments
+  drafts: Patients (`healthcare/patient` 0.3.0, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.3.0) and Appointments
   (`healthcare/appointment` 0.3.1, `healthcare/ehr/appointment` 0.4.0). Both
   support the US and EU through the `jurisdiction` setting. Next: Encounters.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).

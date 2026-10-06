@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.2.0
+version: 0.3.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -56,6 +56,7 @@ dataModel:
   type: string
   required: false
   description: For a newborn, the mother's patient record (FHIR Patient.link see also, and RelatedPerson).
+  constraints: 'codes: linked as a FHIR RelatedPerson with HL7 v3 RoleCode MTH (mother)'
 - name: born_at
   type: instant
   required: false
@@ -107,6 +108,9 @@ businessRules:
 - id: BR-E12
   text: When a temporary name or id is replaced, by identification, naming, reconciliation or merge, every system using it is told, and bands and labels are reprinted.
   rationale: The SAFER Guide asks that any downstream use of a temporary id, including at transfer facilities, is tracked and corrected in every system.
+- id: BR-E13
+  text: Where mrn_scope is facility, each hospital's MRN is an identifier on the one patient record. Registering at a sister hospital searches the whole organisation and adds that hospital's MRN to the existing record instead of creating another. Records found for the same person at two hospitals are merged like duplicates.
+  rationale: The ONC SAFER Guide calls more than one id for the same person across facilities an overlap, usually after institutions merge, and expects an enterprise index that holds every MRN with one primary key.
 validations:
 - field: mother_patient_id
   rule: an existing patient in use
@@ -267,6 +271,18 @@ edgeCases:
   covers:
   - BR-E9
   - AC-E13
+- id: EC-E17
+  situation: A patient known at hospital A arrives at sister hospital B, which assigns its own MRNs.
+  behaviour: The enterprise search finds them, and hospital B's MRN is added to the same record.
+  covers:
+  - BR-E13
+  - AC-E16
+- id: EC-E18
+  situation: An alias has stayed unresolved for three days.
+  behaviour: It appears on the temporary id report, past the deployment's target (PERF-E1).
+  covers:
+  - PERF-E1
+  - AC-E17
 functionalRequirements:
 - id: FR-E1
   text: The service must assign an MRN to every new patient, unique in mrn_system and never reused.
@@ -300,10 +316,18 @@ functionalRequirements:
   text: The service must tell every system using a temporary name or id when it is replaced.
   priority: must
   verification: test
+- id: FR-E9
+  text: The service must search across every facility and add a facility MRN to an existing record when mrn_scope is facility.
+  priority: must
+  verification: test
+- id: FR-E10
+  text: The service must report unresolved aliases, downtime ids and incomplete registrations by age.
+  priority: must
+  verification: test
 settings:
 - name: mrn_system
   type: identifier system
-  description: The system MRNs are assigned in, their format and check digit scheme. Required.
+  description: The system MRNs are assigned in, their format and check digit scheme. MRNs carry the HL7 v2 Table 0203 type MR. Required.
 - name: mrn_scope
   type: enterprise | facility
   description: Whether one MRN covers every hospital in the organisation or each hospital assigns its own. Practice varies, so each organisation chooses. Required.
@@ -421,6 +445,19 @@ acceptanceCriteria:
   then: it fails with PATIENT_INVALID_NAME
   verifies:
   - BR-E2
+- id: AC-E16
+  given: mrn_scope facility and a patient with MRN A-1 at hospital A
+  when: they register at hospital B
+  then: the record holds A-1 and a new B MRN, and no second record exists
+  verifies:
+  - BR-E13
+  - FR-E9
+- id: AC-E17
+  given: an alias registered 3 days ago and a target of 1 day
+  when: the temporary id report runs
+  then: the alias is listed as overdue with its age
+  verifies:
+  - FR-E10
 operations:
 - name: Search patients
   actor: Registrar
@@ -504,6 +541,16 @@ operations:
   - PATIENT_INVALID_CODE
   - PATIENT_IDEMPOTENCY_KEY_REUSED
   - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Report temporary ids
+  actor: Health information management (HIM) specialist
+  description: Unresolved aliases, downtime ids and incomplete registrations, oldest first.
+  method: GET
+  path: /patients/temporary-ids
+  success: 200
+  input: optional kind and minimum age; limit and cursor
+  output: records with their kind and age
+  errors:
+  - PATIENT_DEPENDENCY_UNAVAILABLE
 events:
 - name: patient.identified
   description: An unidentified patient was identified. If their record was merged, patient.merged follows.
@@ -541,6 +588,12 @@ accessMatrix:
     Emergency department staff: any
     Maternity staff: none
   permission: patient.register
+- action: Report temporary ids
+  roles:
+    Registrar: any
+    Emergency department staff: any
+    Maternity staff: none
+  permission: patient.read
 errors:
 - code: PATIENT_NOT_UNIDENTIFIED
   http: 409
@@ -559,6 +612,14 @@ personalData:
 - field: born_at
   category: personal
   purpose: Telling apart babies born the same day
+  retention: record_retention
+- field: unidentified
+  category: personal; shows the patient could not be identified on arrival
+  purpose: Following up identification
+  retention: record_retention
+- field: downtime_id
+  category: personal
+  purpose: Reconciling registrations made during an outage
   retention: record_retention
 risks:
 - id: RISK-E1
@@ -604,7 +665,17 @@ references:
 - id: REF-E6
   title: CDC National Vital Statistics System, fetal deaths
   url: https://www.cdc.gov/nchs/nvss/fetal_death.htm
+- id: REF-E7
+  title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
+  url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
 changelog:
+- version: 0.3.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - One record across sister hospitals when each assigns its own MRN (BR-E13).
+  - A report and target for unresolved temporary ids (PERF-E1), and the storage design for hospital fields.
+  - MRNs carry the HL7 identifier type MR, and newborns link to their mother with RoleCode MTH.
 - version: 0.2.0
   date: '2026-10-06'
   breaking: false
@@ -638,6 +709,36 @@ dependencies:
   - 'Gives: band data from Get identification band data'
   - 'Gives: patient.updated, patient.identified and patient.merged, so bands and labels are reprinted'
   - Printers and label formats are Printing's concern
+performanceTargets:
+- id: PERF-E1
+  indicator: Unresolved temporary ids
+  target: Set by each deployment
+  measurement: Aliases, downtime ids and incomplete registrations older than the deployment's target, reported daily. The SAFER Guide asks hospitals to monitor resolution of temporary ids.
+tables:
+- name: patient_hospital
+  description: Hospital-only fields, one row per patient.
+  columns:
+  - name: patient_id
+    type: uuid
+    note: references patients(id)
+  - name: unidentified
+    type: boolean
+    default: 'false'
+  - name: registration_status
+    type: text
+    default: '''complete'''
+  - name: mother_patient_id
+    type: uuid
+    nullable: true
+  - name: born_at
+    type: timestamptz
+    nullable: true
+  - name: downtime_id
+    type: text
+    nullable: true
+  indexes:
+  - name: one_downtime_id
+    definition: UNIQUE (downtime_id) WHERE downtime_id IS NOT NULL
 ---
 Patients build on the [patient record rules](/docs/healthcare/patient)
 every healthcare application shares. This layer adds what happens at a

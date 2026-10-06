@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.2.0
+version: 0.3.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -28,6 +28,9 @@ scope:
 - Requests for a copy of patient data
 - Legal holds that stop a record being erased
 - Bulk imports, such as from a legacy system
+- Names in more than one script or language
+- Recorded sex, kept apart from administrative gender
+- Limits and alerts on patient searches
 nonGoals:
 - Clinical facts about the patient, such as allergies, problems, sex for clinical use or care plans. Clinical modules own them.
 - Insurance and coverage. They belong to the Coverage module, which refers to the patient by id.
@@ -108,12 +111,12 @@ dataModel:
   type: identifier[]
   required: false
   description: Each with system, value, type (such as MRN or national health identifier), use (usual, official, temp, secondary or old) and period (FHIR Identifier).
-  constraints: system must be in identifier_systems; system plus value unique among records in use (BR-H3)
+  constraints: 'system must be in identifier_systems; system plus value unique among records in use (BR-H3); codes: type from HL7 v2 Table 0203 (MR medical record number, SS social security number, PPN passport, DL driver''s license, NI national identifier, JHN jurisdictional health number, PI and PT patient identifiers); use from FHIR IdentifierUse'
 - name: names
   type: name[]
   required: true
-  description: Each with use (usual, official, temp, nickname, anonymous, old or maiden), family name, given names, prefix, suffix and period (FHIR HumanName).
-  constraints: at least one usual or official name, or a temp name (BR-H4); each part validated as in Validations
+  description: Each with use (usual, official, temp, nickname, anonymous, old or maiden), family name, given names, prefix, suffix and period (FHIR HumanName), and optionally the language and script it is written in (BR-H41).
+  constraints: 'at least one usual or official name, or a temp name (BR-H4); each part validated as in Validations; codes: use from FHIR NameUse; representation from ISO 21090 (ABC alphabetic, IDE ideographic, SYL syllabic); language as BCP 47'
 - name: birth_date
   type: date
   required: true
@@ -127,23 +130,32 @@ dataModel:
   type: enum
   required: true
   description: For administration and record keeping (FHIR Patient.gender).
-  constraints: male | female | other | unknown
+  constraints: 'male | female | other | unknown; codes: FHIR AdministrativeGender: male | female | other | unknown'
+- name: recorded_sex
+  type: recorded sex[]
+  required: false
+  description: Sex as recorded for a purpose, each with its kind (assigned at birth, legal, or other recorded), value from sex_codes, the source, and the jurisdiction for legal sex (BR-H42).
+  constraints: 'codes: values from sex_codes; in the US, US Core binds sex to its Federal Administrative Sex value set, and C-CDA records it as LOINC 46098-0 Sex'
 - name: addresses
   type: address[]
   required: false
   description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing (Project US@). Unknown parts are left blank.
+  constraints: 'codes: use and type from FHIR AddressUse and AddressType; country ISO 3166-1 alpha-2; US state USPS two-letter code'
 - name: telecoms
   type: contact point[]
   required: false
   description: Phone numbers in E.164 form and email addresses, each with use (home, work, mobile, temp or old), rank and period.
+  constraints: 'codes: system and use from FHIR ContactPointSystem and ContactPointUse'
 - name: languages
   type: language[]
   required: false
   description: BCP 47 tags, one marked preferred.
+  constraints: 'codes: BCP 47 tags (RFC 5646)'
 - name: interpreter_needed
   type: boolean
   required: false
   description: Whether the patient needs an interpreter (USCDI v6).
+  constraints: 'codes: yes, no or unknown, as the US Core Interpreter Needed extension'
 - name: multiple_birth
   type: boolean or integer
   required: false
@@ -166,10 +178,12 @@ dataModel:
   type: contact[]
   required: false
   description: People to contact about the patient, each with relationship, name, phone, address and whether they are the emergency contact (FHIR Patient.contact).
+  constraints: 'codes: role from HL7 v2 Table 0131 (C emergency contact, N next of kin); relationship from HL7 v3 RoleCode (MTH mother, FTH father, SPS spouse, CHILD child)'
 - name: representatives
   type: representative[]
   required: false
   description: People allowed to act for the patient, each with kind (parent, guardian, other legal representative or proxy), scope, exclusions, period and the evidence seen (BR-H14). A parent's authority ends at the age of majority (BR-H25).
+  constraints: 'codes: kind from HL7 v3 RoleCode: PRN parent, GUARD guardian, POWATT power of attorney, HPOWATT healthcare power of attorney'
 - name: confidential_communication
   type: contact point or address
   required: false
@@ -182,27 +196,37 @@ dataModel:
   type: code
   required: false
   description: Collected only when listed in collected_fields.
+  constraints: 'codes: HL7 v3 MaritalStatus: A, C, D, I, L, M, P, S, T, U, W'
 - name: race_ethnicity
   type: code[]
   required: false
   description: Self-reported, one or more categories, or declined (BR-H6). Collected only when listed in collected_fields.
+  constraints: 'codes: CDC Race and Ethnicity code set (CDCREC) 1.3, at least one OMB category; declined as HL7 NullFlavor ASKU, unknown as UNK'
 - name: gender_identity
   type: code
   required: false
   description: The gender the patient identifies with, or declined. Collected only when listed in collected_fields.
+  constraints: 'codes: SNOMED CT, as LOINC 76691-5 Gender identity; values set by the deployment'
 - name: pronouns
   type: code
   required: false
   description: How the patient asks to be referred to. Collected only when listed in collected_fields.
+  constraints: 'codes: LOINC 90778-2 Personal pronouns - Reported, as the FHIR Individual Pronouns extension'
 - name: occupation
   type: text
   required: false
   description: Current job and industry (USCDI). Collected only when listed in collected_fields.
+  constraints: 'codes: CDC Occupational Data for Health (ODH), version 20201030 in USCDI v3; LOINC 11341-5 History of Occupation'
+- name: tribal_affiliation
+  type: code[]
+  required: false
+  description: Tribes or bands the patient associates with, enrolled or not (USCDI). Collected only when listed in collected_fields.
+  constraints: 'codes: as the US Core Tribal Affiliation extension'
 - name: confidentiality
   type: enum
   required: true
   description: How much protection the record needs (HL7 confidentiality codes N, R and V).
-  constraints: normal | restricted | very_restricted; default normal
+  constraints: 'normal | restricted | very_restricted; default normal; codes: HL7 v3 Confidentiality: N normal, R restricted, V very restricted'
 - name: accuracy_contested
   type: boolean
   required: false
@@ -211,7 +235,7 @@ dataModel:
   type: string
   required: false
   description: The record that replaced this one in a merge (FHIR link replaced-by).
-  constraints: set only when status = merged
+  constraints: 'set only when status = merged; codes: FHIR LinkType replaced-by, with replaces on the target'
 - name: last_care_at
   type: instant
   required: false
@@ -248,6 +272,7 @@ dataModel:
   type: link[]
   required: false
   description: Records of this patient held by other organisations, as reported by the Exchange module (FHIR link type refer).
+  constraints: 'codes: FHIR LinkType refer or seealso'
 - name: import_batch
   type: string
   required: false
@@ -332,7 +357,7 @@ businessRules:
   text: Every view and every change of a patient record is logged with who, when, what, and the reason given. Patients can get a report of who accessed their record where the jurisdiction gives that right.
   rationale: HIPAA requires audit controls (45 CFR 164.312(b)). The EHDS gives EU patients information on every access to their health data, kept for at least three years (Article 9).
 - id: BR-H20
-  text: Opening a restricted or very restricted record needs a reason, which is logged. Every opening of a very restricted record is reported to the privacy officer with patient.restricted_access.
+  text: Opening a restricted or very restricted record needs a reason, coded as HL7 v3 ActReason (such as TREAT treatment, ETREAT emergency treatment or BTG break the glass), which is logged. Every opening of a very restricted record is reported to the privacy officer with patient.restricted_access.
   rationale: Staff and public figures' records are the ones colleagues are tempted to look at. A stated reason and a report deter snooping without stopping care.
 - id: BR-H21
   text: Every change sends the revision it read, and a stale revision is rejected.
@@ -341,8 +366,8 @@ businessRules:
   text: Search and matching compare every name, address, phone number and identifier the patient has had, including old ones.
   rationale: A patient returning after years, or a referral in a former name, must still find the existing record (BR-H1).
 - id: BR-H23
-  text: National identifiers and social security numbers are shown in full only to roles that need them, and otherwise masked.
-  rationale: GDPR lets member states set conditions for national identification numbers (Article 87), and HIPAA limits use to the minimum necessary (45 CFR 164.502(b)). These numbers enable identity theft.
+  text: Social security numbers are not used as patient identifiers. Where one is stored, such as for a payer that needs it, it and any national identifier are shown in full only to roles that need them, and otherwise masked.
+  rationale: US Core says social security numbers SHOULD NOT be used as patient identifiers because of identity theft. GDPR lets member states set conditions for national identification numbers (Article 87), and HIPAA limits use to the minimum necessary (45 CFR 164.502(b)).
 - id: BR-H24
   text: A record under legal hold is never erased or anonymised, even after record_retention ends. Other modules are told when a hold starts or ends.
   rationale: Texas forbids destroying records involved in unresolved litigation (Health and Safety Code 241.103(c)), and GDPR lets data be kept for legal claims (Article 17(3)(e)).
@@ -385,6 +410,21 @@ businessRules:
 - id: BR-H37
   text: A patient, or their representative, can ask for a copy of the data this module holds about them. The request is answered within access_request_deadline. A copy of the whole medical record is the Release of information module's job.
   rationale: HIPAA gives a right of access answered within 30 days (45 CFR 164.524), and GDPR a right to a copy (Article 15) answered within one month (Article 12(3)).
+- id: BR-H38
+  text: A merge request states which value to keep for every field where the two records differ. A merge that leaves a difference unresolved is rejected. Names, addresses, phone numbers and identifiers not kept become old values on the target; any other value not kept is stored with the merge record.
+  rationale: FHIR $merge lets the caller send the expected result patient, because only a person comparing the records can tell which birth date or address is right. Picking silently, such as newest wins, can keep a typo and drop the true value.
+- id: BR-H39
+  text: A very restricted record appears in search results only when the search includes one of its identifiers, or its full name and birth date. It is marked restricted, and shows nothing more until opened with a reason (BR-H20).
+  rationale: A broad search such as a surname should not reveal that a staff member or public figure is a patient here. Someone who already has the exact details can still find the record for care.
+- id: BR-H40
+  text: A search returns at most search_result_limit records, and asks for more detail when there are more. Every search is logged with its criteria. A user whose searches in search_alert_window exceed search_alert_threshold is reported to the privacy officer.
+  rationale: HIPAA requires mechanisms that record and examine activity in systems holding health information (45 CFR 164.312(b)). Without limits, one account can list every patient.
+- id: BR-H41
+  text: A name can be recorded in more than one script or language, such as Arabic and its Latin spelling, each tagged with its BCP 47 language and whether it is alphabetic, ideographic or syllabic. Search and matching compare every form.
+  rationale: FHIR tags a name with its language and its representation (ISO 21090 alphabetic, ideographic or syllabic). Staff in different places type different spellings of the same name, and each one must still find the patient.
+- id: BR-H42
+  text: 'Sex is recorded apart from administrative gender, each value with its kind: assigned at birth, legal, or other recorded. It is recorded as the patient or their documents report it, never inferred from name or appearance. Sex for clinical use belongs to clinical modules.'
+  rationale: FHIR separates administrative gender from recorded sex, legal sex and sex assigned at birth, and a patient can have different legal sex values in different jurisdictions. USCDI v3 names the element Sex (Assigned at Birth), and US certification rules for it changed in 2025, so the values come from the sex_codes setting.
 validations:
 - field: names
   rule: at least one usual, official or temp name; a name may have only a given name or only a family name
@@ -440,7 +480,7 @@ validations:
 - field: race_ethnicity
   rule: codes from race_ethnicity_categories; declined cannot be combined with a category
   error: PATIENT_INVALID_CODE
-- field: race_ethnicity, gender_identity, pronouns, marital_status, occupation, photo
+- field: race_ethnicity, tribal_affiliation, gender_identity, pronouns, marital_status, occupation, photo
   rule: accepted only when the deployment collects them (collected_fields, collect_photo)
   error: PATIENT_FIELD_NOT_COLLECTED
 - field: confidentiality
@@ -458,6 +498,15 @@ validations:
 - field: any change by a patient or representative
   rule: only telecoms, addresses, languages and contacts (BR-H36)
   error: PATIENT_SELF_SERVICE_NOT_ALLOWED
+- field: names
+  rule: a language tag is a well-formed BCP 47 tag; a representation is alphabetic, ideographic or syllabic
+  error: PATIENT_INVALID_NAME
+- field: recorded_sex
+  rule: kind is assigned at birth, legal or other recorded; value is in sex_codes; legal sex names its jurisdiction
+  error: PATIENT_INVALID_CODE
+- field: merge
+  rule: a value chosen for every field where the source and target differ
+  error: PATIENT_MERGE_CONFLICT_UNRESOLVED
 stateMachine:
   initial: active
   states:
@@ -519,6 +568,7 @@ workflows:
   steps:
   - Check the revisions and that both records are in use
   - Ask Admission, discharge and transfer whether either record has an active stay, and mark the merge during_care if so
+  - For every field where the records differ, record the value to keep
   - Mark the source merged with replaced_by, and copy its identifiers to the target marked old
   - Record who merged, why and how the records differed
   - Emit patient.merged; each module moves its data to the target
@@ -790,6 +840,36 @@ edgeCases:
   behaviour: Recorded as a business address with the homeless flag, and matching does not treat other shelter residents as the same person.
   covers:
   - AC-H33
+- id: EC-H37
+  situation: Two duplicate records have birth dates 1980-03-04 and 1980-04-03.
+  behaviour: The merge is rejected until the HIM specialist chooses one; the other is stored with the merge record.
+  covers:
+  - BR-H38
+  - AC-H45
+- id: EC-H38
+  situation: A registrar searches the surname of a hospital executive who is a patient with a very restricted record.
+  behaviour: The record does not appear. A search with the executive's MRN shows it marked restricted.
+  covers:
+  - BR-H39
+  - AC-H46
+- id: EC-H39
+  situation: An account runs hundreds of patient searches in an hour.
+  behaviour: Each search is logged, and the privacy officer is alerted when the threshold is passed.
+  covers:
+  - BR-H40
+  - AC-H47
+- id: EC-H40
+  situation: A patient's name is recorded in Arabic, and a referral arrives with a Latin spelling.
+  behaviour: The search finds the record through the Latin form recorded as the same name.
+  covers:
+  - BR-H41
+  - AC-H48
+- id: EC-H41
+  situation: A patient's legal sex differs between two countries' documents.
+  behaviour: Both are recorded as legal sex, each with its jurisdiction; administrative gender stays as registered.
+  covers:
+  - BR-H42
+  - AC-H49
 functionalRequirements:
 - id: FR-H1
   text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
@@ -875,6 +955,18 @@ functionalRequirements:
   text: The service must store a patient photograph and return it with the record, when collect_photo is on.
   priority: should
   verification: test
+- id: FR-H22
+  text: The service must require a chosen value for every differing field before a merge, and return the differences in a preview.
+  priority: must
+  verification: test
+- id: FR-H23
+  text: The service must limit search results, log every search, and alert the privacy officer to unusual search volume.
+  priority: must
+  verification: test
+- id: FR-H24
+  text: The service must store names in several scripts and languages, and match across them.
+  priority: should
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Only roles that need it can read a patient record, and every read is logged (BR-H19).
@@ -890,6 +982,10 @@ nonFunctionalRequirements:
   text: Search results show enough to tell candidates apart, such as birth date, address and identifiers, masked where BR-H23 applies.
 - category: portability
   text: No requirement depends on a particular database, matching algorithm, language or framework.
+- category: compatibility
+  text: 'Events map to HL7 v2 ADT messages for systems that use them: patient.registered to A28, patient.updated to A31, patient.merged to A40, an identifier change to A47. Neither HL7 v2 nor FHIR defines an unmerge, so patient.unmerged is sent as A31 for both records.'
+- category: compatibility
+  text: Where the hospital shares an enterprise or regional patient index, it is reached through IHE PIXm, PDQm or PMIR (by the Exchange module).
 constraints:
 - id: CON-H1
   text: Patient data is encrypted in transit and at rest.
@@ -900,6 +996,12 @@ constraints:
 - id: CON-H3
   text: Language tags follow BCP 47, and dates follow ISO 8601, allowing year or year and month alone.
   rationale: FHIR uses both, and a partial birth date must not be padded into a false full date.
+- id: CON-H4
+  text: Coded fields use the code systems named in the data model. A deployment's local codes are mapped to them before data leaves this module.
+  rationale: Exchange with other systems, reporting and certification all assume these code systems. A local code with no mapping is lost at the boundary.
+- id: CON-H5
+  text: Patients are exchanged as FHIR R5 Patient resources conforming to US Core Patient (9.0.0) in the United States and to the HL7 Europe Base and Core guide (2.0.1) in the European Union.
+  rationale: US Core is what ONC certification tests, and US Core requires Project US@ addresses for certifying systems. HL7 Europe Base is the shared EU starting point.
 settings:
 - name: jurisdiction
   type: us | eu
@@ -913,7 +1015,7 @@ settings:
 - name: collected_fields
   type: list
   default: '[]'
-  description: 'Which optional demographics are collected: race_ethnicity, gender_identity, pronouns, marital_status, occupation. Set with legal advice (BR-H6).'
+  description: 'Which optional demographics are collected: race_ethnicity, tribal_affiliation, gender_identity, pronouns, marital_status, occupation. Set with legal advice (BR-H6).'
 - name: race_ethnicity_categories
   type: code list
   description: Categories offered when race_ethnicity is collected. In the United States, the OMB SPD 15 minimum categories, required for federal reporting by March 28, 2029.
@@ -935,10 +1037,10 @@ settings:
   description: Inactivate records with no care for this long. Unset means records are never inactivated automatically.
 - name: minor_retention_until_age
   type: integer
-  description: For a patient who was a minor at their last care, the age before which the record is never erased, such as 20 in Texas (Health and Safety Code 241.103(b)). Unset means no age rule.
+  description: For a patient who was a minor at their last care, the age before which the record is never erased, such as 20 in Texas (verified from Health and Safety Code 241.103(b)). Other states must be checked with legal advice. Unset means no age rule.
 - name: age_of_majority
   type: integer
-  description: When a parent's authority ends (BR-H25). 18 in most US states, 19 in Nebraska; set per state or member state. Required.
+  description: When a parent's authority ends (BR-H25). 18 in most US states; 19 in Nebraska (verified from Revised Statutes 43-2101). Other states and EU member states must be checked with legal advice. Required.
 - name: max_age
   type: integer
   default: '122'
@@ -953,6 +1055,18 @@ settings:
 - name: max_import_batch
   type: integer
   description: The most records one import accepts. Set by each deployment.
+- name: sex_codes
+  type: code list
+  description: Values allowed for recorded sex. In the United States, ONC accepted SNOMED CT 248152002 Female and 248153007 Male for certification in 2025; check current ONC rules. Required.
+- name: search_result_limit
+  type: integer
+  description: The most records one search returns. Set by each deployment. Required.
+- name: search_alert_threshold
+  type: integer
+  description: Searches by one user in search_alert_window that trigger a privacy alert. Set from the deployment's normal volumes. Required.
+- name: search_alert_window
+  type: duration
+  description: The period search_alert_threshold is counted over. Required.
 performanceTargets:
 - id: PERF-H1
   indicator: Duplicate rate
@@ -978,6 +1092,10 @@ performanceTargets:
   indicator: Event publishing delay
   target: Set by each deployment as an SLO
   measurement: 99th percentile time between a change being saved and its event being published.
+- id: PERF-H7
+  indicator: Matching quality
+  target: Set by each deployment, and tracked over time
+  measurement: On a sample of pairs reviewed by HIM specialists, the share of true duplicates matching proposed, and the share of proposals that were true duplicates.
 acceptanceCriteria:
 - id: AC-H1
   given: an existing record for Ana Silva, born 1990-04-02
@@ -1118,9 +1236,10 @@ acceptanceCriteria:
 - id: AC-H21
   given: any patient
   when: it is exported
-  then: the result is a valid HL7 FHIR R5 Patient resource
+  then: the result is a valid HL7 FHIR R5 Patient resource that validates against US Core Patient for jurisdiction us and HL7 Europe Base for jurisdiction eu
   verifies:
   - FR-H12
+  - CON-H5
 - id: AC-H22
   given: an inactive record
   when: Appointments reports a check-in for the patient
@@ -1272,6 +1391,45 @@ acceptanceCriteria:
   verifies:
   - BR-H37
   - FR-H20
+- id: AC-H45
+  given: source and target records with different birth dates
+  when: a merge is sent without choosing one, then with one chosen
+  then: the first fails with PATIENT_MERGE_CONFLICT_UNRESOLVED; the second succeeds and the other birth date is stored with the merge record
+  verifies:
+  - BR-H38
+  - FR-H22
+- id: AC-H46
+  given: a very restricted record for Lee Park, born 1975-02-01, MRN 900100
+  when: searches run for "Park", for MRN 900100, and for Lee Park born 1975-02-01
+  then: the first returns nothing for it; the other two return it marked restricted, with no other details
+  verifies:
+  - BR-H39
+- id: AC-H47
+  given: search_result_limit 50 and search_alert_threshold 200 per hour
+  when: a search matches 80 records, and a user runs 201 searches in an hour
+  then: the first fails with PATIENT_SEARCH_TOO_BROAD; the user is reported with patient.search_volume_alert; every search is in the log
+  verifies:
+  - BR-H40
+  - FR-H23
+- id: AC-H48
+  given: a name recorded in Arabic and in Latin script as the same name
+  when: a search uses the Latin spelling
+  then: the record is found, and an invalid language tag on a name fails with PATIENT_INVALID_NAME
+  verifies:
+  - BR-H41
+  - FR-H24
+- id: AC-H49
+  given: a patient with administrative gender recorded
+  when: a sex assigned at birth and a legal sex for one jurisdiction are added
+  then: both are stored with their kinds, administrative gender is unchanged, and a legal sex without a jurisdiction fails with PATIENT_INVALID_CODE
+  verifies:
+  - BR-H42
+- id: AC-H50
+  given: a deployment with local marital status codes
+  when: a record is exported
+  then: marital status is sent as an HL7 v3 MaritalStatus code; a local code with no mapping fails the export with PATIENT_INVALID_CODE
+  verifies:
+  - CON-H4
 operations:
 - name: Search patients
   actor: Registrar
@@ -1280,9 +1438,10 @@ operations:
   path: /patients
   success: 200
   input: any of name, birth date, identifier, phone, address; limit and cursor
-  output: matching records with enough detail to tell them apart, masked where BR-H23 applies
+  output: at most search_result_limit records with enough detail to tell them apart, masked where BR-H23 applies, and very restricted records only as BR-H39 allows
   errors:
   - PATIENT_INVALID_QUERY
+  - PATIENT_SEARCH_TOO_BROAD
   - PATIENT_DEPENDENCY_UNAVAILABLE
 - name: Match patient details
   actor: System
@@ -1327,6 +1486,7 @@ operations:
   output: the record, as JSON or as a FHIR Patient resource, with similar_name_alert, deceased and photo where present
   errors:
   - PATIENT_NOT_FOUND
+  - PATIENT_INVALID_CODE
   - PATIENT_REASON_REQUIRED
   - PATIENT_DEPENDENCY_UNAVAILABLE
 - name: Update a patient
@@ -1381,11 +1541,12 @@ operations:
   method: POST
   path: /patients/merge
   success: 200
-  input: source id and revision, target id and revision, reason, optional preview
+  input: source id and revision, target id and revision, the value to keep for each differing field (like FHIR result-patient), reason, optional preview
   output: the target record, with the differences found and whether the merge was during care; a preview saves nothing
   errors:
   - PATIENT_NOT_FOUND
   - PATIENT_MERGE_SAME_RECORD
+  - PATIENT_MERGE_CONFLICT_UNRESOLVED
   - PATIENT_NOT_IN_USE
   - PATIENT_MERGED
   - PATIENT_REVISION_CONFLICT
@@ -1745,6 +1906,12 @@ events:
   - patient_id
   - legal_hold
   - revision
+- name: patient.search_volume_alert
+  description: A user's searches passed search_alert_threshold. For the privacy officer.
+  payload:
+  - user
+  - search_count
+  - window_start
 deliveryGuarantees:
 - id: DG-H1
   text: Events are published at least once. Consumers treat an event with a source and id they have already seen as a duplicate.
@@ -2013,6 +2180,22 @@ personalData:
   category: personal; reveals other care providers
   purpose: Finding the patient's records elsewhere
   retention: record_retention
+- field: recorded_sex
+  category: personal; can reveal sex life or gender history, a special category in the EU
+  purpose: Identification and records required by law
+  retention: record_retention
+- field: demographics_confirmed_at
+  category: personal
+  purpose: Knowing how current the details are
+  retention: record_retention
+- field: search log
+  category: personal, about the user and the patients searched
+  purpose: Detecting snooping and enumeration
+  retention: access_log_retention
+- field: tribal_affiliation
+  category: personal; can reveal ethnic origin, a special category in the EU
+  purpose: Reporting and care that depends on it, where collected
+  retention: record_retention
 errors:
 - code: PATIENT_NOT_FOUND
   http: 404
@@ -2125,6 +2308,12 @@ errors:
 - code: PATIENT_IMPORT_TOO_LARGE
   http: 413
   message: The import batch is larger than max_import_batch. Split it.
+- code: PATIENT_MERGE_CONFLICT_UNRESOLVED
+  http: 422
+  message: Choose which value to keep for every field where the records differ.
+- code: PATIENT_SEARCH_TOO_BROAD
+  http: 422
+  message: Too many patients match. Add a birth date, identifier or more of the name.
 dependencies:
 - service: identity-service
   direction: upstream
@@ -2199,6 +2388,7 @@ dependencies:
   - 'Receives: links to this patient''s records elsewhere (external_links)'
   - 'Receives: deaths reported from outside, recorded with their source'
   - Cross-border identification under EHDS Article 16 is Exchange's concern
+  - Uses IHE PIXm (identifier cross-referencing), PDQm (demographics query) or PMIR (master identity registry) with outside patient indexes
 - service: clinical-modules
   direction: downstream
   reason: orders and results, medications, documentation and every module holding clinical data
@@ -2279,6 +2469,14 @@ decisions:
 - id: ADR-H8
   decision: Photographs and identity checks are deployment settings, on the recommended side, never conditions for care.
   rationale: The SAFER Guide recommends both, but a patient without ID or who declines a photo must still be treated.
+  date: '2026-10-06'
+- id: ADR-H9
+  decision: Very restricted records are hidden from broad searches but found by exact details.
+  rationale: Hiding them completely would block care for staff and public figures; showing them in every surname search would reveal they are patients.
+  date: '2026-10-06'
+- id: ADR-H10
+  decision: Merge conflicts are resolved by a person field by field, never by a rule such as newest wins.
+  rationale: The newest value is often the duplicate's typo. FHIR $merge leaves the result to the caller.
   date: '2026-10-06'
 openQuestions: []
 references:
@@ -2376,7 +2574,47 @@ references:
 - id: REF-H29
   title: 45 CFR 164.520, notice of privacy practices
   url: https://www.ecfr.gov/current/title-45/section-164.520
+- id: REF-H30
+  title: FHIR extensions, Name Representation (iso21090-EN-representation)
+  url: https://hl7.org/fhir/extensions/StructureDefinition-iso21090-EN-representation.html
+- id: REF-H31
+  title: FHIR extensions, Human Language
+  url: https://hl7.org/fhir/extensions/StructureDefinition-language.html
+- id: REF-H32
+  title: ONC enforcement discretion notice for USCDI v3 data elements (March 21, 2025)
+  url: https://www.healthit.gov/topic/uscdi-v3-data-elements-enforcement-discretion
+- id: REF-H33
+  title: US Core Implementation Guide 9.0.0, Patient profile
+  url: https://hl7.org/fhir/us/core/StructureDefinition-us-core-patient.html
+- id: REF-H34
+  title: HL7 Europe Base and Core FHIR IG 2.0.1
+  url: https://hl7.eu/fhir/base/
+- id: REF-H35
+  title: HL7 v2 tables 0203 (identifier type), 0131 (contact role) and 0003 (event type)
+  url: https://terminology.hl7.org/CodeSystem-v2-0203.html
+- id: REF-H36
+  title: 'HL7 v3 code systems: RoleCode, MaritalStatus, ActReason and NullFlavor'
+  url: https://terminology.hl7.org/CodeSystem-v3-RoleCode.html
+- id: REF-H37
+  title: CDC Race and Ethnicity code set (CDCREC) 1.3
+  url: https://terminology.hl7.org/CodeSystem-PHRaceAndEthnicityCDC.html
+- id: REF-H38
+  title: CDC NIOSH, Occupational Data for Health
+  url: https://www.cdc.gov/niosh/ehr/odh/index.html
+- id: REF-H39
+  title: IHE ITI profiles PIXm 3.1.0, PDQm 3.2.0 and PMIR 1.6.0
+  url: https://profiles.ihe.net/ITI/PMIR/
 changelog:
+- version: 0.3.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - Merges choose a value for every differing field, as FHIR $merge result-patient allows (BR-H38).
+  - Very restricted records are hidden from broad searches (BR-H39); searches are limited, logged and monitored (BR-H40).
+  - Names in several scripts and languages (BR-H41), and recorded sex apart from administrative gender (BR-H42).
+  - Matching quality is measured (PERF-H7); the storage design covers every field; implementation notes for phones, names and addresses.
+  - 'Every coded field names its code system: HL7 v2 and v3, FHIR, CDCREC 1.3, LOINC, SNOMED CT, CDC ODH (CON-H4). Exchange conforms to US Core 9.0.0 and HL7 Europe Base 2.0.1 (CON-H5), with HL7 v2 ADT and IHE PIXm, PDQm and PMIR mappings.'
+  - Added tribal affiliation (USCDI). Social security numbers are no longer used as identifiers, following US Core (BR-H23). Restricted-access reasons use HL7 ActReason codes.
 - version: 0.2.0
   date: '2026-10-06'
   breaking: false
@@ -2392,6 +2630,10 @@ changelog:
   changes:
   - First healthcare layer for patient records, for the United States and the European Union.
 acronyms:
+- term: ADT
+  definition: Admission, discharge and transfer; also the HL7 v2 message type for patient events
+- term: CDCREC
+  definition: CDC Race and Ethnicity code set
 - term: EHDS
   definition: European Health Data Space, Regulation (EU) 2025/327
 - term: FHIR
@@ -2402,10 +2644,18 @@ acronyms:
   definition: Health information management
 - term: HIPAA
   definition: Health Insurance Portability and Accountability Act
+- term: IHE
+  definition: Integrating the Healthcare Enterprise, which publishes PIXm, PDQm and PMIR
+- term: LOINC
+  definition: Logical Observation Identifiers Names and Codes
 - term: MRN
   definition: Medical record number
+- term: ODH
+  definition: Occupational Data for Health, CDC
 - term: OMB
   definition: US Office of Management and Budget
+- term: SNOMED CT
+  definition: Systematized Nomenclature of Medicine Clinical Terms
 - term: SPD 15
   definition: OMB Statistical Policy Directive No. 15, the US race and ethnicity standard
 - term: USCDI
@@ -2437,9 +2687,6 @@ tables:
   - name: confidentiality
     type: text
     default: '''normal'''
-  - name: details
-    type: jsonb
-    note: telecoms, addresses, languages, contacts and collected fields
   - name: replaced_by
     type: uuid
     nullable: true
@@ -2450,6 +2697,38 @@ tables:
   - name: revision
     type: integer
     default: '0'
+  - name: details
+    type: jsonb
+    note: telecoms, addresses, languages, interpreter_needed, contacts, confidential_communication, general_practitioner, multiple_birth, recorded_sex, external_links and collected fields
+  - name: deceased
+    type: boolean
+    default: 'false'
+  - name: emancipated
+    type: boolean
+    default: 'false'
+  - name: identity_evidence
+    type: text
+    nullable: true
+  - name: demographics_confirmed_at
+    type: timestamptz
+    nullable: true
+  - name: photo_ref
+    type: text
+    nullable: true
+    note: reference to the image in object storage
+  - name: similar_name_alert
+    type: boolean
+    default: 'false'
+    note: derived
+  - name: accuracy_contested
+    type: boolean
+    default: 'false'
+  - name: legal_hold
+    type: boolean
+    default: 'false'
+  - name: import_batch
+    type: text
+    nullable: true
   constraints:
   - name: merged_has_target
     definition: CHECK ((status = 'merged') = (replaced_by IS NOT NULL))
@@ -2472,6 +2751,14 @@ tables:
   - name: valid_to
     type: date
     nullable: true
+  - name: language
+    type: text
+    nullable: true
+    note: BCP 47
+  - name: representation
+    type: text
+    nullable: true
+    note: alphabetic, ideographic or syllabic
   indexes:
   - name: patient_names_search
     definition: USING gin (family gin_trgm_ops)
@@ -2558,6 +2845,26 @@ tables:
   - name: unmerged_at
     type: timestamptz
     nullable: true
+  - name: during_care
+    type: boolean
+    default: 'false'
+- name: patient_search_log
+  description: Every search, for BR-H40.
+  columns:
+  - name: id
+    type: uuid
+  - name: user_id
+    type: text
+  - name: criteria
+    type: jsonb
+  - name: result_count
+    type: integer
+  - name: searched_at
+    type: timestamptz
+  indexes:
+  - name: search_log_by_user
+    definition: (user_id, searched_at)
+    note: counting searches per window
 technicalNotes:
 - id: TN-H1
   title: Match in two steps
@@ -2568,6 +2875,15 @@ technicalNotes:
 - id: TN-H3
   title: Map to FHIR
   text: status active and inactive map to Patient.active true and false. merged maps to active false with link type replaced-by, and the target gets link type replaces. entered_in_error maps to active false with no link. identifiers marked old use Identifier.use old.
+- id: TN-H4
+  title: Validate phone numbers with libphonenumber
+  text: Parse numbers with the caller's default region, reject ones that are not possible numbers, and store the E.164 form. Google's libphonenumber has ports for most languages.
+- id: TN-H5
+  title: Normalise before comparing names
+  text: Store names exactly as given, but compare them after Unicode NFC normalisation and case folding, so composed and decomposed accents match. For cross-script matching, compare a transliteration, such as from ICU transforms, alongside the recorded Latin form.
+- id: TN-H6
+  title: Standardise US addresses before matching
+  text: Apply Project US@ (uppercase, standard suffix and state abbreviations, no punctuation except the ZIP+4 hyphen) to a comparison copy, and keep the address as entered for display.
 ---
 Every clinical module refers to a patient by id. This module keeps that id
 pointing at one person, and keeps who that person is accurate over the years.
