@@ -32,6 +32,26 @@ records the industry, domain and jurisdiction under **Project context** in
 `AGENTS.md`, so later sessions skip the first two steps, but it still reads
 `llms.txt` to see modules added since.
 
+## Staying in your industry and domain
+
+Different domains can specify a module with the same name from different
+purposes. One domain's appointments may be about booking, another's about
+when a visit becomes billable. Rules from the wrong domain look plausible
+and are wrong for your product, so the instructions keep the agent on your
+project's path:
+
+- **Only your path.** The agent uses core pages, your industry's pages and
+  your domain's pages: URLs under `/docs/core/`, `/docs/<industry>/` and
+  `/docs/<industry>/<domain>/`.
+- **Never a sibling.** A page from another industry or domain is never used,
+  even when it has the module the agent is looking for. If your domain has no
+  page for it, the agent falls back up your own path, to your industry and
+  then core.
+- **Check the identity.** Every module page opens with "Module identity" and
+  its layer, such as `healthcare > ehr`. The agent checks it against
+  **Project context** before using the page. A web search can land on any
+  page, so this check is what catches a mismatch.
+
 ## Fetching only what a task needs
 
 A module page's markdown is its complete spec, merged across layers, and the
@@ -105,6 +125,7 @@ The same conventions apply to every module:
 | Instruction | Without it, an agent may |
 |---|---|
 | Use the most specific page | Build from a core page and miss industry rules such as identity checks or retention |
+| Stay on your path, check the identity | Follow another domain's rules for a module with the same name, because a search landed there |
 | Fetch sections, not the whole site | Load more than fits in context, or get a lossy summary |
 | Open questions are undecided | Pick an answer the domain hasn't settled |
 | Items are merged and tagged by layer | Read a `[core]` rule next to an `[ehr]` override as a conflict, or "fix" the override back |

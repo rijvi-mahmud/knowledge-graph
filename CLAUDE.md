@@ -95,7 +95,11 @@ their project's `AGENTS.md` (the Quickstart on `content/docs/agentic/index.mdx`)
 and the agent does the rest with its own web fetch or search tools: it works
 out the project's industry and domain, starts at `/llms.txt`, and fetches the
 most specific page as `/docs/<page>.md` when a task needs it. Keep that section
-project-agnostic and module-agnostic, so it works pasted unedited. Don't
+project-agnostic, module-agnostic and industry-agnostic, so it works pasted
+unedited in any domain: no healthcare words, codes or examples in it or in
+`/llms.txt`'s guide (the user caught this once). Use placeholders such as
+`<industry>` and `<module>`. It must also keep agents on their own path
+(core, their industry, their domain) and never on a sibling domain's page. Don't
 document vendoring specs or per-module setup.
 
 ### Never hardcode the site address in content

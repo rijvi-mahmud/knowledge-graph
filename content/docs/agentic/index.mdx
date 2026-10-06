@@ -17,11 +17,12 @@ adding `.md` to its URL.
 
 1. You add the Knowledge Graph section to `AGENTS.md`. It's the same for every
    project.
-2. Your agent works out the project's industry, domain and jurisdiction, for
-   example healthcare > ehr in the us, and records them in the same section.
-3. For every task that touches a domain concept, such as patient registration,
-   the agent fetches the matching spec sections, builds against them, and
-   cites the rule ids it followed.
+2. Your agent works out the project's industry, domain and jurisdiction from
+   your code and README, confirms them with you, and records them in the same
+   section.
+3. For every task that touches a domain concept, the agent fetches the
+   matching spec sections from your industry and domain only, builds against
+   them, and cites the rule ids it followed.
 
 There's nothing to install or download. Your agent reads pages with its own
 web tools, so it always reads the current version.
@@ -47,8 +48,8 @@ with citations.
 
 ## When to use the Knowledge Graph
 
-Use it when your product implements a concept the Knowledge Graph specifies,
-such as patient registration or appointments. Your agent gets the business
+Use it when your product implements a concept the Knowledge Graph specifies
+for your industry and domain. Your agent gets the business
 rules, field validations, standard codes, API with HTTP status codes,
 contracts with other modules and acceptance criteria for that concept, along
 with the reason behind each rule.
@@ -65,8 +66,8 @@ this section:
 ## Knowledge Graph
 
 This project follows the Knowledge Graph (%SITE_URL%), an open, versioned
-specification of domain requirements such as patients and appointments. It is
-the source of truth for domain behaviour.
+specification of domain requirements, layered core > industry > domain. It is
+the source of truth for domain behaviour in this project.
 
 ### Ground every domain decision in a fetched page
 
@@ -83,46 +84,60 @@ the source of truth for domain behaviour.
 5. If your fetch tool summarises pages instead of returning them in full,
    fetch the smaller section pages and quote from them.
 
+### Stay in this project's industry and domain
+
+1. Use only pages on this project's path: core pages, pages of the industry
+   under "Project context", and pages of its domain. Their URLs start with
+   %SITE_URL%/docs/core/, %SITE_URL%/docs/<industry>/ or
+   %SITE_URL%/docs/<industry>/<domain>/.
+2. Never use a page from another industry or another domain, even if it
+   covers a module with the same name. Each domain specifies a module from
+   its own purpose, and its rules don't apply here.
+3. Every module page starts with "Module identity", including its layer.
+   Check the layer matches this project before you use the page. If a web
+   search led you to a page that doesn't match, go back to /llms.txt and find
+   this project's page.
+
 ### Find the right page
 
 1. Use the industry, domain and jurisdiction under "Project context" below. If
    they're empty, work them out from the README and code, confirm them with
-   the user, and fill them in.
+   the user, and fill them in. Use the industry and domain names exactly as
+   /llms.txt lists them.
 2. Start at %SITE_URL%/llms.txt with your web fetch tool. It explains how to
    navigate and lists every page, including modules added since your last
    session.
-3. For each domain concept a task touches, use the most specific page for this
-   project: the domain page if it exists, otherwise the industry page,
+3. For each domain concept a task touches, use the most specific page on this
+   project's path: the domain page if it exists, otherwise the industry page,
    otherwise the module's core page. A more specific page already includes
    everything above it.
 4. Fetch only what the task needs, as markdown, by adding `.md` to the URL.
    Module pages are complete specs and can pass 100 KB, so prefer their
-   sections: functions/business-rules, functions/validations,
+   sections, such as functions/business-rules, functions/validations,
    data/data-model, interfaces/operations, interfaces/errors,
    interfaces/dependencies and verification/acceptance. Don't fetch
    /llms-full.txt.
 5. When a task crosses into another module, read this module's
-   interfaces/dependencies page first. If the other module has a page in
-   llms.txt, fetch its side of the contract. If it doesn't, build against the
-   contract text alone and don't invent that module's rules.
-6. If no page covers the concept, say so and follow the project's own
-   requirements.
+   interfaces/dependencies page first. If the other module has a page on this
+   project's path, fetch its side of the contract. If it doesn't, build
+   against the contract text alone and don't invent that module's rules.
+6. If no page on this project's path covers the concept, say so and follow
+   the project's own requirements.
 
 ### Read a spec
 
 - Items are tagged with the layer they come from, such as [core],
-  [healthcare] or [ehr]. "overrides" means a more specific layer replaced the
-  item with the same id. Only the replacement applies.
+  [<industry>] or [<domain>]. "overrides" means a more specific layer
+  replaced the item with the same id. Only the replacement applies.
 - Ids are stable: BR- business rules, FR- functional requirements, AC-
   acceptance criteria, EC- edge cases, CON- design constraints, AS-
   assumptions, DG- delivery guarantees, ADR- decisions.
 - Validations give each field's rule and error code. A data model field's
-  "codes:" names its standard code system, such as HL7, LOINC or SNOMED CT.
+  "codes:" names the standard code system to use.
 - Operations carry their HTTP method, path and success status, and errors
   their HTTP status. These are part of the API contract.
 - Acceptance criteria are Given / When / Then and map one to one onto tests.
-- Settings decide what varies, such as jurisdiction (us or eu) or a retention
-  period.
+- Settings decide what varies by deployment, such as the jurisdiction.
 - The Reference implementation folder (storage design, implementation notes)
   is non-normative: one way to build it, not a requirement.
 - "Why:" gives the reason for a rule or decision. "Considered:" lists
@@ -135,15 +150,16 @@ the source of truth for domain behaviour.
 2. If the behaviour is listed under "Open questions", it hasn't been decided.
    Ask before choosing an answer.
 3. Cite ids in a comment next to the code that enforces them, in test names,
-   and in commit messages with the spec version, for example
-   "Enforce BR-H3 (patient 0.5.0): one active record per identifier".
+   and in commit messages with the module and spec version, for example
+   "Enforce BR-12 (<module> 1.2.0): <what the rule does>".
 4. Read a rule's "Why:" before relaxing or working around it. If you think it
    should change, say so and cite the id.
 5. Don't reintroduce an alternative listed under "Considered:" without naming
    the decision you're going against.
 6. If existing code contradicts the spec, report the conflict with the id.
    Don't silently change either side.
-7. Apply the rules and settings for the jurisdiction under "Project context".
+7. Apply the rules and settings for the jurisdiction under "Project context",
+   where a spec has a jurisdiction setting.
 8. If the spec's status is draft, mention any code that depends on it in your
    summary.
 
@@ -168,8 +184,8 @@ Which Knowledge Graph pages apply to this project?
 ```
 
 The agent fetches `llms.txt`, fills in **Project context**, and lists the
-pages it would use, for example the EHR Patients and Appointments pages for a
-hospital management system.
+pages on your project's path, such as the domain's own pages for each module
+your product touches.
 
 > **Note:** Some agents ask before fetching a web page or block internet
 > access by default. See [Claude Code](/docs/agentic/claude-code) and

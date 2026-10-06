@@ -20,21 +20,22 @@ const guide = `# ${appName}
 
 ## Find the right page
 
-- Work out the project's industry and domain (for example healthcare > ehr) before choosing a page.
-- For each domain concept a task touches, use the deepest page that matches the project: the domain page, otherwise the industry page, otherwise the module's core page. A deeper page already includes everything above it. Some modules start at the industry level and have no core page.
+- Work out the project's industry and domain before choosing a page, using the names exactly as listed below.
+- Use only pages on the project's path: /docs/core/, /docs/<industry>/ and /docs/<industry>/<domain>/. Never use a page from another industry or domain, even for a module with the same name: each domain specifies a module from its own purpose. Every module page starts with "Module identity" and its layer; check it matches the project before using the page. If a web search led you to a page that doesn't match, come back here.
+- For each domain concept a task touches, use the deepest page on the project's path: the domain page, otherwise the industry page, otherwise the module's core page. A deeper page already includes everything above it. Some modules start at the industry level and have no core page.
 - Industry overview pages list the domains in that industry and which modules are specified yet.
-- A module page's markdown is its complete spec, often over 100 KB. Fetch only the sections a task needs. The pages listed under a module are its sections (such as functions/business-rules, functions/validations, data/data-model, interfaces/operations, interfaces/errors, interfaces/dependencies, verification/acceptance) and its variants (such as outpatient and inpatient).
-- A module's Dependencies page lists contracts: what it asks of other modules and gives them. If the other module has a page below, fetch its contract side too. If not, build against the contract text alone and don't invent that module's rules.
+- A module page's markdown is its complete spec, often over 100 KB. Fetch only the sections a task needs. The pages listed under a module are its sections (such as functions/business-rules, functions/validations, data/data-model, interfaces/operations, interfaces/errors, interfaces/dependencies, verification/acceptance) and its variants (kinds of the module that differ in a few items).
+- A module's Dependencies page lists contracts: what it asks of other modules and gives them. If the other module has a page on the project's path, fetch its side of the contract. If not, build against the contract text alone and don't invent that module's rules.
 - Every link below is markdown. Add \`.md\` to any other docs URL, such as \`${siteUrl}/docs/core/appointment.md\`, for the same.
 - Don't load \`/llms-full.txt\` into context. It contains every page and is too large.
 
 ## Read a spec
 
 - Each module page starts with a "How to read this spec" section.
-- Items are tagged with the layer they come from, such as [core], [healthcare] or [ehr]. "overrides" means a deeper layer replaced the item with the same id; only the replacement applies.
-- Validations give each field's rule and error code. A data model field's "codes:" names its standard code system, such as HL7, LOINC or SNOMED CT. Use those codes.
+- Items are tagged with the layer they come from, such as [core], [<industry>] or [<domain>]. "overrides" means a deeper layer replaced the item with the same id; only the replacement applies.
+- Validations give each field's rule and error code. A data model field's "codes:" names the standard code system to use. Use those codes.
 - Operations carry their HTTP method, path and success status; errors carry their HTTP status. Acceptance criteria are Given / When / Then and map one to one onto tests.
-- Settings decide what varies, such as jurisdiction (us or eu). Apply the rules for the project's jurisdiction.
+- Settings decide what varies by deployment, such as the jurisdiction. Apply the rules for the project's jurisdiction where a spec has one.
 - The Reference implementation pages (storage design, implementation notes) are non-normative: one way to build it.
 
 ## Pages`;
