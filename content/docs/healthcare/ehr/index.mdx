@@ -16,12 +16,18 @@ visit. So the shared modules come first, and each later module builds on them.
 | Order | Module | Covers | Status |
 |---|---|---|---|
 | 1 | Patients | Registration, demographics, identifiers and duplicate records | Not yet specified |
-| 2 | [Appointments](/docs/healthcare/ehr/appointment) | Scheduling for outpatients and admitted patients, built on the [core Appointment specification](/docs/core/appointment) | Draft |
+| 2 | [Appointments](/docs/healthcare/ehr/appointment) | Scheduling for outpatient and virtual visits and for patients in a hospital stay, built on the [core Appointment specification](/docs/core/appointment) | Draft |
 | 3 | Encounters | A visit or stay as a clinical record, started from an appointment or an admission | Not yet specified |
 | 4 | Admission, discharge and transfer | Inpatient admission, bed and ward assignment, transfers and discharge | Not yet specified |
 | 5 | Clinical documentation | Notes, vital signs and assessments recorded during an encounter | Not yet specified |
 | 6 | Orders and results | Laboratory and imaging orders, and their results | Not yet specified |
 | 7 | Medications and allergies | Prescribing, administration records and allergy lists | Not yet specified |
+| 8 | Organization | Departments, rooms, equipment and which practitioners work where | Not yet specified |
+| 9 | Referrals | Referrals into specialist departments, and whether one is valid | Not yet specified |
+| 10 | Waitlist | Patients waiting for a slot, and offering freed slots | Not yet specified |
+| 11 | Authorization | Prior authorization requests to payers, and their decisions | Not yet specified |
+| 12 | Theatre | Operating theatre lists and surgical case scheduling | Not yet specified |
+| 13 | Emergency department | Emergency arrivals, triage and treatment | Not yet specified |
 
 The list follows the functional areas of the HL7 EHR System Functional Model
 (ISO 10781:2023): care provision, its support, administration, and the record
