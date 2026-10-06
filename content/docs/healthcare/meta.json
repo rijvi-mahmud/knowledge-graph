@@ -3,6 +3,7 @@
   "icon": "HeartPulse",
   "pages": [
     "index",
+    "patient",
     "appointment",
     "ehr"
   ]

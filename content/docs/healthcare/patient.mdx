@@ -1,0 +1,1892 @@
+---
+title: Patient records
+description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
+module: patient
+version: 0.1.0
+status: draft
+industry: healthcare
+purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
+scope:
+- Searching for a patient, and registering one only when no existing record matches
+- Names, birth date, administrative gender, addresses, phone numbers and email, with their history
+- Identifiers, such as medical record numbers and national health identifiers
+- Optional demographics a deployment chooses to collect, such as race and ethnicity or gender identity
+- Contacts, including emergency contacts
+- Personal representatives and proxies, and whether one may act for the patient
+- Confidential communication preferences
+- Finding duplicate records, merging them, and undoing a wrong merge
+- Recording and retracting death
+- Restricted records, such as for staff or public figures
+- Requests to correct, restrict or erase patient data
+- A log of who viewed or changed each record
+nonGoals:
+- Clinical facts about the patient, such as allergies, problems, sex for clinical use or care plans. Clinical modules own them.
+- Insurance and coverage. They belong to the Coverage module, which refers to the patient by id.
+- Consent to treatment, to sharing and to research, and EU opt-outs and access restrictions on health data. They belong to the Consent module.
+- Logins, passwords and patient portal accounts. They belong to Identity, which links an account to a patient id.
+- Printing documents and sending messages. Other modules ask this one where to send them.
+- Biometric identification, such as palm or face scans.
+- Exchanging records with other organisations or national services. An Exchange module does that, using the patient id and identifiers.
+actors:
+- name: Registrar
+  description: Staff who register patients and keep their details up to date, such as front desk or admissions staff.
+- name: Health information management (HIM) specialist
+  description: Resolves duplicate records, merges and unmerges them, and decides correction requests.
+- name: Clinician
+  description: Reads patient details to provide care.
+- name: Patient
+  description: The person the record is about.
+- name: Personal representative
+  description: 'A person allowed to act for the patient: a parent, guardian or other legal representative, or a proxy the patient chose.'
+- name: Privacy officer
+  description: Reviews who accessed patient records, and handles requests about patient data.
+- name: System
+  description: Another module, or this one acting on its own, such as when it proposes duplicates.
+assumptions:
+- id: AS-H1
+  text: Identity authenticates every caller and says which permissions they hold.
+  rationale: Who someone is as a user is a different question from who a patient is. Keeping them apart lets a patient exist with no account.
+- id: AS-H2
+  text: 'The deployment has a lawful basis to process health data for care: treatment under HIPAA in the United States, and GDPR Article 9(2)(h) in the European Union.'
+  rationale: Without it, no patient record could be held at all. The legal basis is the deployment's responsibility, not this module's.
+- id: AS-H3
+  text: The jurisdiction, record_retention, identifier_systems and collected_fields settings are set with legal advice before go-live.
+  rationale: Retention, national identifiers and which demographics may be collected differ by US state and EU member state.
+- id: AS-H4
+  text: Modules that record care tell this one when they do, so it knows when a patient was last cared for.
+  rationale: Retention runs from the last care (BR-H18), and a record with care on it must be merged, not discarded (BR-H11).
+glossary:
+- term: Patient record
+  definition: The one record of who a patient is. Clinical data lives in other modules and points to it by id.
+- term: Duplicate record
+  definition: A second record for a person who already has one. Around 2% of registrations are in error, mostly duplicates (HL7 FHIR).
+- term: Merge
+  definition: Retiring a duplicate (the source) in favour of the record to keep (the target). The source stays, marked merged, and points to the target.
+- term: Unmerge
+  definition: Undoing a merge that joined two different people.
+- term: Identifier
+  definition: A number assigned to the patient by an organisation or government, such as a medical record number or a national health identifier, with the system that issued it.
+- term: Administrative gender
+  definition: The gender used for administration and record keeping (FHIR Patient.gender). It has no clinical meaning.
+- term: Personal representative
+  definition: Someone the law treats as the patient for their health information, such as a parent or guardian (45 CFR 164.502(g)), or a proxy the patient authorised (EHDS Article 4(2)).
+- term: Restricted record
+  definition: A record that needs extra protection, such as a staff member's or a public figure's (HL7 confidentiality R or V).
+- term: Statement of disagreement
+  definition: A patient's written statement disagreeing with a denied correction. In the United States it is kept with the record (45 CFR 164.526(d)).
+concepts:
+- name: One record per person
+  description: Every other module refers to a patient only by id. When two records turn out to be the same person, the merge tells every module to point at the one that remains.
+- name: History, not overwrite
+  description: Names, addresses, phone numbers and identifiers change. The old values are kept and marked old, because documents and other systems still use them.
+dataModel:
+- name: id
+  type: string
+  required: true
+  description: The record id. It never changes and is never reused (BR-H2).
+- name: status
+  type: enum
+  required: true
+  description: Whether the record is in use.
+  constraints: active | inactive | merged | entered_in_error
+- name: identifiers
+  type: identifier[]
+  required: false
+  description: Each with system, value, type (such as MRN or national health identifier), use (usual, official, temp, secondary or old) and period (FHIR Identifier).
+  constraints: system must be in identifier_systems; system plus value unique among records in use (BR-H3)
+- name: names
+  type: name[]
+  required: true
+  description: Each with use (usual, official, temp, nickname, anonymous, old or maiden), family name, given names, prefix, suffix and period (FHIR HumanName).
+  constraints: at least one usual or official name, or a temp name (BR-H4)
+- name: birth_date
+  type: date
+  required: true
+  description: Full date, or year and month, or year only when only that is known.
+  constraints: not in the future
+- name: birth_date_estimated
+  type: boolean
+  required: false
+  description: Whether birth_date is an estimate, such as from the patient's stated age.
+- name: administrative_gender
+  type: enum
+  required: true
+  description: For administration and record keeping (FHIR Patient.gender).
+  constraints: male | female | other | unknown
+- name: addresses
+  type: address[]
+  required: false
+  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period.
+- name: telecoms
+  type: contact point[]
+  required: false
+  description: Phone numbers and email addresses, each with use (home, work, mobile, temp or old), rank and period.
+- name: languages
+  type: language[]
+  required: false
+  description: BCP 47 tags, one marked preferred.
+- name: interpreter_needed
+  type: boolean
+  required: false
+  description: Whether the patient needs an interpreter (USCDI v6).
+- name: multiple_birth
+  type: boolean or integer
+  required: false
+  description: Whether the patient is one of twins, triplets and so on, or their birth order (FHIR Patient.multipleBirth).
+- name: deceased
+  type: boolean
+  required: false
+  description: Whether the patient has died (BR-H12).
+- name: deceased_at
+  type: date or instant
+  required: false
+  description: When the patient died, as precisely as known.
+  constraints: not before birth_date
+- name: death_source
+  type: string
+  required: false
+  description: Who reported the death, such as a pronouncement in this hospital or a family member.
+  constraints: required with deceased
+- name: contacts
+  type: contact[]
+  required: false
+  description: People to contact about the patient, each with relationship, name, phone, address and whether they are the emergency contact (FHIR Patient.contact).
+- name: representatives
+  type: representative[]
+  required: false
+  description: People allowed to act for the patient, each with kind, scope, exclusions, period and the evidence seen (BR-H14).
+- name: confidential_communication
+  type: contact point or address
+  required: false
+  description: Where the patient asked to be contacted instead of their usual details (BR-H16).
+- name: general_practitioner
+  type: string
+  required: false
+  description: The patient's nominated primary care practitioner or practice, owned by the Organization module (FHIR Patient.generalPractitioner).
+- name: marital_status
+  type: code
+  required: false
+  description: Collected only when listed in collected_fields.
+- name: race_ethnicity
+  type: code[]
+  required: false
+  description: Self-reported, one or more categories, or declined (BR-H6). Collected only when listed in collected_fields.
+- name: gender_identity
+  type: code
+  required: false
+  description: The gender the patient identifies with, or declined. Collected only when listed in collected_fields.
+- name: pronouns
+  type: code
+  required: false
+  description: How the patient asks to be referred to. Collected only when listed in collected_fields.
+- name: occupation
+  type: text
+  required: false
+  description: Current job and industry (USCDI). Collected only when listed in collected_fields.
+- name: confidentiality
+  type: enum
+  required: true
+  description: How much protection the record needs (HL7 confidentiality codes N, R and V).
+  constraints: normal | restricted | very_restricted; default normal
+- name: accuracy_contested
+  type: boolean
+  required: false
+  description: Set while the patient contests the accuracy of their data and asked for restriction (BR-H17).
+- name: replaced_by
+  type: string
+  required: false
+  description: The record that replaced this one in a merge (FHIR link replaced-by).
+  constraints: set only when status = merged
+- name: last_care_at
+  type: instant
+  required: false
+  description: When another module last reported care for the patient (AS-H4).
+- name: revision
+  type: integer
+  required: true
+  description: Increases with every change. A change must send the revision it read (BR-H21).
+relationships:
+- type: has_many
+  target: identifier
+  note: current and old
+- type: has_many
+  target: representative
+  note: people who may act for the patient
+- type: has_many
+  target: duplicate-candidate
+  note: pairs of records that may be the same person
+- type: has_many
+  target: correction-request
+  note: requests to correct the patient's data
+- type: has_one
+  target: patient
+  note: replaced_by, after a merge
+- type: exposes_to
+  target: appointment
+  note: patient details, confidential communications and representative authority
+- type: can_trigger
+  target: event:patient.merged
+businessRules:
+- id: BR-H1
+  text: Before a new patient is registered, existing records are searched with at least the name and birth date. If the search finds a probable match, the registrar either picks that record or registers a new one with a reason.
+  rationale: HL7 FHIR notes that around 2% of registrations are in error, mostly duplicate records. A duplicate splits one person's history in two, so allergies and results on one are missed on the other.
+- id: BR-H2
+  text: A record's id never changes and is never reused. Numbers people use, such as medical record numbers, are identifiers on the record, not its id.
+  rationale: Other modules hold the id for years. FHIR warns that medical record numbers change, for example when duplicates are merged, so they must not be the id.
+- id: BR-H3
+  text: An identifier's system and value belong to at most one record that is active or inactive.
+  rationale: Two people with the same medical record number means a scan or a lookup can open the wrong person's record.
+- id: BR-H4
+  text: A record has at least one usual or official name, a birth date and an administrative gender. The birth date can be partial or estimated, and the gender can be unknown, when that is all anyone knows.
+  rationale: Name and birth date are what every search and every two-identifier check rely on (BR-H1). Allowing partial and estimated values records what is known instead of inventing it.
+- id: BR-H5
+  text: A change to a name, address, phone number, email or identifier keeps the old value, marked old, with the period it was in use. Nothing is overwritten.
+  rationale: USCDI includes previous name and previous address because documents and other systems still use them. Matching a referral letter in a maiden name needs the old name.
+- id: BR-H6
+  text: Fields listed in collected_fields are optional for the patient. Race and ethnicity and gender identity are recorded as the patient reports them, with declined as an answer, and are never inferred by staff.
+  rationale: OMB SPD 15 says race and ethnicity data should be self-reported wherever possible, and allows several categories. USCDI v3.1 removed sexual orientation and gender identity in 2025 while EU law treats racial or ethnic origin as special category data (GDPR Article 9), so each deployment decides what it collects.
+- id: BR-H7
+  text: 'A merge retires the source record in favour of the target: the source becomes merged and points to the target with replaced_by, its identifiers are copied to the target and marked old, and patient.merged tells every module to move its data to the target. A merge always records who did it, why, and how the two records differed.'
+  rationale: This is the FHIR $merge behaviour. Keeping the source, rather than deleting it, lets anyone holding the old id find the right record, and makes a wrong merge reversible.
+- id: BR-H8
+  text: Two records are merged only by an HIM specialist. Matching proposes duplicates; it never merges on its own.
+  rationale: A wrong merge puts two people's care in one record, which is a worse failure than a duplicate. A person confirms every merge.
+- id: BR-H9
+  text: Reading a merged record returns it with status merged and replaced_by, following the chain to the record in use. A change to a merged record is rejected.
+  rationale: FHIR notes the record pointed to may itself have been merged later. Writing to a retired record would put new data where nobody looks.
+- id: BR-H10
+  text: An unmerge restores the source record to active with the identifiers it had, and emits patient.unmerged. Data recorded on the target since the merge stays there, and every module is told to review it.
+  rationale: A wrong merge mixes two people's care. Only the people who recorded care since the merge can tell whose it is, so nothing is moved back automatically.
+- id: BR-H11
+  text: A record can be marked entered in error only while no care has been recorded for it (last_care_at unset). Once care exists, the record is merged instead.
+  rationale: FHIR marks a record created in error as not in use. If care was recorded, discarding the record would hide that care; merging keeps it with the right person.
+- id: BR-H12
+  text: Recording a death sets deceased, deceased_at and death_source, and emits patient.deceased. The record stays active. A death recorded in error can be retracted only by an HIM specialist, with a reason, which emits patient.death_retracted.
+  rationale: FHIR notes a deceased patient's record may stay in use for some time, for results, billing and family. A wrong death record stops care and messages, so retracting it is a controlled correction.
+- id: BR-H13
+  text: 'A deceased patient''s record keeps the same protection as a living patient''s for as long as the law requires: 50 years after death in the United States.'
+  rationale: HIPAA protects a deceased person's health information for 50 years after death (45 CFR 164.502(f)). GDPR does not apply to the dead, but member states may set rules (Recital 27), and medical confidentiality continues.
+- id: BR-H14
+  text: A representative is recorded with their kind (parent, guardian, other legal representative, or a proxy the patient chose), the scope of their authority, any exclusions, a period, and the evidence seen. They may act for the patient only within that scope and period, and not for an excluded service.
+  rationale: HIPAA treats a personal representative as the patient (45 CFR 164.502(g)), and the EHDS lets patients authorise proxies for a limited period and purpose (Article 4(2)). Recording the scope makes every module's question "may this person act?" answerable the same way.
+- id: BR-H15
+  text: Staff can exclude services or episodes from a representative's authority where the law lets the patient act alone, or where treating someone as the representative could endanger the patient. The exclusion is not shown to that representative.
+  rationale: Under HIPAA a parent is not the representative for care a minor could consent to themselves (164.502(g)(3)), and a provider may refuse to treat someone as the representative where there is abuse or danger (164.502(g)(5)). Which care qualifies is set by state or member state law, so staff record it.
+- id: BR-H16
+  text: A patient can ask to be contacted by other means or at another address, without giving a reason. Every module that contacts the patient asks this one where to.
+  rationale: US providers must accommodate reasonable requests for confidential communications and may not ask why (45 CFR 164.522(b)). For some patients an ordinary letter home could be unsafe.
+- id: BR-H17
+  text: A patient can ask for their data to be corrected. The request is decided within correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made and linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which stays with the record. While the patient contests accuracy, they can ask for the data to be restricted, which sets accuracy_contested.
+  rationale: HIPAA gives 60 days with one 30-day extension, and requires a written denial and a right to disagree (45 CFR 164.526). GDPR gives a right to rectification (Article 16) answered within one month, extendable by two (Article 12(3)), and to restriction while accuracy is checked (Article 18(1)(a)). The EHDS adds online requests (Article 6).
+- id: BR-H18
+  text: A request to erase a patient record is refused while record_retention applies, counted from last_care_at or the date of death. When it ends, identifying fields are removed and the id is kept.
+  rationale: HIPAA gives no right to erasure, and US hospitals must keep records for at least 5 years (42 CFR 482.24(b)(1)), longer in many states. GDPR Article 17(3)(c) lets health data be kept for care. Keeping the id keeps every other module's references valid.
+- id: BR-H19
+  text: Every view and every change of a patient record is logged with who, when, what, and the reason given. Patients can get a report of who accessed their record where the jurisdiction gives that right.
+  rationale: HIPAA requires audit controls (45 CFR 164.312(b)). The EHDS gives EU patients information on every access to their health data, kept for at least three years (Article 9).
+- id: BR-H20
+  text: Opening a restricted or very restricted record needs a reason, which is logged. Every opening of a very restricted record is reported to the privacy officer with patient.restricted_access.
+  rationale: Staff and public figures' records are the ones colleagues are tempted to look at. A stated reason and a report deter snooping without stopping care.
+- id: BR-H21
+  text: Every change sends the revision it read, and a stale revision is rejected.
+  rationale: Registrars and HIM specialists edit the same record at once, such as during a merge. Without this, one silently undoes the other.
+- id: BR-H22
+  text: Search and matching compare every name, address, phone number and identifier the patient has had, including old ones.
+  rationale: A patient returning after years, or a referral in a former name, must still find the existing record (BR-H1).
+- id: BR-H23
+  text: National identifiers and social security numbers are shown in full only to roles that need them, and otherwise masked.
+  rationale: GDPR lets member states set conditions for national identification numbers (Article 87), and HIPAA limits use to the minimum necessary (45 CFR 164.502(b)). These numbers enable identity theft.
+validations:
+- field: names
+  rule: at least one usual, official or temp name with a family or given name
+  error: PATIENT_INVALID_NAME
+- field: birth_date
+  rule: a valid full or partial date, not in the future
+  error: PATIENT_INVALID_BIRTH_DATE
+- field: administrative_gender
+  rule: male, female, other or unknown
+  error: PATIENT_INVALID_CODE
+- field: identifiers
+  rule: system listed in identifier_systems, and value in that system's format
+  error: PATIENT_INVALID_IDENTIFIER
+- field: identifiers
+  rule: system and value not held by another record in use
+  error: PATIENT_DUPLICATE_IDENTIFIER
+- field: languages
+  rule: valid BCP 47 tags, at most one preferred
+  error: PATIENT_INVALID_CODE
+- field: race_ethnicity, gender_identity, pronouns, marital_status, occupation
+  rule: accepted only when listed in collected_fields, with codes from the configured lists
+  error: PATIENT_FIELD_NOT_COLLECTED
+- field: deceased_at
+  rule: not before birth_date and not in the future
+  error: PATIENT_INVALID_DEATH_DATE
+- field: representatives
+  rule: kind, scope and period present, period end after start
+  error: PATIENT_INVALID_REPRESENTATIVE
+stateMachine:
+  initial: active
+  states:
+  - active
+  - inactive
+  - merged
+  - entered_in_error
+  transitions:
+  - from: active
+    to: inactive
+    trigger: inactivate, or inactive_after passes with no care
+  - from: inactive
+    to: active
+    trigger: reactivate, or care is reported
+  - from: active
+    to: merged
+    trigger: merge, as the source
+    guard: target is active or inactive and is another record
+  - from: inactive
+    to: merged
+    trigger: merge, as the source
+    guard: target is active or inactive and is another record
+  - from: merged
+    to: active
+    trigger: unmerge
+  - from: active
+    to: entered_in_error
+    trigger: mark entered in error
+    guard: last_care_at unset
+  - from: inactive
+    to: entered_in_error
+    trigger: mark entered in error
+    guard: last_care_at unset
+workflows:
+- name: Register a patient
+  trigger: A person needs care and may not have a record
+  actor: Registrar
+  steps:
+  - Search with name and birth date, plus any identifier, phone or address the patient gives
+  - If a record matches, use it and update what has changed
+  - Otherwise register a new record, with a reason if the search found a probable match
+  - Emit patient.registered
+  - Propose duplicates for review if matching finds any after saving
+  outcome: The patient has exactly one record, or a possible duplicate is waiting for review.
+- name: Review a possible duplicate
+  trigger: Matching proposes two records that may be the same person
+  actor: Health information management (HIM) specialist
+  steps:
+  - Compare the two records side by side, including old names and identifiers
+  - 'Decide: the same person, or not'
+  - If the same, preview the merge, then merge the newer or less complete record into the other
+  - If not, mark the pair not a duplicate so it is not proposed again
+  outcome: The pair is resolved, and the decision is recorded.
+- name: Merge two records
+  trigger: An HIM specialist confirms a duplicate
+  actor: Health information management (HIM) specialist
+  steps:
+  - Check the revisions and that both records are in use
+  - Mark the source merged with replaced_by, and copy its identifiers to the target marked old
+  - Record who merged, why and how the records differed
+  - Emit patient.merged; each module moves its data to the target
+  outcome: One record remains, and anyone holding the old id is pointed to it.
+- name: Undo a wrong merge
+  trigger: An HIM specialist finds a merge joined two different people
+  actor: Health information management (HIM) specialist
+  steps:
+  - Restore the source to active with its identifiers, and remove them from the target
+  - Emit patient.unmerged
+  - Each module reviews data recorded on the target since the merge and moves what belongs to the source
+  outcome: Two records again, with care recorded since the merge checked by the people who recorded it.
+- name: Record a death
+  trigger: A patient dies in hospital, or a death is reported
+  actor: Registrar
+  steps:
+  - Record deceased_at as precisely as known, and death_source
+  - Emit patient.deceased
+  - Other modules stop reminders and review future plans
+  outcome: Nobody is contacted or booked as if the patient were alive.
+- name: Decide a correction request
+  trigger: A patient asks for their data to be corrected
+  actor: Health information management (HIM) specialist
+  steps:
+  - Record the request and its due date from correction_deadline
+  - If the patient asks, set accuracy_contested while it is checked
+  - 'Accept: make the change, link it to the request, and tell the patient'
+  - 'Deny: give the reason in writing, and record any statement of disagreement'
+  - Clear accuracy_contested
+  outcome: Every request is answered in time, and a disagreement stays with the record.
+edgeCases:
+- id: EC-H1
+  situation: Twins born the same day share a family name and birth date, and their mother registers both.
+  behaviour: The search proposes the first twin when registering the second. The registrar registers a new record with the reason "twin", and multiple_birth records the birth order.
+  covers:
+  - BR-H1
+  - AC-H1
+- id: EC-H2
+  situation: A patient registered under her maiden name returns married, with a new family name.
+  behaviour: The search finds her through the old name. The new name is added as official and the maiden name is kept with use maiden.
+  covers:
+  - BR-H5
+  - BR-H22
+  - AC-H4
+- id: EC-H3
+  situation: A registrar types the birth date with day and month swapped.
+  behaviour: The search may not find the record. If a duplicate is created, matching later proposes the pair, and an HIM specialist merges them.
+  covers:
+  - BR-H1
+  - BR-H8
+  - AC-H6
+- id: EC-H4
+  situation: A patient knows only their age, not their birth date.
+  behaviour: birth_date is set to the estimated year, with birth_date_estimated true.
+  covers:
+  - BR-H4
+  - AC-H3
+- id: EC-H5
+  situation: A patient has no fixed address.
+  behaviour: The record is registered with no address. Addresses are optional.
+  covers:
+  - BR-H4
+  - AC-H3
+- id: EC-H6
+  situation: Two registrars update the same record at once.
+  behaviour: The second change fails with PATIENT_REVISION_CONFLICT and is retried on the latest revision.
+  covers:
+  - BR-H21
+  - AC-H16
+- id: EC-H7
+  situation: A medical record number is entered for a second patient.
+  behaviour: Rejected with PATIENT_DUPLICATE_IDENTIFIER.
+  covers:
+  - BR-H3
+  - AC-H2
+- id: EC-H8
+  situation: A record is merged while the source patient has an appointment booked.
+  behaviour: Appointments receives patient.merged and moves the appointment to the target. Reading the source returns replaced_by.
+  covers:
+  - BR-H7
+  - BR-H9
+  - AC-H7
+- id: EC-H9
+  situation: Record A was merged into B, and B was later merged into C.
+  behaviour: Reading A returns replaced_by C, following the chain.
+  covers:
+  - BR-H9
+  - AC-H8
+- id: EC-H10
+  situation: A merge turns out to have joined two different people, and a lab result was recorded on the target since.
+  behaviour: The unmerge restores the source. The result stays on the target and the lab module is told to review it.
+  covers:
+  - BR-H10
+  - AC-H9
+- id: EC-H11
+  situation: A record created by mistake already has a completed appointment.
+  behaviour: Marking it entered in error fails with PATIENT_HAS_CARE. It is merged into the right record instead.
+  covers:
+  - BR-H11
+  - AC-H10
+- id: EC-H12
+  situation: A death is recorded for the wrong patient.
+  behaviour: An HIM specialist retracts it with a reason, and patient.death_retracted lets other modules restore reminders and plans.
+  covers:
+  - BR-H12
+  - AC-H11
+- id: EC-H13
+  situation: Only the year of death is known, from a family member.
+  behaviour: deceased_at holds the year, with death_source family.
+  covers:
+  - BR-H12
+  - AC-H11
+- id: EC-H14
+  situation: A parent asks about an appointment their 16-year-old consented to alone, where state law allows it.
+  behaviour: The service is excluded from the parent's authority, so the answer to "may this person act?" is no.
+  covers:
+  - BR-H15
+  - AC-H13
+- id: EC-H15
+  situation: A proxy's authorisation ended last month.
+  behaviour: They can no longer act for the patient. The answer to "may this person act?" is no.
+  covers:
+  - BR-H14
+  - AC-H12
+- id: EC-H16
+  situation: A patient asks for erasure of their record in the European Union.
+  behaviour: Refused with PATIENT_RETENTION_REQUIRED while record_retention applies, with the reason given.
+  covers:
+  - BR-H18
+  - AC-H15
+- id: EC-H17
+  situation: A colleague opens a nurse's very restricted record without a reason.
+  behaviour: Rejected with PATIENT_REASON_REQUIRED. With a reason, it opens, and the privacy officer is told.
+  covers:
+  - BR-H20
+  - AC-H14
+- id: EC-H18
+  situation: A registrar submits gender identity where collected_fields does not list it.
+  behaviour: Rejected with PATIENT_FIELD_NOT_COLLECTED.
+  covers:
+  - BR-H6
+  - AC-H5
+- id: EC-H19
+  situation: A registration is retried after a timeout with the same Idempotency-Key.
+  behaviour: The first result is returned and no second record is created.
+  covers:
+  - FR-H1
+  - AC-H17
+- id: EC-H20
+  situation: patient.updated at revision 5 arrives before revision 4.
+  behaviour: Consumers apply revision 5 and ignore revision 4 (DG-H2).
+  covers:
+  - DG-H2
+- id: EC-H21
+  situation: Identity is down.
+  behaviour: Every request fails with PATIENT_DEPENDENCY_UNAVAILABLE, because callers cannot be authorised.
+  covers:
+  - FR-H14
+- id: EC-H22
+  situation: A patient contests their birth date and asks for restriction while it is checked.
+  behaviour: accuracy_contested is set, so other modules see the date is disputed, until the request is decided.
+  covers:
+  - BR-H17
+  - AC-H19
+functionalRequirements:
+- id: FR-H1
+  text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
+  priority: must
+  verification: test
+- id: FR-H2
+  text: The service must search patients by any current or old name, birth date, identifier, phone number or address.
+  priority: must
+  verification: test
+- id: FR-H3
+  text: The service must match a set of patient details against existing records and return candidates graded certain, probable or possible, best first.
+  priority: must
+  verification: test
+- id: FR-H4
+  text: The service must keep a list of possible duplicates for review, and let an HIM specialist mark a pair not a duplicate.
+  priority: must
+  verification: test
+- id: FR-H5
+  text: The service must let an HIM specialist preview and perform a merge, and undo one.
+  priority: must
+  verification: test
+- id: FR-H6
+  text: The service must record and retract a death.
+  priority: must
+  verification: test
+- id: FR-H7
+  text: The service must record representatives and answer whether a person may act for a patient for a given purpose.
+  priority: must
+  verification: test
+- id: FR-H8
+  text: The service must tell any module where to contact a patient, honouring confidential communication preferences.
+  priority: must
+  verification: test
+- id: FR-H9
+  text: The service must track correction requests to a decision within correction_deadline.
+  priority: must
+  verification: test
+- id: FR-H10
+  text: The service must log every view and change of a patient record, and let a privacy officer read the log.
+  priority: must
+  verification: test
+- id: FR-H11
+  text: The service must give a patient a report of who accessed their record, where the jurisdiction gives that right.
+  priority: should
+  verification: test
+- id: FR-H12
+  text: The service must export a patient record as an HL7 FHIR R5 Patient resource.
+  priority: must
+  verification: test
+- id: FR-H13
+  text: The service must update last_care_at when a module reports care.
+  priority: must
+  verification: test
+- id: FR-H14
+  text: The service must fail fast with PATIENT_DEPENDENCY_UNAVAILABLE when Identity cannot be reached.
+  priority: must
+  verification: test
+- id: FR-H15
+  text: The service must inactivate records with no care for inactive_after, when that setting is set.
+  priority: could
+  verification: test
+nonFunctionalRequirements:
+- category: security
+  text: Only roles that need it can read a patient record, and every read is logged (BR-H19).
+- category: compliance
+  text: The jurisdiction setting decides retention, correction deadlines and access reports. United States and European Union are supported.
+- category: compatibility
+  text: 'Patient records map onto HL7 FHIR R5 Patient: names to HumanName, identifiers to Identifier, merged records to link replaced-by, and status inactive to active false.'
+- category: availability
+  text: Search stays available during a merge. Records being merged read as they were until the merge completes.
+- category: reliability
+  text: A change is acknowledged only after it is committed together with its events.
+- category: usability
+  text: Search results show enough to tell candidates apart, such as birth date, address and identifiers, masked where BR-H23 applies.
+- category: portability
+  text: No requirement depends on a particular database, matching algorithm, language or framework.
+constraints:
+- id: CON-H1
+  text: Patient data is encrypted in transit and at rest.
+  rationale: GDPR Article 32 lists encryption as a security measure, and HIPAA treats it as an addressable safeguard (45 CFR 164.312).
+- id: CON-H2
+  text: The access log cannot be changed or deleted by the people it records.
+  rationale: A log its subjects can edit cannot show who accessed what.
+- id: CON-H3
+  text: Language tags follow BCP 47, and dates follow ISO 8601, allowing year or year and month alone.
+  rationale: FHIR uses both, and a partial birth date must not be padded into a false full date.
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. Decides defaults for correction deadlines and access reports. Required.
+- name: record_retention
+  type: duration
+  description: How long a record is kept after last_care_at or death. At least 5 years for US hospitals (42 CFR 482.24(b)(1)); set per state or member state law. Required.
+- name: identifier_systems
+  type: list of identifier systems
+  description: The identifier systems accepted, with their format and which roles see them unmasked, such as the hospital's medical record number or a national health identifier. Required.
+- name: collected_fields
+  type: list
+  default: '[]'
+  description: 'Which optional demographics are collected: race_ethnicity, gender_identity, pronouns, marital_status, occupation. Set with legal advice (BR-H6).'
+- name: race_ethnicity_categories
+  type: code list
+  description: Categories offered when race_ethnicity is collected. In the United States, the OMB SPD 15 minimum categories, required for federal reporting by March 28, 2029.
+- name: correction_deadline
+  type: duration
+  description: 'Time to decide a correction request. Defaults by jurisdiction: 60 days in the US (45 CFR 164.526(b)(2)), one month in the EU (GDPR Article 12(3)).'
+- name: correction_extension
+  type: duration
+  description: 'One extension allowed, with a written reason. Defaults by jurisdiction: 30 days in the US, two months in the EU.'
+- name: access_log_retention
+  type: duration
+  description: How long the access log is kept. At least three years in the EU (EHDS Article 9(2)); set with legal advice in the US. Required.
+- name: match_review_grade
+  type: certain | probable | possible
+  default: probable
+  description: The lowest match grade that is proposed for duplicate review.
+- name: inactive_after
+  type: duration
+  description: Inactivate records with no care for this long. Unset means records are never inactivated automatically.
+performanceTargets:
+- id: PERF-H1
+  indicator: Duplicate rate
+  target: Set by each deployment, and tracked over time
+  measurement: Confirmed duplicates (merges) as a share of new registrations, per month.
+- id: PERF-H2
+  indicator: Wrong merges
+  target: '0'
+  measurement: Unmerges per month. Any non-zero value is a defect to investigate.
+- id: PERF-H3
+  indicator: Search latency
+  target: Set by each deployment as an SLO
+  measurement: 95th and 99th percentile time to return search results.
+- id: PERF-H4
+  indicator: Duplicate review backlog
+  target: Set by each deployment
+  measurement: Possible duplicates open for longer than the deployment's review target.
+- id: PERF-H5
+  indicator: Correction requests answered on time
+  target: 100%
+  measurement: Share of correction requests decided before their due date, including any extension.
+- id: PERF-H6
+  indicator: Event publishing delay
+  target: Set by each deployment as an SLO
+  measurement: 99th percentile time between a change being saved and its event being published.
+acceptanceCriteria:
+- id: AC-H1
+  given: an existing record for Ana Silva, born 1990-04-02
+  when: a registrar registers Ana Silva, born 1990-04-02, without a reason
+  then: the request fails with PATIENT_POSSIBLE_DUPLICATE and returns the existing record; with a reason it succeeds
+  verifies:
+  - BR-H1
+  - FR-H1
+- id: AC-H2
+  given: a record holding MRN 100234
+  when: another record is given MRN 100234
+  then: the request fails with PATIENT_DUPLICATE_IDENTIFIER
+  verifies:
+  - BR-H3
+- id: AC-H3
+  given: a registration with only an estimated birth year and no address
+  when: it is submitted
+  then: the record is created with birth_date_estimated true; a registration with no name fails with PATIENT_INVALID_NAME
+  verifies:
+  - BR-H4
+- id: AC-H4
+  given: a patient whose official name changes from Ana Silva to Ana Costa
+  when: the change is saved
+  then: Ana Silva is kept with use old and its period, and a search for Ana Silva finds the record
+  verifies:
+  - BR-H5
+  - BR-H22
+  - FR-H2
+- id: AC-H5
+  given: collected_fields without gender_identity
+  when: a registrar submits a gender identity, then a patient declines race and ethnicity where it is collected
+  then: the first fails with PATIENT_FIELD_NOT_COLLECTED; the second is recorded as declined
+  verifies:
+  - BR-H6
+- id: AC-H6
+  given: two records that match as probable
+  when: matching runs
+  then: the pair is proposed for review and neither record changes until an HIM specialist decides
+  verifies:
+  - BR-H8
+  - FR-H3
+  - FR-H4
+- id: AC-H7
+  given: source record S with MRN 1 and target T with MRN 2
+  when: an HIM specialist merges S into T
+  then: S is merged with replaced_by T, T holds MRN 1 marked old, the merge records who, why and the differences, and patient.merged is emitted
+  verifies:
+  - BR-H7
+  - FR-H5
+- id: AC-H8
+  given: A merged into B, then B merged into C
+  when: A is read, then a change is sent to A
+  then: A keeps its id and the read returns replaced_by C; the change fails with PATIENT_MERGED
+  verifies:
+  - BR-H9
+  - BR-H2
+- id: AC-H9
+  given: S merged into T, and a result recorded on T afterwards
+  when: the merge is undone
+  then: S is active with MRN 1 again, T no longer holds it, the result stays on T, and patient.unmerged is emitted
+  verifies:
+  - BR-H10
+  - FR-H5
+- id: AC-H10
+  given: a record with last_care_at set
+  when: it is marked entered in error
+  then: the request fails with PATIENT_HAS_CARE; a record with no care becomes entered_in_error
+  verifies:
+  - BR-H11
+- id: AC-H11
+  given: an active patient
+  when: a death is recorded with only a year and death_source family, then retracted with a reason
+  then: the record stays active, patient.deceased then patient.death_retracted are emitted, and a death before birth_date fails with PATIENT_INVALID_DEATH_DATE
+  verifies:
+  - BR-H12
+  - FR-H6
+- id: AC-H12
+  given: a proxy authorised until 2026-09-30 for appointments only
+  when: the proxy asks to act on 2026-10-06, and earlier to read the whole record
+  then: both answers are no
+  verifies:
+  - BR-H14
+  - FR-H7
+- id: AC-H13
+  given: a parent representative with one service excluded
+  when: the parent asks to act for that service, and for another
+  then: the first answer is no, the second is yes, and the exclusion is not shown to the parent
+  verifies:
+  - BR-H15
+  - FR-H7
+- id: AC-H14
+  given: a very restricted record
+  when: a clinician opens it without a reason, then with one
+  then: the first fails with PATIENT_REASON_REQUIRED; the second succeeds, is logged with the reason, and emits patient.restricted_access
+  verifies:
+  - BR-H20
+  - BR-H19
+  - FR-H10
+- id: AC-H15
+  given: a record whose last_care_at is within record_retention
+  when: the patient asks for erasure
+  then: the request fails with PATIENT_RETENTION_REQUIRED; after retention, identifying fields are removed and the id remains
+  verifies:
+  - BR-H18
+- id: AC-H16
+  given: a record at revision 3
+  when: two updates send revision 3
+  then: one succeeds; the other fails with PATIENT_REVISION_CONFLICT
+  verifies:
+  - BR-H21
+- id: AC-H17
+  given: a registration that succeeded
+  when: it is retried with the same Idempotency-Key, then with the same key and a different body
+  then: the first retry returns the original record; the second fails with PATIENT_IDEMPOTENCY_KEY_REUSED
+  verifies:
+  - FR-H1
+- id: AC-H18
+  given: a patient with a confidential communication address
+  when: Appointments asks where to send a reminder
+  then: the confidential address is returned
+  verifies:
+  - BR-H16
+  - FR-H8
+- id: AC-H19
+  given: a correction request received with jurisdiction us
+  when: it is denied with a reason and the patient files a statement of disagreement
+  then: the decision is recorded within 60 days, the statement stays with the record, and accuracy_contested is cleared
+  verifies:
+  - BR-H17
+  - FR-H9
+- id: AC-H20
+  given: a patient with three accesses to their record
+  when: they ask who accessed it, with jurisdiction eu
+  then: the report lists each access with who, when and what
+  verifies:
+  - BR-H19
+  - FR-H11
+- id: AC-H21
+  given: any patient
+  when: it is exported
+  then: the result is a valid HL7 FHIR R5 Patient resource
+  verifies:
+  - FR-H12
+- id: AC-H22
+  given: an inactive record
+  when: Appointments reports a check-in for the patient
+  then: last_care_at is updated and the record becomes active
+  verifies:
+  - FR-H13
+- id: AC-H23
+  given: Identity unreachable
+  when: any request arrives
+  then: it fails with PATIENT_DEPENDENCY_UNAVAILABLE
+  verifies:
+  - FR-H14
+- id: AC-H24
+  given: inactive_after of 10 years and a record with no care for 11
+  when: the inactivation job runs
+  then: the record is inactive and patient.inactivated is emitted
+  verifies:
+  - FR-H15
+- id: AC-H25
+  given: a social security number and a registrar without the role to see it
+  when: the registrar reads the record
+  then: the number is masked
+  verifies:
+  - BR-H23
+- id: AC-H26
+  given: a deceased patient who died 10 years ago in the United States
+  when: a registrar without a care reason reads the record
+  then: the same access rules and logging apply as for a living patient
+  verifies:
+  - BR-H13
+- id: AC-H27
+  given: two records proposed as a duplicate
+  when: an HIM specialist marks them not a duplicate
+  then: the pair is closed and not proposed again
+  verifies:
+  - FR-H4
+- id: AC-H28
+  given: a privacy officer
+  when: they read a record's access log
+  then: they see every view and change with who, when and what
+  verifies:
+  - FR-H10
+  - CON-H2
+- id: AC-H29
+  given: patient data in storage and in transit
+  when: it is inspected
+  then: it is encrypted
+  verifies:
+  - CON-H1
+- id: AC-H30
+  given: a birth date of 1990-04
+  when: it is saved and exported
+  then: it stays year and month, never padded to a full date
+  verifies:
+  - CON-H3
+operations:
+- name: Search patients
+  actor: Registrar
+  description: Find patients by name, birth date, identifier, phone or address, including old values.
+  method: GET
+  path: /patients
+  success: 200
+  input: any of name, birth date, identifier, phone, address; limit and cursor
+  output: matching records with enough detail to tell them apart, masked where BR-H23 applies
+  errors:
+  - PATIENT_INVALID_QUERY
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Match patient details
+  actor: System
+  description: Score a set of patient details against existing records, like FHIR Patient $match.
+  method: POST
+  path: /patients/match
+  success: 200
+  input: patient details, possibly incomplete; optional count
+  output: 'candidates best first, each with a grade: certain, probable or possible'
+  errors:
+  - PATIENT_INVALID_QUERY
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Register a patient
+  actor: Registrar
+  description: Create a patient record after a search. Accepts a retry key.
+  method: POST
+  path: /patients
+  success: 201
+  input: names, birth date and whether estimated, administrative gender, and optional identifiers, addresses, telecoms, languages, contacts, confidentiality and collected fields; the search id; a reason if the search found a probable match
+  output: the record
+  errors:
+  - PATIENT_SEARCH_REQUIRED
+  - PATIENT_POSSIBLE_DUPLICATE
+  - PATIENT_INVALID_NAME
+  - PATIENT_INVALID_BIRTH_DATE
+  - PATIENT_INVALID_CODE
+  - PATIENT_INVALID_IDENTIFIER
+  - PATIENT_DUPLICATE_IDENTIFIER
+  - PATIENT_FIELD_NOT_COLLECTED
+  - PATIENT_IDEMPOTENCY_KEY_REUSED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Get a patient
+  actor: Clinician
+  description: Read a record. A merged record returns replaced_by. A restricted record needs a reason.
+  method: GET
+  path: /patients/{id}
+  success: 200
+  input: patient id; a reason for restricted records
+  output: the record, as JSON or as a FHIR Patient resource
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_REASON_REQUIRED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Update a patient
+  actor: Registrar
+  description: Change demographics, identifiers, contacts, confidential communication or confidentiality. Old values are kept.
+  method: PATCH
+  path: /patients/{id}
+  success: 200
+  input: patient id, revision, the fields to change
+  output: the updated record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGED
+  - PATIENT_NOT_IN_USE
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_INVALID_NAME
+  - PATIENT_INVALID_BIRTH_DATE
+  - PATIENT_INVALID_CODE
+  - PATIENT_INVALID_IDENTIFIER
+  - PATIENT_DUPLICATE_IDENTIFIER
+  - PATIENT_FIELD_NOT_COLLECTED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: List possible duplicates
+  actor: Health information management (HIM) specialist
+  description: Pairs of records proposed by matching, waiting for review.
+  method: GET
+  path: /patient-duplicates
+  success: 200
+  input: optional grade and status; limit and cursor
+  output: pairs with their grade and when they were proposed
+  errors:
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Mark not a duplicate
+  actor: Health information management (HIM) specialist
+  description: Close a proposed pair as two different people.
+  method: POST
+  path: /patient-duplicates/{id}/not-duplicate
+  success: 200
+  input: pair id, reason
+  output: the closed pair
+  errors:
+  - PATIENT_DUPLICATE_PAIR_NOT_FOUND
+  - PATIENT_DUPLICATE_PAIR_CLOSED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Merge patients
+  actor: Health information management (HIM) specialist
+  description: Merge a source record into a target, or preview the result without saving.
+  method: POST
+  path: /patients/merge
+  success: 200
+  input: source id and revision, target id and revision, reason, optional preview
+  output: the target record, with the differences found; a preview saves nothing
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGE_SAME_RECORD
+  - PATIENT_NOT_IN_USE
+  - PATIENT_MERGED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Undo a merge
+  actor: Health information management (HIM) specialist
+  description: Restore a merged source record.
+  method: POST
+  path: /patients/{id}/unmerge
+  success: 200
+  input: source id, revision, reason
+  output: the restored source and the updated target
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_MERGED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Mark entered in error
+  actor: Health information management (HIM) specialist
+  description: Retire a record created by mistake that has no care on it.
+  method: POST
+  path: /patients/{id}/entered-in-error
+  success: 200
+  input: patient id, revision, reason
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_HAS_CARE
+  - PATIENT_MERGED
+  - PATIENT_NOT_IN_USE
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Inactivate a patient
+  actor: Health information management (HIM) specialist
+  description: Mark a record not in active use, such as a patient not seen for years.
+  method: POST
+  path: /patients/{id}/inactivate
+  success: 200
+  input: patient id, revision
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_IN_USE
+  - PATIENT_MERGED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Reactivate a patient
+  actor: Registrar
+  description: Return an inactive record to active use.
+  method: POST
+  path: /patients/{id}/reactivate
+  success: 200
+  input: patient id, revision
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_IN_USE
+  - PATIENT_MERGED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Record a death
+  actor: Registrar
+  description: Record that the patient died.
+  method: POST
+  path: /patients/{id}/death
+  success: 200
+  input: patient id, revision, deceased_at, death_source
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGED
+  - PATIENT_ALREADY_DECEASED
+  - PATIENT_INVALID_DEATH_DATE
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Retract a death
+  actor: Health information management (HIM) specialist
+  description: Correct a death recorded in error.
+  method: POST
+  path: /patients/{id}/death/retract
+  success: 200
+  input: patient id, revision, reason
+  output: the record
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_DECEASED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Add a representative
+  actor: Registrar
+  description: Record a person allowed to act for the patient.
+  method: POST
+  path: /patients/{id}/representatives
+  success: 201
+  input: patient id, revision, person, kind, scope, exclusions, period, evidence seen
+  output: the representative
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGED
+  - PATIENT_INVALID_REPRESENTATIVE
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Change a representative
+  actor: Registrar
+  description: Change a representative's scope, exclusions or period, or end their authority.
+  method: PATCH
+  path: /patients/{id}/representatives/{representativeId}
+  success: 200
+  input: patient id, representative id, revision, the fields to change
+  output: the representative
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_REPRESENTATIVE_NOT_FOUND
+  - PATIENT_INVALID_REPRESENTATIVE
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Check authority to act
+  actor: System
+  description: Answer whether a person may act for the patient for a purpose, such as booking an appointment.
+  method: GET
+  path: /patients/{id}/authority
+  success: 200
+  input: patient id, person, purpose, optional service
+  output: yes or no; never the reason for an exclusion
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Get contact details
+  actor: System
+  description: Where to contact the patient, honouring a confidential communication preference.
+  method: GET
+  path: /patients/{id}/contact-details
+  success: 200
+  input: patient id, channel
+  output: the address or contact point to use, and the preferred language
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Report care
+  actor: System
+  description: Tell this module that care was recorded for the patient. Updates last_care_at.
+  method: POST
+  path: /patients/{id}/care-reported
+  success: 202
+  input: patient id, when, the reporting module
+  output: accepted
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Request a correction
+  actor: Patient
+  description: Ask for patient data to be corrected, and optionally restricted while it is checked.
+  method: POST
+  path: /patients/{id}/correction-requests
+  success: 201
+  input: patient id, what is wrong, the correct value, whether to restrict meanwhile
+  output: the request with its due date
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_AUTHORISED_FOR_PATIENT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Decide a correction
+  actor: Health information management (HIM) specialist
+  description: Accept, deny or extend a correction request, or add a statement of disagreement.
+  method: POST
+  path: /patients/{id}/correction-requests/{requestId}/decision
+  success: 200
+  input: request id, decision (accept, deny or extend), reason, statement of disagreement
+  output: the request
+  errors:
+  - PATIENT_CORRECTION_NOT_FOUND
+  - PATIENT_CORRECTION_CLOSED
+  - PATIENT_EXTENSION_USED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Request erasure
+  actor: Patient
+  description: Ask for the patient record to be erased.
+  method: POST
+  path: /patients/{id}/erasure-requests
+  success: 202
+  input: patient id
+  output: accepted, or refused while record_retention applies
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_RETENTION_REQUIRED
+  - PATIENT_NOT_AUTHORISED_FOR_PATIENT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Read the access log
+  actor: Privacy officer
+  description: Every view and change of a record. A patient gets their own access report where the jurisdiction gives that right.
+  method: GET
+  path: /patients/{id}/access-log
+  success: 200
+  input: patient id, optional period; limit and cursor
+  output: entries with who, when, what and reason
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_AUTHORISED_FOR_PATIENT
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+apiConventions:
+- topic: Authentication
+  text: Every request carries the caller's identity from Identity. Permissions are checked against it (Permission matrix).
+- topic: Errors
+  text: Errors use problem details with the media type application/problem+json, with a code member carrying the error code, such as PATIENT_DUPLICATE_IDENTIFIER.
+  reference: RFC 9457
+- topic: Pagination
+  text: 'Lists are cursor-based: a request sends limit and an optional cursor, and the response returns next_cursor until there are no more results.'
+- topic: Concurrency
+  text: Every change sends the revision it read. A stale revision fails with PATIENT_REVISION_CONFLICT (BR-H21).
+- topic: Retries
+  text: Every change accepts an Idempotency-Key header. A retry with the same key returns the original result (FR-H1).
+  reference: IETF draft-ietf-httpapi-idempotency-key-header
+- topic: Rate limits
+  text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
+  reference: RFC 6585, RFC 9110
+- topic: Dates
+  text: Dates are ISO 8601 and may be partial (year, or year and month). Instants are RFC 3339 timestamps in UTC (CON-H3).
+  reference: RFC 3339
+- topic: FHIR
+  text: GET /patients/{id} returns an HL7 FHIR R5 Patient resource when the request asks for application/fhir+json (FR-H12).
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
+- topic: Versioning
+  text: Additive changes don't change the version. A breaking change ships as a new major version, announced with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
+events:
+- name: patient.registered
+  description: A new record was created.
+  payload:
+  - patient_id
+  - revision
+- name: patient.updated
+  description: Details changed. Lists the fields that changed, not their values.
+  payload:
+  - patient_id
+  - changed_fields
+  - revision
+- name: patient.merged
+  description: The source was merged into the target. Move data to the target.
+  payload:
+  - source_patient_id
+  - target_patient_id
+  - revision
+- name: patient.unmerged
+  description: A merge was undone. Review data recorded on the target since the merge.
+  payload:
+  - source_patient_id
+  - target_patient_id
+  - merged_at
+  - revision
+- name: patient.deceased
+  description: The patient died.
+  payload:
+  - patient_id
+  - deceased_at
+  - revision
+- name: patient.death_retracted
+  description: A death was recorded in error.
+  payload:
+  - patient_id
+  - revision
+- name: patient.entered_in_error
+  description: The record was created by mistake.
+  payload:
+  - patient_id
+  - revision
+- name: patient.inactivated
+  description: The record is no longer in active use.
+  payload:
+  - patient_id
+  - revision
+- name: patient.reactivated
+  description: The record is in use again.
+  payload:
+  - patient_id
+  - revision
+- name: patient.representative_changed
+  description: A representative was added, changed or ended.
+  payload:
+  - patient_id
+  - representative_id
+  - revision
+- name: patient.restricted_access
+  description: A very restricted record was opened. For the privacy officer.
+  payload:
+  - patient_id
+  - accessed_by
+  - reason
+  - accessed_at
+deliveryGuarantees:
+- id: DG-H1
+  text: Events are published at least once. Consumers treat an event with a source and id they have already seen as a duplicate.
+  rationale: A relay can publish twice if it crashes after publishing. CloudEvents defines source plus id as the duplicate check.
+- id: DG-H2
+  text: Events for one patient can arrive out of order. Each carries the revision, and consumers ignore one lower than a revision they have applied.
+  rationale: Brokers and retries don't guarantee order. The revision orders every change to a record.
+- id: DG-H3
+  text: Events carry ids and the names of changed fields, never names, birth dates, addresses or identifiers. Consumers read the record for details.
+  rationale: Events fan out to many modules and logs. Keeping demographics out of them follows the minimum necessary standard (45 CFR 164.502(b)) and GDPR data minimisation (Article 5(1)(c)).
+- id: DG-H4
+  text: Every event carries a unique id, its type, the patient it is about and when the change happened.
+  rationale: The id lets consumers drop duplicates (DG-H1). CloudEvents requires id, type and source on every event.
+permissions:
+- name: patient.read
+  description: Read patient records.
+- name: patient.register
+  description: Search, register and update patients, and record deaths and representatives.
+- name: patient.merge
+  description: Review duplicates, merge and unmerge, mark records entered in error, retract deaths and decide corrections.
+- name: patient.identifiers_unmasked
+  description: See national identifiers and social security numbers in full (BR-H23).
+- name: patient.audit
+  description: Read the access log of any record.
+accessMatrix:
+- action: Search and read a patient
+  roles:
+    Registrar: any
+    Clinician: any
+    Health information management (HIM) specialist: any
+    Patient: own
+    Privacy officer: any
+  permission: patient.read
+  note: A restricted record needs a reason (BR-H20). A personal representative reads within their scope (BR-H14).
+- action: Register or update a patient
+  roles:
+    Registrar: any
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+  permission: patient.register
+  note: Patients ask for changes through a correction request.
+- action: Record a death
+  roles:
+    Registrar: any
+    Clinician: any
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+  permission: patient.register
+- action: Add or change a representative
+  roles:
+    Registrar: any
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+  permission: patient.register
+- action: Review duplicates, merge and unmerge
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+  permission: patient.merge
+- action: Mark entered in error, or retract a death
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+  permission: patient.merge
+- action: Request a correction or erasure
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: none
+    Patient: own
+    Privacy officer: none
+  permission: patient.read
+  note: A personal representative can request for the patient they represent.
+- action: Decide a correction
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: none
+    Privacy officer: none
+  permission: patient.merge
+- action: Read the access log
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: none
+    Patient: own
+    Privacy officer: any
+  permission: patient.audit
+  note: Patients get their own access report where the jurisdiction gives that right (FR-H11).
+- action: See identifiers unmasked
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: any
+    Patient: own
+    Privacy officer: none
+  permission: patient.identifiers_unmasked
+  note: Deployments grant it to other roles that need it, such as billing.
+personalData:
+- field: names, birth_date, administrative_gender
+  category: personal
+  purpose: Identifying the patient
+  retention: record_retention
+- field: identifiers
+  category: personal; national identifiers are identifiers of general application (GDPR Article 87)
+  purpose: Identifying the patient across systems
+  retention: record_retention
+- field: addresses, telecoms, contacts
+  category: personal
+  purpose: Contacting the patient and their emergency contacts
+  retention: record_retention
+- field: confidential_communication
+  category: personal; can reveal a risk to the patient
+  purpose: Contacting the patient safely
+  retention: record_retention
+- field: race_ethnicity
+  category: special category (GDPR Article 9)
+  purpose: Reporting and equity monitoring, where collected
+  retention: record_retention
+- field: gender_identity, pronouns
+  category: special category where it reveals sex life or sexual orientation
+  purpose: Addressing the patient as they ask, where collected
+  retention: record_retention
+- field: deceased_at, death_source
+  category: health data
+  purpose: Stopping contact and closing care
+  retention: record_retention
+- field: representatives
+  category: personal, about the representative too
+  purpose: Deciding who may act for the patient
+  retention: record_retention
+- field: access log
+  category: personal
+  purpose: Showing who accessed the record
+  retention: access_log_retention
+errors:
+- code: PATIENT_NOT_FOUND
+  http: 404
+  message: No patient exists with that id.
+- code: PATIENT_INVALID_QUERY
+  http: 422
+  message: Search with at least a name and birth date, or an identifier, phone number or address.
+- code: PATIENT_SEARCH_REQUIRED
+  http: 422
+  message: Search for the patient before registering them, and send the search id.
+- code: PATIENT_POSSIBLE_DUPLICATE
+  http: 409
+  message: A probable match exists. Use that record, or register with a reason.
+- code: PATIENT_INVALID_NAME
+  http: 422
+  message: Give at least one usual, official or temporary name.
+- code: PATIENT_INVALID_BIRTH_DATE
+  http: 422
+  message: The birth date must be a full or partial date, not in the future.
+- code: PATIENT_INVALID_CODE
+  http: 422
+  message: A code isn't in the allowed list for its field.
+- code: PATIENT_INVALID_IDENTIFIER
+  http: 422
+  message: The identifier system isn't accepted, or the value isn't in its format.
+- code: PATIENT_DUPLICATE_IDENTIFIER
+  http: 409
+  message: Another patient already has that identifier.
+- code: PATIENT_FIELD_NOT_COLLECTED
+  http: 422
+  message: This deployment doesn't collect that field.
+- code: PATIENT_IDEMPOTENCY_KEY_REUSED
+  http: 409
+  message: That Idempotency-Key was used for a different request.
+- code: PATIENT_REVISION_CONFLICT
+  http: 409
+  message: The record changed since you read it. Read it again and retry.
+- code: PATIENT_MERGED
+  http: 409
+  message: This record was merged. Use the record in replaced_by.
+- code: PATIENT_NOT_IN_USE
+  http: 409
+  message: This record is entered in error, or not in the state this change needs.
+- code: PATIENT_MERGE_SAME_RECORD
+  http: 422
+  message: The source and target must be different records.
+- code: PATIENT_NOT_MERGED
+  http: 409
+  message: Only a merged record can be unmerged.
+- code: PATIENT_HAS_CARE
+  http: 409
+  message: Care is recorded for this patient. Merge the record instead.
+- code: PATIENT_ALREADY_DECEASED
+  http: 409
+  message: A death is already recorded. Retract it first to change it.
+- code: PATIENT_NOT_DECEASED
+  http: 409
+  message: No death is recorded for this patient.
+- code: PATIENT_INVALID_DEATH_DATE
+  http: 422
+  message: The date of death can't be before birth or in the future.
+- code: PATIENT_INVALID_REPRESENTATIVE
+  http: 422
+  message: A representative needs a kind, a scope and a valid period.
+- code: PATIENT_REPRESENTATIVE_NOT_FOUND
+  http: 404
+  message: No such representative for this patient.
+- code: PATIENT_REASON_REQUIRED
+  http: 403
+  message: This record is restricted. Give a reason to open it.
+- code: PATIENT_NOT_AUTHORISED_FOR_PATIENT
+  http: 403
+  message: Only the patient or their personal representative can request this.
+- code: PATIENT_RETENTION_REQUIRED
+  http: 409
+  message: This record must be kept until record_retention ends.
+- code: PATIENT_DUPLICATE_PAIR_NOT_FOUND
+  http: 404
+  message: No such possible duplicate.
+- code: PATIENT_DUPLICATE_PAIR_CLOSED
+  http: 409
+  message: This pair was already resolved.
+- code: PATIENT_CORRECTION_NOT_FOUND
+  http: 404
+  message: No such correction request.
+- code: PATIENT_CORRECTION_CLOSED
+  http: 409
+  message: This correction request was already decided.
+- code: PATIENT_EXTENSION_USED
+  http: 409
+  message: The one allowed extension was already used.
+- code: PATIENT_DEPENDENCY_UNAVAILABLE
+  http: 503
+  message: A service this request needs is unavailable. Retry later.
+dependencies:
+- service: identity-service
+  direction: upstream
+  reason: authenticates callers and holds their permissions
+  criticality: hard
+  contract:
+  - 'Asks: who is the caller, and do they hold this permission?'
+  - Logins, accounts and the link from a portal account to a patient id are Identity's concern
+- service: organization-service
+  direction: upstream
+  reason: owns practitioners and practices named as the general practitioner
+  criticality: soft
+  contract:
+  - 'Asks: does this practitioner or practice exist?'
+- service: appointment-service
+  direction: downstream
+  reason: books patients and contacts them
+  criticality: soft
+  contract:
+  - 'Gives: whether a patient exists and is in use, following replaced_by'
+  - 'Gives: the identifiers to verify at check-in, and where to contact the patient'
+  - 'Gives: whether a person may act for the patient for an appointment'
+  - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted and patient.entered_in_error'
+  - 'Receives: care reported at check-in'
+- service: encounter-service
+  direction: downstream
+  reason: records care against the patient
+  criticality: soft
+  contract:
+  - 'Gives: patient.merged, patient.unmerged and patient.deceased'
+  - 'Receives: care reported when an encounter starts'
+  - Moving clinical data between records after a merge is Encounter's concern
+risks:
+- id: RISK-H1
+  risk: Duplicate records split one person's history.
+  impact: Allergies, results and medicines on one record are missed on the other.
+  mitigation: Search before registering (BR-H1), matching on old values (BR-H22), and a duplicate review queue (FR-H4).
+- id: RISK-H2
+  risk: Two different people are merged.
+  impact: One person's care is given or recorded against another.
+  mitigation: Only a person merges (BR-H8), with a preview, and merges can be undone (BR-H10). Track unmerges (PERF-H2).
+- id: RISK-H3
+  risk: A wrong death record.
+  impact: Care, reminders and benefits stop for a living patient.
+  mitigation: Death needs a source, and can be retracted with a reason (BR-H12).
+- id: RISK-H4
+  risk: Staff look up colleagues or public figures.
+  impact: A privacy breach and loss of trust.
+  mitigation: Restricted records need a reason and are reported (BR-H20), and every access is logged (BR-H19).
+- id: RISK-H5
+  risk: Someone acts for a patient without authority.
+  impact: Health information reaches the wrong person, possibly an abuser.
+  mitigation: Representatives have a scope, period and exclusions (BR-H14, BR-H15).
+- id: RISK-H6
+  risk: Demographics leak through events and logs.
+  impact: Personal data spreads beyond the systems that need it.
+  mitigation: Events carry ids only (DG-H3), and personal data is kept out of URLs.
+decisions:
+- id: ADR-H1
+  decision: Patients start at the healthcare level, with no core page.
+  rationale: 'Patient identity in healthcare carries rules no other industry needs: two-identifier checks, merges of clinical records, personal representatives and medical record retention.'
+  alternatives: A neutral core Person module. Not needed until another industry has a person module to share it with.
+  date: '2026-10-06'
+- id: ADR-H2
+  decision: Merging keeps the source record, marked merged with replaced_by, instead of deleting it.
+  rationale: It matches FHIR $merge and Patient.link, lets anyone holding the old id find the right record, and makes a wrong merge reversible.
+  alternatives: Delete the source. Rejected because old ids in other systems and documents would point nowhere.
+  date: '2026-10-06'
+- id: ADR-H3
+  decision: Matching only proposes; a person merges.
+  rationale: Matching algorithms and their thresholds differ by deployment, and a false merge costs more than a duplicate.
+  alternatives: Merge automatically above a threshold. Rejected for now; a deployment that wants it can override BR-H8.
+  date: '2026-10-06'
+- id: ADR-H4
+  decision: Optional demographics are switched on per deployment with collected_fields, with none collected by default.
+  rationale: US federal standards removed sexual orientation and gender identity in 2025, while EU law treats racial or ethnic origin as special category data. One default would be wrong somewhere.
+  date: '2026-10-06'
+- id: ADR-H5
+  decision: Whether a person may act for a patient is answered here, from the representatives recorded on the patient.
+  rationale: Every module asks the same question. Answering it in one place keeps the answer consistent and the exclusions private.
+  date: '2026-10-06'
+- id: ADR-H6
+  decision: The matching algorithm is not specified.
+  rationale: 'Deterministic, probabilistic and referential matching all exist, and they change with the data. The requirement is the behaviour: grades, review and measurement (FR-H3, PERF-H1).'
+  date: '2026-10-06'
+openQuestions: []
+references:
+- id: REF-H1
+  title: HL7 FHIR R5, Patient
+  url: https://hl7.org/fhir/R5/patient.html
+  note: Elements, link types, merging and linking, gender and sex, and the 2% registration error figure.
+- id: REF-H2
+  title: HL7 FHIR R5, Patient $merge
+  url: https://hl7.org/fhir/R5/patient-operation-merge.html
+- id: REF-H3
+  title: HL7 FHIR R5, Patient $match
+  url: https://hl7.org/fhir/R5/patient-operation-match.html
+- id: REF-H4
+  title: HL7 FHIR R5, NameUse code system
+  url: https://hl7.org/fhir/R5/codesystem-name-use.html
+- id: REF-H5
+  title: HL7 v3 Confidentiality code system
+  url: https://terminology.hl7.org/CodeSystem-v3-Confidentiality.html
+- id: REF-H6
+  title: 45 CFR 164.502, uses and disclosures (minimum necessary, deceased individuals, personal representatives)
+  url: https://www.ecfr.gov/current/title-45/section-164.502
+- id: REF-H7
+  title: 45 CFR 164.522, confidential communications
+  url: https://www.ecfr.gov/current/title-45/section-164.522
+- id: REF-H8
+  title: 45 CFR 164.526, amendment of protected health information
+  url: https://www.ecfr.gov/current/title-45/section-164.526
+- id: REF-H9
+  title: 45 CFR 164.312, technical safeguards (audit controls)
+  url: https://www.ecfr.gov/current/title-45/section-164.312
+- id: REF-H10
+  title: 42 CFR 482.24, hospital medical record services
+  url: https://www.ecfr.gov/current/title-42/section-482.24
+- id: REF-H11
+  title: GDPR (EU) 2016/679, Articles 9, 12, 16, 17, 18 and 87, and Recital 27
+  url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
+- id: REF-H12
+  title: European Health Data Space Regulation (EU) 2025/327, Articles 3 to 10
+  url: https://eur-lex.europa.eu/eli/reg/2025/327/oj
+  note: Patient rights apply to patient summaries from 26 March 2029 (Article 105).
+- id: REF-H13
+  title: USCDI, versions 3, 3.1 and 6
+  url: https://isp.healthit.gov/united-states-core-data-interoperability-uscdi
+  note: Patient demographics data elements, and the 2025 removal of sexual orientation and gender identity in v3.1.
+- id: REF-H14
+  title: OMB Statistical Policy Directive No. 15, 2024 revisions
+  url: https://www.federalregister.gov/documents/2024/03/29/2024-06469/revisions-to-ombs-statistical-policy-directive-no-15-standards-for-maintaining-collecting-and
+- id: REF-H15
+  title: Evolving availability and standardization of patient attributes for matching (Deng et al., Health Affairs Scholar, 2023)
+  url: https://doi.org/10.1093/haschl/qxad047
+  note: All 38 organisations studied collect name, birth date, address and phone number for matching.
+- id: REF-H16
+  title: Project US@ technical specification for patient addresses (ONC)
+  url: https://oncprojectracking.healthit.gov/wiki/download/attachments/180486153/Project%20US@%20FINAL%20Technical%20Specification%20Version%201.0.pdf
+- id: REF-H17
+  title: CloudEvents specification
+  url: https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md
+- id: REF-H18
+  title: RFC 9457, problem details for HTTP APIs
+  url: https://www.rfc-editor.org/rfc/rfc9457
+changelog:
+- version: 0.1.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - First healthcare layer for patient records, for the United States and the European Union.
+acronyms:
+- term: EHDS
+  definition: European Health Data Space, Regulation (EU) 2025/327
+- term: FHIR
+  definition: Fast Healthcare Interoperability Resources, HL7's standard for exchanging health data
+- term: GDPR
+  definition: General Data Protection Regulation (EU) 2016/679
+- term: HIM
+  definition: Health information management
+- term: HIPAA
+  definition: Health Insurance Portability and Accountability Act
+- term: MRN
+  definition: Medical record number
+- term: OMB
+  definition: US Office of Management and Budget
+- term: SPD 15
+  definition: OMB Statistical Policy Directive No. 15, the US race and ethnicity standard
+- term: USCDI
+  definition: United States Core Data for Interoperability
+tables:
+- name: patients
+  description: One row per record.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: status
+    type: text
+    note: active, inactive, merged or entered_in_error
+  - name: birth_date
+    type: text
+    note: ISO 8601, possibly partial (CON-H3)
+  - name: birth_date_estimated
+    type: boolean
+    default: 'false'
+  - name: administrative_gender
+    type: text
+  - name: deceased_at
+    type: text
+    nullable: true
+  - name: death_source
+    type: text
+    nullable: true
+  - name: confidentiality
+    type: text
+    default: '''normal'''
+  - name: details
+    type: jsonb
+    note: telecoms, addresses, languages, contacts and collected fields
+  - name: replaced_by
+    type: uuid
+    nullable: true
+    note: references patients(id)
+  - name: last_care_at
+    type: timestamptz
+    nullable: true
+  - name: revision
+    type: integer
+    default: '0'
+  constraints:
+  - name: merged_has_target
+    definition: CHECK ((status = 'merged') = (replaced_by IS NOT NULL))
+- name: patient_names
+  description: Every name a patient has had, so search finds old ones (BR-H22).
+  columns:
+  - name: patient_id
+    type: uuid
+  - name: use
+    type: text
+  - name: family
+    type: text
+    nullable: true
+  - name: given
+    type: text[]
+    nullable: true
+  - name: valid_from
+    type: date
+    nullable: true
+  - name: valid_to
+    type: date
+    nullable: true
+  indexes:
+  - name: patient_names_search
+    definition: USING gin (family gin_trgm_ops)
+    note: trigram index for misspelled names; needs pg_trgm
+- name: patient_identifiers
+  description: Current and old identifiers.
+  columns:
+  - name: patient_id
+    type: uuid
+  - name: system
+    type: text
+  - name: value
+    type: text
+  - name: use
+    type: text
+    note: old after a merge
+  - name: in_use
+    type: boolean
+    note: false when the patient is merged or entered in error
+  indexes:
+  - name: one_identifier_per_patient
+    definition: UNIQUE (system, value) WHERE in_use AND use <> 'old'
+    note: BR-H3
+- name: patient_representatives
+  description: People who may act for a patient.
+  columns:
+  - name: id
+    type: uuid
+  - name: patient_id
+    type: uuid
+  - name: person
+    type: text
+  - name: kind
+    type: text
+  - name: scope
+    type: text[]
+  - name: exclusions
+    type: text[]
+    default: '''{}'''
+  - name: period
+    type: daterange
+  - name: evidence
+    type: text
+- name: patient_duplicate_candidates
+  description: Pairs proposed by matching.
+  columns:
+  - name: id
+    type: uuid
+  - name: patient_a
+    type: uuid
+  - name: patient_b
+    type: uuid
+  - name: grade
+    type: text
+  - name: status
+    type: text
+    note: open, merged or not_duplicate
+  - name: resolved_by
+    type: text
+    nullable: true
+  constraints:
+  - name: ordered_pair
+    definition: CHECK (patient_a < patient_b)
+    note: one row per pair
+- name: patient_merges
+  description: Every merge, so it can be undone (BR-H10).
+  columns:
+  - name: id
+    type: uuid
+  - name: source_id
+    type: uuid
+  - name: target_id
+    type: uuid
+  - name: merged_by
+    type: text
+  - name: reason
+    type: text
+  - name: differences
+    type: jsonb
+  - name: moved_identifiers
+    type: jsonb
+  - name: merged_at
+    type: timestamptz
+  - name: unmerged_at
+    type: timestamptz
+    nullable: true
+technicalNotes:
+- id: TN-H1
+  title: Match in two steps
+  text: Find candidates cheaply first (blocking), for example records sharing a birth date or a phonetic code of the family name, then score each candidate on name, birth date, gender, address, phone and identifiers. Normalise addresses to Project US@ in the United States before comparing. Tune thresholds on the deployment's own data and map scores to certain, probable and possible.
+- id: TN-H2
+  title: Run large merges in the background
+  text: FHIR $merge allows 202 Accepted with a task to track. Mark the source merged and publish patient.merged in the same transaction, then let each module move its own data. Until consumers finish, reads of their data may show either record.
+- id: TN-H3
+  title: Map to FHIR
+  text: status active and inactive map to Patient.active true and false. merged maps to active false with link type replaced-by, and the target gets link type replaces. entered_in_error maps to active false with no link. identifiers marked old use Identifier.use old.
+---
+Every clinical module refers to a patient by id. This module keeps that id
+pointing at one person, and keeps who that person is accurate over the years.
+
+## One person, one record
+
+A duplicate record splits a patient's history: an allergy on one record isn't
+seen on the other. So registration starts with a search (BR-H1), and search
+looks at old names and addresses as well as current ones (BR-H22). When a
+duplicate still gets through, matching proposes it and an HIM specialist
+decides (BR-H8).
+
+## A merge can be undone
+
+Merging keeps the retired record and points it at the one that remains
+(BR-H7), so old ids still lead somewhere. If the merge joined two different
+people, it can be undone, and every module is told to check what was recorded
+since (BR-H10).
+
+## Nothing about a person is overwritten
+
+Names, addresses and identifiers change. The old values stay, marked old,
+because referral letters, insurers and other hospitals still use them (BR-H5).
+
+## Death is recorded, not assumed
+
+A death needs a date and a source, and a wrong one can be retracted (BR-H12).
+The record stays in use, and stays protected for as long as the law requires
+(BR-H13).
+
+## Who may act for the patient is answered in one place
+
+Parents, guardians and proxies are recorded with what they may do and until
+when (BR-H14). Where the law lets a patient act alone, such as a minor
+consenting to their own care, staff exclude that care from the parent's
+authority (BR-H15). Every module asks this one, so the answer is the same
+everywhere.

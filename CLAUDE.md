@@ -556,15 +556,18 @@ scaffold's own pages fail validation.
 
 ## Known TODO
 
-- EHR is specified in the order of its overview's build list. Appointments
-  is done as a draft (`healthcare/appointment` 0.1.0, `healthcare/ehr/appointment`
-  0.1.0, US and EU through the `jurisdiction` setting). Next: Patients. Follow
-  [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
+- EHR is specified in the order of its overview's build list. Done as
+  drafts: Patients (`healthcare/patient` 0.1.0, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.1.0) and Appointments
+  (`healthcare/appointment` 0.3.0, `healthcare/ehr/appointment` 0.4.0). Both
+  support the US and EU through the `jurisdiction` setting. Next: Encounters.
+  Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - `pnpm check:specs` isn't run in CI yet. Running it with `--strict` on every
   pull request would stop unverified items from coming back.
 
-- Only one module exists (`appointment`). The schema has not been stress-tested
-  against a second, structurally different concept.
+- Modules that start at the industry level (no `extends`, like
+  `healthcare/patient`) use `-H` ids and must be complete on their own: API
+  conventions, delivery guarantees and the rest have no core to inherit from.
 - `pnpm check:specs` validates ids and error codes, but not dependencies that
   name a service with no page.
 - Company-layer overrides are designed for but not implemented. No merge or

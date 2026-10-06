@@ -3,6 +3,7 @@
   "icon": "Stethoscope",
   "pages": [
     "index",
+    "patient",
     "appointment"
   ]
 }

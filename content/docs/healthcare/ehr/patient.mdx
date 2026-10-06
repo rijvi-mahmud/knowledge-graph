@@ -1,0 +1,474 @@
+---
+title: Patients
+description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
+module: patient
+version: 0.1.0
+status: draft
+industry: healthcare
+domain: ehr
+extends: healthcare/patient
+purpose: 'Add what a hospital needs to identify patients: a medical record number for everyone, patients who arrive unconscious or unknown, babies born in the hospital, identification bands, registration that never delays emergency care, and aliases for patients whose identity needs protecting.'
+scope:
+- Assigning the hospital medical record number (MRN)
+- Registering unidentified patients under an alias, and identifying them later
+- Registering newborns with distinct names, linked to their mother
+- The data printed on identification bands
+- Quick registration with minimal data, completed later
+- Registering a patient under a privacy alias
+nonGoals:
+- Emergency department arrival, triage and treatment. They belong to the Emergency department module, which registers patients through this one.
+- Admissions and bed assignment. They belong to the Admission, discharge and transfer module.
+- Printing bands and labels. A printing service prints what this module returns.
+- Birth registration with civil authorities. This module records the newborn as a patient only.
+actors:
+- name: Emergency department staff
+  description: Register patients who arrive in an emergency, including unidentified ones.
+- name: Maternity staff
+  description: Register babies born in the hospital.
+assumptions:
+- id: AS-E1
+  text: The hospital has one MRN system for each scope set in mrn_scope, and this module is the only one that assigns numbers in it.
+  rationale: Two systems assigning MRNs from the same range would give two patients one number.
+glossary:
+- term: Medical record number (MRN)
+  definition: The number a hospital assigns to identify a patient's record. One of the identifiers The Joint Commission lists for patient identification.
+- term: Unidentified patient
+  definition: A patient whose identity is unknown on arrival, such as an unconscious trauma patient, registered under an alias.
+- term: Alias
+  definition: A temporary name given to an unidentified patient, from the hospital's alias scheme, such as a phonetic word and a number.
+- term: Identification band
+  definition: The wristband a patient wears in hospital, showing identifiers and a barcode.
+- term: Quick registration
+  definition: Registering with the minimum data so care can start, and completing the details later.
+dataModel:
+- name: unidentified
+  type: boolean
+  required: false
+  description: Set while the patient's identity is unknown and they are registered under an alias.
+- name: registration_status
+  type: enum
+  required: true
+  description: Whether registration still needs completing.
+  constraints: complete | incomplete; default complete
+- name: mother_patient_id
+  type: string
+  required: false
+  description: For a newborn, the mother's patient record (FHIR Patient.link see also, and RelatedPerson).
+- name: born_at
+  type: instant
+  required: false
+  description: For a newborn, the time of birth. Tells apart babies with the same birth date.
+businessRules:
+- id: BR-H1
+  text: Before a new patient is registered, existing records are searched with at least the name and birth date. If the search finds a probable match, the registrar either picks that record or registers a new one with a reason. Unidentified patients and babies born in the hospital are registered without a search.
+  rationale: HL7 FHIR notes that around 2% of registrations are in error, mostly duplicate records. An unidentified patient has nothing to search with, and a baby born here cannot have a record yet. Both are checked later (BR-E3).
+- id: BR-H4
+  text: A record has at least one usual or official name, a birth date and an administrative gender. The birth date can be partial or estimated, and the gender can be unknown, when that is all anyone knows. An unidentified patient has a temp alias as their only name and an estimated birth year.
+  rationale: Name and birth date are what every search and identity check rely on. An unidentified patient still needs both to be told apart, so the alias and an estimate stand in for them.
+- id: BR-E1
+  text: Every patient gets an MRN from mrn_system at registration. An MRN is never reused, including after a merge, where it stays on the target marked old.
+  rationale: The Joint Commission lists an assigned identification number, such as the MRN, as a patient identifier (NPG.01.01.01). Reusing one would make old documents and labels point at the wrong person.
+- id: BR-E2
+  text: An unidentified patient is registered with an alias from alias_scheme and marked unidentified. An alias is never given to two records.
+  rationale: Placeholder names such as John Doe cause duplicates and mix-ups. A UK trauma centre found a phonetic alias system reduced duplication, but staff confused similar-sounding aliases, so aliases must be unique.
+- id: BR-E3
+  text: When an unidentified patient is identified, the hospital searches for an existing record. If one is found, the alias record is merged into it. If not, the real details are added, the alias is kept as an old name, and unidentified is cleared. Either way patient.identified is emitted.
+  rationale: Care given under the alias must stay with the person. The same study found record merging after identification was done inconsistently, so it is one defined step.
+- id: BR-E4
+  text: A baby born in the hospital is registered with a distinct name from newborn_naming, such as "Smith, Judy Girl", with a letter for each baby in a multiple birth, its birth order, born_at, and mother_patient_id. When the baby's name is given, it becomes official and the newborn name is kept as old.
+  rationale: The Joint Commission requires distinct identification methods for newborns, giving "Smith, Judy Girl A" and "Smith, Judy Girl B" as examples (NPG.01.01.01 EP 3). Babies cannot say who they are and often share names such as Baby Boy Smith.
+- id: BR-E5
+  text: An identification band shows at least two person-specific identifiers, such as name, birth date and MRN, and a barcode that encodes them. It never shows a room or bed.
+  rationale: The Joint Commission requires at least two identifiers and never the room number, and lists barcoding that includes two or more identifiers (NPG.01.01.01 EP 1). The band is what staff check before each test and treatment.
+- id: BR-E6
+  text: A patient who needs care at once can be registered with only what BR-H4 requires, as registration_status incomplete. Incomplete registrations are listed for staff to complete. Insurance and payment questions are never asked before the patient is seen.
+  rationale: In the United States, a hospital may not delay a medical screening examination or treatment to ask about payment or insurance, and registration must not discourage patients from staying (42 CFR 489.24(d)(4)).
+- id: BR-E7
+  text: A patient can be registered under a privacy alias, recorded as a name with use anonymous, with confidentiality restricted or very restricted. Lists, boards and bands show the alias; the official name is shown only when the record is opened with a reason.
+  rationale: FHIR defines the anonymous name use to protect a person's identity for privacy reasons. Public figures and people at risk of harm are found through ward boards and lists, not only through records.
+validations:
+- field: mother_patient_id
+  rule: an existing patient in use
+  error: PATIENT_INVALID_MOTHER
+- field: born_at
+  rule: not in the future
+  error: PATIENT_INVALID_BIRTH_DATE
+workflows:
+- name: Register an unidentified patient
+  trigger: A patient arrives who cannot say who they are and has no identification
+  actor: Emergency department staff
+  steps:
+  - Take the next unused alias from alias_scheme
+  - Record the alias, an estimated birth year and the administrative gender if known, as unidentified
+  - Assign an MRN and print the band
+  - Emit patient.registered
+  outcome: Care starts at once, under a name nobody else has.
+- name: Identify a patient
+  trigger: Staff learn who an unidentified patient is
+  actor: Registrar
+  steps:
+  - Search with the real name and birth date
+  - If a record exists, merge the alias record into it
+  - Otherwise add the real details, keep the alias as an old name, and clear unidentified
+  - Emit patient.identified, and reprint the band
+  outcome: The patient's care since arrival is on their one record.
+- name: Register a newborn
+  trigger: A baby is born in the hospital
+  actor: Maternity staff
+  steps:
+  - Build the name from newborn_naming, with a letter for each baby in a multiple birth
+  - Record born_at, birth order, administrative gender and mother_patient_id
+  - Assign an MRN and print the band
+  - Emit patient.registered
+  outcome: Each baby has a distinct name and band from birth.
+- name: Complete a quick registration
+  trigger: A patient registered as incomplete can now give their details
+  actor: Registrar
+  steps:
+  - Search for an existing record with the details given
+  - If one exists, merge the quick record into it
+  - Otherwise add the missing details and set registration_status complete
+  outcome: No quick registration is left as a duplicate.
+edgeCases:
+- id: EC-E1
+  situation: Two unconscious trauma patients arrive within minutes.
+  behaviour: Each gets a different alias and MRN, and the aliases are never reused (BR-E2).
+  covers:
+  - BR-E2
+  - AC-E2
+- id: EC-E2
+  situation: An unidentified patient is identified as someone with an existing record.
+  behaviour: The alias record is merged into the existing one, and patient.identified and patient.merged are emitted.
+  covers:
+  - BR-E3
+  - AC-E3
+- id: EC-E3
+  situation: An unidentified patient is identified, and has never been to the hospital.
+  behaviour: The real name becomes official, the alias is kept as old, and unidentified is cleared.
+  covers:
+  - BR-E3
+  - AC-E3
+- id: EC-E4
+  situation: Twin girls are born to Judy Smith.
+  behaviour: They are registered as "Smith, Judy Girl A" and "Smith, Judy Girl B", with birth order 1 and 2 and their own born_at.
+  covers:
+  - BR-E4
+  - AC-E4
+- id: EC-E5
+  situation: A newborn is named two days after birth.
+  behaviour: The new name becomes official; the newborn name stays as old, so labels printed at birth still match.
+  covers:
+  - BR-E4
+  - AC-E4
+- id: EC-E6
+  situation: The mother's record is merged into another after her baby was registered.
+  behaviour: Reading mother_patient_id follows replaced_by to the record in use (BR-H9).
+  covers:
+  - BR-H9
+  - AC-E4
+- id: EC-E7
+  situation: A patient arrives in labour and asks about cost before being seen.
+  behaviour: Quick registration takes only what BR-H4 requires; nothing about payment is asked first.
+  covers:
+  - BR-E6
+  - AC-E6
+- id: EC-E8
+  situation: A quick registration turns out to be a returning patient.
+  behaviour: Completing it finds the existing record, and the quick record is merged into it.
+  covers:
+  - BR-E6
+  - BR-H7
+  - AC-E6
+- id: EC-E9
+  situation: A public figure is admitted under a privacy alias.
+  behaviour: The ward board and band show the alias; opening the record needs a reason, and very restricted openings are reported (BR-H20).
+  covers:
+  - BR-E7
+  - AC-E7
+- id: EC-E10
+  situation: A merge moves MRN 100234 to the target as old.
+  behaviour: MRN 100234 is never assigned again, and searching for it finds the target.
+  covers:
+  - BR-E1
+  - AC-E1
+functionalRequirements:
+- id: FR-E1
+  text: The service must assign an MRN to every new patient, unique in mrn_system and never reused.
+  priority: must
+  verification: test
+- id: FR-E2
+  text: The service must register unidentified patients under unique aliases, and identify them later.
+  priority: must
+  verification: test
+- id: FR-E3
+  text: The service must register newborns with distinct names linked to their mother.
+  priority: must
+  verification: test
+- id: FR-E4
+  text: The service must return the data for a patient's identification band.
+  priority: must
+  verification: test
+- id: FR-E5
+  text: The service must list incomplete registrations, and unidentified patients, for staff to follow up.
+  priority: must
+  verification: test
+- id: FR-E6
+  text: The service must show a privacy alias in place of the official name everywhere except an opened record.
+  priority: must
+  verification: test
+settings:
+- name: mrn_system
+  type: identifier system
+  description: The system MRNs are assigned in, and their format. Required.
+- name: mrn_scope
+  type: enterprise | facility
+  description: Whether one MRN covers every hospital in the organisation or each hospital assigns its own. Practice varies, so each organisation chooses. Required.
+- name: alias_scheme
+  type: pattern
+  description: How aliases for unidentified patients are made, such as a phonetic alphabet word and a number. Must not produce real-looking names. Required.
+- name: newborn_naming
+  type: pattern
+  description: How newborn names are built, such as the mother's family and given name, the baby's administrative gender, and a letter for multiples. Required.
+acceptanceCriteria:
+- id: AC-E1
+  given: MRN 100234 moved to a target as old after a merge
+  when: new patients are registered
+  then: none is assigned 100234, and a search for it finds the target
+  verifies:
+  - BR-E1
+  - FR-E1
+- id: AC-E2
+  given: two unidentified patients registered a minute apart
+  when: their aliases are compared
+  then: they differ, no alias is given to two records, and each record has an MRN and estimated birth year without a prior search
+  verifies:
+  - BR-E2
+  - BR-H1
+  - BR-H4
+  - FR-E2
+- id: AC-E3
+  given: an unidentified patient
+  when: they are identified, once as an existing patient and once as a new one
+  then: the first is merged into the existing record; the second keeps the alias as old and clears unidentified; both emit patient.identified
+  verifies:
+  - BR-E3
+  - FR-E2
+- id: AC-E4
+  given: twins born to Judy Smith
+  when: they are registered and one is named later
+  then: they are "Smith, Judy Girl A" and "Smith, Judy Girl B" with birth order, born_at and mother_patient_id; the later name is official and the newborn name old
+  verifies:
+  - BR-E4
+  - FR-E3
+- id: AC-E5
+  given: a registered patient
+  when: their identification band is requested
+  then: it has name, birth date, MRN and a barcode encoding them, and no room or bed
+  verifies:
+  - BR-E5
+  - FR-E4
+- id: AC-E6
+  given: a patient who needs care at once
+  when: they are registered with only a name, birth date and gender
+  then: the record is incomplete, appears on the incomplete list, and no payment or insurance field is required
+  verifies:
+  - BR-E6
+  - FR-E5
+- id: AC-E7
+  given: a patient with a privacy alias
+  when: a ward list, a band and the opened record are shown
+  then: the list and band show the alias; the opened record shows the official name after a reason is given
+  verifies:
+  - BR-E7
+  - FR-E6
+- id: AC-E8
+  given: a newborn registration naming a mother record that does not exist
+  when: it is submitted
+  then: it fails with PATIENT_INVALID_MOTHER
+  verifies:
+  - BR-E4
+operations:
+- name: Search patients
+  actor: Registrar
+  description: Find patients by name, birth date, identifier, phone or address, including old values, or list incomplete and unidentified registrations.
+  method: GET
+  path: /patients
+  success: 200
+  input: any of name, birth date, identifier, phone, address, registration status, unidentified; limit and cursor
+  output: matching records with enough detail to tell them apart, masked where BR-H23 applies, and aliases in place of names where BR-E7 applies
+  errors:
+  - PATIENT_INVALID_QUERY
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Register an unidentified patient
+  actor: Emergency department staff
+  description: Register a patient whose identity is unknown, under a new alias. Accepts a retry key.
+  method: POST
+  path: /patients/unidentified
+  success: 201
+  input: estimated birth year, administrative gender if known, optional description
+  output: the record with its alias and MRN
+  errors:
+  - PATIENT_INVALID_BIRTH_DATE
+  - PATIENT_INVALID_CODE
+  - PATIENT_IDEMPOTENCY_KEY_REUSED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Identify a patient
+  actor: Registrar
+  description: Record who an unidentified patient is, merging into an existing record if there is one.
+  method: POST
+  path: /patients/{id}/identify
+  success: 200
+  input: patient id, revision, the real details or the existing patient id
+  output: the record in use
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_NOT_UNIDENTIFIED
+  - PATIENT_REVISION_CONFLICT
+  - PATIENT_INVALID_NAME
+  - PATIENT_INVALID_BIRTH_DATE
+  - PATIENT_DUPLICATE_IDENTIFIER
+  - PATIENT_MERGED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Register a newborn
+  actor: Maternity staff
+  description: Register a baby born in the hospital. Accepts a retry key.
+  method: POST
+  path: /patients/newborns
+  success: 201
+  input: mother patient id, born_at, administrative gender, birth order for multiples
+  output: the record with its newborn name and MRN
+  errors:
+  - PATIENT_INVALID_MOTHER
+  - PATIENT_INVALID_BIRTH_DATE
+  - PATIENT_INVALID_CODE
+  - PATIENT_IDEMPOTENCY_KEY_REUSED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Get identification band data
+  actor: Registrar
+  description: What to print on the patient's band.
+  method: GET
+  path: /patients/{id}/identification-band
+  success: 200
+  input: patient id
+  output: the name or alias to show, birth date, MRN and barcode content
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGED
+  - PATIENT_DEPENDENCY_UNAVAILABLE
+events:
+- name: patient.identified
+  description: An unidentified patient was identified. If their record was merged, patient.merged follows.
+  payload:
+  - patient_id
+  - revision
+accessMatrix:
+- action: Register an unidentified patient
+  roles:
+    Registrar: any
+    Emergency department staff: any
+    Maternity staff: none
+  permission: patient.register
+- action: Identify a patient
+  roles:
+    Registrar: any
+    Emergency department staff: any
+    Maternity staff: none
+  permission: patient.register
+- action: Register a newborn
+  roles:
+    Registrar: any
+    Emergency department staff: none
+    Maternity staff: any
+  permission: patient.register
+- action: Get identification band data
+  roles:
+    Registrar: any
+    Emergency department staff: any
+    Maternity staff: any
+  permission: patient.read
+errors:
+- code: PATIENT_NOT_UNIDENTIFIED
+  http: 409
+  message: This patient is already identified.
+- code: PATIENT_INVALID_MOTHER
+  http: 422
+  message: The mother must be an existing patient record in use.
+personalData:
+- field: mother_patient_id
+  category: personal, about the mother too
+  purpose: Linking a newborn to their mother
+  retention: record_retention
+- field: born_at
+  category: personal
+  purpose: Telling apart babies born the same day
+  retention: record_retention
+risks:
+- id: RISK-E1
+  risk: Similar-sounding aliases are confused.
+  impact: Care or blood products given to the wrong unidentified patient.
+  mitigation: Unique aliases (BR-E2), two identifiers on the band including the MRN (BR-E5).
+- id: RISK-E2
+  risk: Newborns are mixed up.
+  impact: A baby goes to the wrong mother, or receives another baby's care.
+  mitigation: Distinct newborn names and a link to the mother (BR-E4).
+decisions:
+- id: ADR-E1
+  decision: MRN scope is a setting, enterprise or facility.
+  rationale: 'Health systems differ: some give one number across every hospital, others one per hospital. Neither is wrong.'
+  date: '2026-10-06'
+- id: ADR-E2
+  decision: Unidentified, newborn and quick registrations skip the search but always end in a search, at identification, naming or completion.
+  rationale: Care can't wait for a search with nothing to search on, but the duplicate check still happens once there is.
+  date: '2026-10-06'
+references:
+- id: REF-E1
+  title: The Joint Commission, National Performance Goals effective January 2026 for the Hospital Program (NPG.01.01.01)
+  url: https://digitalassets.jointcommission.org/api/public/content/9ca80055182b4274842a5780a94f2c82
+  note: Two identifiers, never the room number, barcodes, and distinct newborn identification.
+- id: REF-E2
+  title: 42 CFR 489.24, emergency screening and stabilisation (EMTALA)
+  url: https://www.ecfr.gov/current/title-42/section-489.24
+  note: 'Paragraph (d)(4): no delay to ask about payment or insurance.'
+- id: REF-E3
+  title: 'Unidentified but Not Unknown: Evaluating the Phonetic Naming System in a UK Trauma Centre (Mahajan et al., Cureus, 2025)'
+  url: https://doi.org/10.7759/cureus.99127
+- id: REF-E4
+  title: HL7 FHIR R5, Patient (mother and newborn relationships)
+  url: https://hl7.org/fhir/R5/patient.html
+changelog:
+- version: 0.1.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - 'First EHR layer for patients: MRNs, unidentified patients, newborns, identification bands, quick registration and privacy aliases.'
+acronyms:
+- term: EMTALA
+  definition: Emergency Medical Treatment and Labor Act
+- term: NPG
+  definition: National Performance Goal, The Joint Commission
+---
+Patients build on the [patient record rules](/docs/healthcare/patient)
+every healthcare application shares. This layer adds what happens at a
+hospital's front door, in its emergency department and on its maternity ward.
+
+## A patient nobody can name still gets a unique one
+
+An unconscious patient gets an alias nobody else has had (BR-E2), so care can
+start at once without mixing them up with the patient in the next bay. Once
+someone knows who they are, the alias record joins their real one (BR-E3).
+
+## Babies are told apart from birth
+
+Newborns can't say who they are and often share a surname. Each one gets a
+distinct name built from the mother's name, with a letter for twins and
+triplets, and a link to the mother (BR-E4).
+
+## Registration never stands between a patient and care
+
+A patient who needs care now is registered with the minimum, and the rest is
+completed later (BR-E6). Nothing about payment is asked first.
+
+## The band is what staff check
+
+Every test and treatment starts by checking the band against two identifiers,
+so the band carries two of them and a barcode, and never the bed (BR-E5).

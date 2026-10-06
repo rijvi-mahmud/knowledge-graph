@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.2.0
+version: 0.3.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -22,7 +22,7 @@ scope:
 nonGoals:
 - The clinical record of the visit itself. That belongs to the Encounter module.
 - Insurance eligibility and billing, which differ by country and payer.
-- Patient registration and identifiers. Identity owns them; this layer only uses them.
+- Patient registration, identifiers, contact details and representatives. The Patients module owns them; this layer only asks for them.
 - Charging fees for missed or late-cancelled appointments. Billing decides, using appointment.no_show and the late cancellation flag on appointment.cancelled.
 - Detecting and reporting data breaches, which belongs to the Security module.
 - Maintaining code sets. This layer only stores codes and checks them against the configured code system.
@@ -39,8 +39,8 @@ actors:
   description: Reviews who accessed appointment data.
 assumptions:
 - id: AS-H1
-  text: Identity holds each patient's identifiers, such as name and date of birth, and whether they asked for confidential communications.
-  rationale: Check-in verifies against these identifiers (BR-H2), and reminders follow the communication preference (BR-H4).
+  text: The Patients module holds each patient's identifiers, such as name and date of birth, where to contact them, and who may act for them.
+  rationale: Check-in verifies against these identifiers (BR-H2), reminders follow the communication preference (BR-H4), and representatives act within what Patients allows (BR-H5).
 - id: AS-H2
   text: 'The deployment has a lawful basis to process health data for care: treatment under HIPAA in the United States, and GDPR Article 9(2)(h) in the European Union.'
   rationale: Without it, no appointment data could be held at all. The legal basis is the deployment's responsibility, not this module's.
@@ -90,7 +90,7 @@ dataModel:
 - name: acting_representative
   type: string
   required: false
-  description: Identity id of the personal representative who booked or changed the appointment, if one did.
+  description: The personal representative who booked or changed the appointment, if one did, as the Patients module records them.
 - name: checked_in_at
   type: instant
   required: false
@@ -115,7 +115,7 @@ businessRules:
   rationale: A clinical appointment is care given to a patient by a practitioner. FHIR models both as participants of an Appointment.
 - id: BR-H2
   text: At check-in, the patient's identity is verified with at least two identifiers, such as name and date of birth. A room or location is never one of them.
-  rationale: The Joint Commission requires at least two identifiers when providing care, treatment and services, and never the room number (NPSG.01.01.01). WHO Patient Safety Solution 2 recommends the same before care is given. Verifying at check-in matches the visit, and everything later recorded on it, to the right person.
+  rationale: The Joint Commission requires at least two identifiers when providing care, treatment and services, and never the room number (NPG.01.01.01 for hospitals from 2026, NPSG.01.01.01 for its other programs). WHO Patient Safety Solution 2 recommends the same before care is given. Verifying at check-in matches the visit, and everything later recorded on it, to the right person.
 - id: BR-H3
   text: 'Reminders and other messages to patients contain only what''s needed to attend: the patient''s name, the date, time and place, and the provider''s name and number. Never the reason, diagnosis or a service that reveals a condition.'
   rationale: HHS guidance permits reminders but says providers "should take care to limit the amount of information disclosed", for example only "name and number and other information necessary to confirm an appointment" (FAQ 198). GDPR requires data to be "limited to what is necessary" (Article 5(1)(c)). Messages reach shared phones, postcards and lock screens.
@@ -123,7 +123,7 @@ businessRules:
   text: If a patient asked to be contacted by another means or at another address, every appointment message uses it.
   rationale: In the United States, providers must accommodate reasonable requests to communicate by alternative means or at alternative locations, without asking why (45 CFR 164.522(b)). In the EU, GDPR requires appropriate security and confidentiality of personal data (Article 5(1)(f)). For some patients an ordinary reminder could be unsafe.
 - id: BR-H5
-  text: A personal representative can book and manage appointments for the patient they represent, when Identity confirms they may act for the patient for this appointment. Every action they take records them as acting_representative.
+  text: A personal representative can book and manage appointments for the patient they represent, when the Patients module confirms they may act for the patient for this appointment. Every action they take records them as acting_representative.
   rationale: HIPAA treats a personal representative as the patient (45 CFR 164.502(g)), but not for a minor's care the minor could consent to themselves or that a parent agreed to keep confidential (164.502(g)(3)), and state and member state law add their own rules. That is a judgment about the person, so Identity makes it and this module applies the answer.
 - id: BR-H6
   text: When a patient needs an interpreter, the appointment records the language so a qualified interpreter can be arranged at no cost to the patient.
@@ -158,6 +158,15 @@ businessRules:
 - id: BR-H15
   text: reason and service_type are coded with the configured code systems, and a code must be valid in the release in effect on the appointment date.
   rationale: 'HIPAA adopts ICD-10-CM for diagnoses and HCPCS with CPT-4 for services (45 CFR 162.1002). In Europe, coding is set nationally: WHO''s ICD-11 has been the global standard since 1 January 2022, but countries are still moving from ICD-10. Codes are revised over time, so a code is checked against the release in force on the day.'
+- id: BR-H16
+  text: 'When the Patients module merges two patient records, every appointment of the retired record is moved to the record that remains: the patient participant changes, the appointment keeps its id, and the change is recorded in its history.'
+  rationale: After a merge, the retired record is never used again. An appointment left on it would disappear from the patient's schedule and from check-in.
+- id: BR-H17
+  text: When a patient dies, their appointments that have not started are cancelled with the reason patient_deceased, and no message about them is sent to the patient. If the death is retracted, the cancelled appointments are listed for a Scheduler to rebook.
+  rationale: Reminders and appointment letters to a person who has died distress their family. A death recorded in error is corrected by a person, so rebooking is a person's decision too.
+- id: BR-H18
+  text: When a merge is undone, appointments moved by it return to the restored record. Appointments booked on the remaining record since the merge stay there, and appointment.patient_review_needed is emitted for each so a Scheduler checks whose they are.
+  rationale: Only the appointments the merge moved are known to belong to the restored record. Those booked since could belong to either person, so a person checks.
 validations:
 - field: participants
   rule: at least one participant with the role patient and one with the role practitioner
@@ -253,6 +262,7 @@ workflows:
   - Verify the patient with two identifiers, such as name and date of birth
   - Record checked_in_at and identity_verified_with, set status to checked_in and increase revision
   - Emit appointment.checked_in
+  - Report care to the Patients module
   outcome: The patient is recorded as present and verified, ready to be seen.
 - name: Mark entered in error
   trigger: An appointment was created by mistake, for example for the wrong patient
@@ -262,6 +272,22 @@ workflows:
   - Withdraw pending reminders and release the slot
   - Emit appointment.entered_in_error
   outcome: The mistake is kept for the record but no longer affects schedules or statistics.
+- name: Follow a patient merge
+  trigger: Patients emits patient.merged
+  actor: System
+  steps:
+  - Find the appointments whose patient participant is the retired record
+  - Change the participant to the remaining record, record it in history, and increase revision
+  - Emit appointment.updated for each
+  outcome: Every appointment shows on the one record in use.
+- name: Follow a death
+  trigger: Patients emits patient.deceased
+  actor: System
+  steps:
+  - Find the patient's appointments that have not started
+  - Cancel each with the reason patient_deceased, without messaging the patient
+  - Emit appointment.cancelled for each
+  outcome: No one is booked or reminded after their death.
 edgeCases:
 - id: EC-H1
   situation: Two patients with the same name arrive for appointments at the same time.
@@ -342,10 +368,28 @@ edgeCases:
   - AC-H19
 - id: EC-H14
   situation: A parent tries to view a teenager's appointment for care the teenager consented to on their own.
-  behaviour: Identity answers that the parent may not act for this appointment, so the parent cannot see or change it.
+  behaviour: Patients answers that the parent may not act for this appointment, so the parent cannot see or change it.
   covers:
   - BR-H5
   - AC-H20
+- id: EC-H15
+  situation: A patient with an appointment next week is found to be a duplicate and merged.
+  behaviour: The appointment moves to the remaining record, keeps its id, and still checks in.
+  covers:
+  - BR-H16
+  - AC-H21
+- id: EC-H16
+  situation: A patient dies with a follow-up booked for tomorrow and a reminder due tonight.
+  behaviour: The follow-up is cancelled with reason patient_deceased and no reminder or cancellation message is sent.
+  covers:
+  - BR-H17
+  - AC-H22
+- id: EC-H17
+  situation: A merge is undone after a new appointment was booked on the remaining record.
+  behaviour: Appointments the merge moved return; the new one stays, with appointment.patient_review_needed for a Scheduler.
+  covers:
+  - BR-H18
+  - AC-H23
 functionalRequirements:
 - id: FR-H1
   text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
@@ -393,6 +437,10 @@ functionalRequirements:
   verification: test
 - id: FR-H12
   text: The service must validate coded reason and service_type against the configured code systems.
+  priority: must
+  verification: test
+- id: FR-H13
+  text: The service must follow patient merges, unmerges, deaths and retracted deaths reported by the Patients module.
   priority: must
   verification: test
 nonFunctionalRequirements:
@@ -556,11 +604,32 @@ acceptanceCriteria:
   - BR-H15
   - FR-H12
 - id: AC-H20
-  given: Identity answers that a parent may not act for their child on a given appointment
+  given: Patients answers that a parent may not act for their child on a given appointment
   when: the parent tries to view or change it
   then: the request is refused and nothing is shown or changed
   verifies:
   - BR-H5
+- id: AC-H21
+  given: patient S with a booked appointment
+  when: Patients merges S into T
+  then: the appointment has T as its patient, the same id, a history entry and a higher revision, and appointment.updated is emitted
+  verifies:
+  - BR-H16
+  - FR-H13
+- id: AC-H22
+  given: a patient with an appointment tomorrow and a pending reminder
+  when: Patients reports their death, and later retracts it
+  then: the appointment is cancelled with reason patient_deceased, the reminder is withdrawn and no message is sent; after the retraction it is listed for rebooking
+  verifies:
+  - BR-H17
+  - FR-H13
+- id: AC-H23
+  given: S merged into T, moving appointment 1, then appointment 2 booked on T
+  when: the merge is undone
+  then: appointment 1 returns to S; appointment 2 stays on T and appointment.patient_review_needed is emitted for it
+  verifies:
+  - BR-H18
+  - FR-H13
 operations:
 - name: Book an appointment
   actor: Requester
@@ -666,6 +735,11 @@ events:
   payload:
   - appointment_id
   - reason
+  - revision
+- name: appointment.patient_review_needed
+  description: After a merge was undone, a Scheduler must check which patient this appointment belongs to.
+  payload:
+  - appointment_id
   - revision
 permissions:
 - name: appointment.check_in
@@ -784,7 +858,7 @@ decisions:
   rationale: Retention differs by US state and EU member state, so the jurisdiction alone cannot decide it.
   date: '2026-10-05'
 - id: ADR-H4
-  decision: Whether someone may act for a patient, including for minors, is Identity's decision; this module asks for each appointment.
+  decision: Whether someone may act for a patient, including for minors, is the Patients module's decision; this module asks for each appointment.
   rationale: The rules depend on the patient's age, the kind of care and US state or EU member state law. Deciding them here would copy another module's job.
   date: '2026-10-06'
 openQuestions: []
@@ -821,8 +895,9 @@ references:
   title: GDPR Article 32, security of processing
   url: https://gdpr-info.eu/art-32-gdpr/
 - id: REF-H11
-  title: The Joint Commission, National Patient Safety Goals 2026 (NPSG.01.01.01)
-  url: https://digitalassets.jointcommission.org/api/public/content/94389f1cc45940fd90d7954147cac4c4?v=339f4b95
+  title: The Joint Commission, National Performance Goals effective January 2026 for the Hospital Program (NPG.01.01.01)
+  url: https://digitalassets.jointcommission.org/api/public/content/9ca80055182b4274842a5780a94f2c82
+  note: Other accreditation programs keep the same requirement as NPSG.01.01.01.
 - id: REF-H12
   title: HL7 FHIR R5, Appointment
   url: https://hl7.org/fhir/R5/appointment.html
@@ -871,6 +946,13 @@ references:
   url: https://medicaid.ncdhhs.gov/providers-billing-beneficiaries/open
   note: 'For the Billing module: quotes the CMS policy that Medicaid beneficiaries may not be billed for missed appointments.'
 changelog:
+- version: 0.3.0
+  date: '2026-10-06'
+  breaking: false
+  changes:
+  - The Joint Commission identification goal is cited as NPG.01.01.01, its 2026 hospital numbering.
+  - 'Patient facts now come from the Patients module (patient-service) instead of Identity: existence, identifiers, contact details and representatives.'
+  - Appointments follow patient merges (BR-H16), deaths (BR-H17) and undone merges (BR-H18).
 - version: 0.2.0
   date: '2026-10-06'
   breaking: false
@@ -887,17 +969,26 @@ changelog:
 dependencies:
 - service: identity-service
   direction: upstream
-  reason: resolve participants, and give the patient details check-in and messaging need
+  reason: resolve participants and authorise callers
   criticality: hard
   contract:
   - 'Asks: does this identity exist, and is it active?'
   - 'Asks: the person''s preferred time zone and locale, if they have one'
   - 'Asks: does the caller hold this permission?'
-  - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
-  - 'Asks: whether the patient wants confidential communications, and where to'
   - 'Asks: whether a person is a practitioner'
   - 'Asks: is this practitioner licensed or permitted to practise in this US state?'
-  - 'Asks: may this person act for this patient on this appointment? (Covers minors, guardians and confidential care.)'
+- service: patient-service
+  direction: upstream
+  reason: owns patient records
+  criticality: hard
+  contract:
+  - 'Asks: does this patient exist and is the record in use? A merged record answers with the record that replaced it'
+  - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
+  - 'Asks: where to contact the patient, honouring confidential communications'
+  - 'Asks: may this person act for this patient on this appointment? (Covers minors, guardians, proxies and confidential care.)'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.death_retracted'
+  - 'Gives: care reported at check-in'
+  - Registering patients and deciding who may act for them is the Patients module's concern
 - service: terminology-service
   direction: upstream
   reason: validates codes against code systems
