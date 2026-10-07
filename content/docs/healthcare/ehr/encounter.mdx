@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -31,6 +31,9 @@ scope:
 - Record completion and locking, and amendments after locking
 - Sensitive encounters, such as at a substance use disorder program
 - A department's and a practitioner's open and incomplete encounters
+- 'Pre-admission: planned stays before the patient arrives'
+- The start of observation, for the US notice deadline
+- Links to episodes of care
 nonGoals:
 - Booking. The Appointments module schedules visits; an encounter records what actually happened.
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
@@ -39,6 +42,7 @@ nonGoals:
 - Conditions and the problem list. The Conditions module owns them; an encounter refers to them, or carries a coded diagnosis.
 - Coding for claims, diagnosis-related groups and charges. Billing owns them, using the diagnoses and class history this module gives.
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
+- Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 actors:
 - name: Clinician
   description: A practitioner who cares for the patient during the encounter, such as the attending.
@@ -125,6 +129,11 @@ dataModel:
   type: string
   required: true
   description: The department responsible, owned by the Organization module (FHIR serviceProvider).
+- name: department_history
+  type: department stay[]
+  required: false
+  description: Every department responsible for the encounter, with the time each took over.
+  constraints: append-only; set by the service (BR-E25)
 - name: appointment_id
   type: string
   required: false
@@ -134,7 +143,7 @@ dataModel:
   type: string
   required: false
   description: The encounter this one is part of, such as the stay a consultation happened in (FHIR partOf).
-  constraints: same patient; its period within the parent's
+  constraints: same patient, or the mother's encounter for a newborn (BR-E6); its period within the parent's
 - name: planned_start
   type: instant
   required: false
@@ -177,8 +186,8 @@ dataModel:
 - name: admission
   type: admission
   required: false
-  description: 'For inpatient and observation: admit source, origin, re-admission, discharge disposition and destination (FHIR admission).'
-  constraints: 'codes: admit source from HL7 admit-source (such as emd, outp, hosp-trans, born); discharge disposition from HL7 discharge-disposition (such as home, snf, aadvice, exp)'
+  description: 'For inpatient and observation: pre-admission id, admit source, origin, re-admission, discharge disposition and destination (FHIR admission).'
+  constraints: 'codes: re-admission from HL7 v2 Table 0092 (R); admit source from HL7 admit-source (such as emd, outp, hosp-trans, born); discharge disposition from HL7 discharge-disposition (such as home, snf, aadvice, exp)'
   variant: inpatient
 - name: virtual_service
   type: connection details
@@ -230,6 +239,10 @@ dataModel:
   required: true
   description: Increases with every change. A change sends the revision it read.
   constraints: set by the service
+- name: episode_of_care_ids
+  type: string[]
+  required: false
+  description: Episodes of care this encounter belongs to, owned by the Episodes module (FHIR episodeOfCare).
 relationships:
 - type: belongs_to
   target: patient
@@ -266,8 +279,8 @@ businessRules:
   rationale: Medicare counts observation as outpatient care until an inpatient order, so the time in each class matters to billing; FHIR keeps class history (EncounterHistory).
   variant: inpatient
 - id: BR-E6
-  text: An encounter part of another has the same patient, a period within the parent's, and the parent cannot be completed while a part is still open.
-  rationale: FHIR groups encounters with partOf, such as a consultation during a stay. A parent closed over an open part leaves care outside any complete record.
+  text: An encounter part of another has the same patient, except that a newborn's encounter can be part of its mother's encounter. A part's period is within its parent's, and the parent cannot be completed while a part is still open.
+  rationale: FHIR groups encounters with partOf, such as a consultation during a stay, and says a child's encounter should reference the mother's encounter with partOf. A parent closed over an open part leaves care outside any complete record.
 - id: BR-E7
   text: A discharged encounter becomes completed only when Clinical documentation reports its documentation complete and a final diagnosis is recorded. It must happen within record_completion_deadline of actual_end; encounters past that are listed as overdue.
   rationale: US hospitals must record the final diagnosis and complete the medical record within 30 days after discharge (42 CFR 482.24(c)(4)(viii)). FHIR uses discharged for care that is over while the record is still being completed.
@@ -312,6 +325,31 @@ businessRules:
 - id: BR-E20
   text: Every change sends the revision it read, and a stale revision is rejected.
   rationale: Registrars, clinicians and HIM staff change the same encounter; without this, one silently undoes another.
+- id: BR-E21
+  text: A patient has at most one inpatient or observation encounter that is in progress or on hold.
+  rationale: A patient is in one hospital stay at a time. Two open stays send orders, results and charges to the wrong one.
+  variant: inpatient
+- id: BR-E22
+  text: No encounter starts after the patient's recorded death.
+  rationale: An encounter after death almost always means the wrong patient. A death recorded in error is retracted in the Patients module first.
+- id: BR-E23
+  text: 'When an encounter enters observation, encounter.observation_started is emitted with observation_notice_due_at: the start plus observation_notice_deadline. Deciding who must receive the notice, and giving it, belongs to Admission, discharge and transfer.'
+  rationale: US hospitals must give Medicare patients who receive observation services as outpatients for more than 24 hours a standardized written notice no later than 36 hours after observation starts, or sooner on transfer, discharge or admission (42 CFR 489.20(y)). The encounter knows when observation began.
+  variant: inpatient
+- id: BR-E24
+  text: A pre-admission from Admission, discharge and transfer opens a planned inpatient encounter with planned_start and the pre-admission id. The admission starts that same encounter; a cancelled pre-admission cancels it.
+  rationale: FHIR uses planned encounters for pre-admission, and HL7 v2 sends pre-admit (A05) and cancel pre-admit (A38). Testing and paperwork before an elective stay need an encounter to attach to.
+  variant: inpatient
+- id: BR-E25
+  text: A change of responsible department keeps the encounter and adds the new department to department_history with the time it took over.
+  rationale: Who was responsible at each point matters for billing, quality reporting and accountability, the same as class history.
+- id: BR-E26
+  text: Encounters of a patient under legal hold are never erased or anonymised, even after the Patients module's retention ends.
+  rationale: The Patients module stops erasure during litigation, and the encounters are the record in question.
+- id: BR-E27
+  text: A re-admission is marked on the admission when Admission, discharge and transfer reports it.
+  rationale: Readmissions are tracked for quality and payment. FHIR records it as admission.reAdmission.
+  variant: inpatient
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -329,7 +367,7 @@ validations:
   rule: Appointments confirms the appointment, for the same patient
   error: ENCOUNTER_INVALID_REFERENCE
 - field: part_of
-  rule: an encounter for the same patient whose period contains this one
+  rule: an encounter for the same patient, or the mother's encounter for a newborn, whose period contains this one
   error: ENCOUNTER_INVALID_PARENT
 - field: planned_start, actual_start, actual_end
   rule: RFC 3339 instants; actual_end not before actual_start; actual times not in the future
@@ -355,6 +393,18 @@ validations:
 - field: revision
   rule: matches the current revision
   error: ENCOUNTER_REVISION_CONFLICT
+- field: patient_id
+  rule: no other inpatient or observation encounter in progress or on hold for the patient, when opening or starting one (BR-E21)
+  error: ENCOUNTER_CONCURRENT_STAY
+- field: actual_start
+  rule: not after the patient's recorded death (BR-E22)
+  error: ENCOUNTER_PATIENT_DECEASED
+- field: episode_of_care_ids
+  rule: Episodes confirms each episode, for the same patient
+  error: ENCOUNTER_INVALID_REFERENCE
+- field: department_history
+  rule: never sent by clients (BR-E25)
+  error: ENCOUNTER_READ_ONLY_FIELD
 stateMachine:
   initial: planned
   states:
@@ -429,6 +479,15 @@ workflows:
   - On departure, discharge it, or discontinue it with the departure reason if care was not complete
   - If the patient is admitted, ADT opens an inpatient encounter; the emergency encounter is discharged
   outcome: Every emergency visit is one encounter, including patients who leave.
+- name: Pre-admit a stay
+  trigger: Admission, discharge and transfer reports a pre-admission
+  actor: System
+  variant: inpatient
+  steps:
+  - Open a planned inpatient encounter with planned_start and the pre-admission id
+  - On admission, start this encounter instead of opening another
+  - On a cancelled pre-admission, cancel it
+  outcome: Pre-admission testing and paperwork attach to the stay before it begins.
 - name: Follow a stay
   trigger: Admission, discharge and transfer reports an admission, transfer, leave or discharge
   actor: System
@@ -549,6 +608,48 @@ edgeCases:
   - FR-E13
   - AC-E25
   variant: inpatient
+- id: EC-E15
+  situation: A baby is born during the mother's stay.
+  behaviour: The baby's encounter is part of the mother's encounter, though the patients differ.
+  covers:
+  - BR-E6
+  - AC-E31
+- id: EC-E16
+  situation: ADT reports an admission for a patient whose earlier stay is still in progress.
+  behaviour: Rejected with ENCOUNTER_CONCURRENT_STAY; the earlier stay is discharged first.
+  covers:
+  - BR-E21
+  - AC-E32
+- id: EC-E17
+  situation: A patient dies during a stay.
+  behaviour: ADT discharges the encounter with disposition expired; the Patients module records the death. A later encounter for that patient fails with ENCOUNTER_PATIENT_DECEASED.
+  covers:
+  - BR-E22
+  - AC-E33
+- id: EC-E18
+  situation: A Medicare patient is placed in observation at 20:00.
+  behaviour: encounter.observation_started carries a notice due by 08:00 two days later; ADT gives the notice.
+  covers:
+  - BR-E23
+  - AC-E34
+- id: EC-E19
+  situation: An elective hip replacement is pre-admitted a week ahead.
+  behaviour: A planned encounter holds the pre-admission tests, and admission starts it.
+  covers:
+  - BR-E24
+  - AC-E35
+- id: EC-E20
+  situation: A patient moves from the medicine service to surgery.
+  behaviour: department_history records both, and encounter.department_changed is emitted.
+  covers:
+  - BR-E25
+  - AC-E36
+- id: EC-E21
+  situation: The patient's records are under legal hold when retention ends.
+  behaviour: The encounters are kept.
+  covers:
+  - BR-E26
+  - AC-E37
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -606,7 +707,7 @@ nonFunctionalRequirements:
 - category: compatibility
   text: 'Encounters map onto HL7 FHIR R5 Encounter: status to status, subject_status to subjectStatus, class to class, admission to admission, and class_history to EncounterHistory.'
 - category: compatibility
-  text: 'Events map to HL7 v2 ADT messages for systems that use them: an ambulatory or emergency encounter.created to A04, admission to A01, a location change to A02, discharge to A03, class changes to A06 and A07, leave to A21 and A22, a cancelled discharge to A13.'
+  text: 'Events map to HL7 v2 ADT messages for systems that use them: an ambulatory or emergency encounter.created to A04, a pre-admission to A05 and its cancellation to A38, admission to A01, a location change to A02, discharge to A03, class changes to A06 and A07, leave to A21 and A22, a cancelled discharge to A13.'
 - category: security
   text: Only people involved in the patient's care, or with a role that needs it, can read an encounter, and every read is logged.
 - category: reliability
@@ -648,6 +749,9 @@ settings:
   type: map of department to sensitivity codes
   default: '{}'
   description: Departments whose encounters carry sensitivity codes, such as a Part 2 substance use disorder program with SUD (BR-E14).
+- name: observation_notice_deadline
+  type: duration
+  description: 'How long after observation starts the US notice must be given: 36 hours (42 CFR 489.20(y)). Unset outside the United States.'
 performanceTargets:
 - id: PERF-E1
   indicator: Records completed on time
@@ -875,6 +979,60 @@ acceptanceCriteria:
   verifies:
   - BR-E8
   - FR-E6
+- id: AC-E31
+  given: a mother's stay, and her newborn registered with mother_patient_id
+  when: the newborn's encounter is opened part of the mother's
+  then: it is accepted; part of an unrelated patient's encounter fails with ENCOUNTER_INVALID_PARENT
+  verifies:
+  - BR-E6
+- id: AC-E32
+  given: a patient with a stay in progress
+  when: another inpatient encounter is opened for them
+  then: it fails with ENCOUNTER_CONCURRENT_STAY and HTTP 409
+  verifies:
+  - BR-E21
+- id: AC-E33
+  given: a patient who died yesterday
+  when: an encounter is opened for them starting today
+  then: it fails with ENCOUNTER_PATIENT_DECEASED and HTTP 409
+  verifies:
+  - BR-E22
+- id: AC-E34
+  given: observation_notice_deadline 36 hours
+  when: an encounter enters observation at 20:00
+  then: encounter.observation_started is emitted with observation_notice_due_at 36 hours later
+  verifies:
+  - BR-E23
+- id: AC-E35
+  given: a pre-admission reported by ADT
+  when: the patient is admitted, and another pre-admission is cancelled
+  then: the planned encounter starts with the same id; the cancelled one becomes cancelled
+  verifies:
+  - BR-E24
+- id: AC-E36
+  given: an open encounter in medicine
+  when: its department changes to surgery
+  then: department_history holds both with their times, encounter.department_changed is emitted, and a client sending department_history fails with ENCOUNTER_READ_ONLY_FIELD
+  verifies:
+  - BR-E25
+- id: AC-E37
+  given: a patient under legal hold whose retention has ended
+  when: retention is applied
+  then: their encounters are kept unchanged
+  verifies:
+  - BR-E26
+- id: AC-E38
+  given: an admission ADT reports as a re-admission
+  when: it is recorded
+  then: admission holds re-admission R
+  verifies:
+  - BR-E27
+- id: AC-E39
+  given: an encounter linked to an episode for another patient
+  when: it is saved
+  then: it fails with ENCOUNTER_INVALID_REFERENCE and HTTP 422
+  verifies:
+  - FR-E3
 operations:
 - name: Open an encounter
   actor: System
@@ -882,7 +1040,7 @@ operations:
   method: POST
   path: /encounters
   success: 201
-  input: patient, class, department, and optional appointment, part_of, planned start, type, priority, reasons, admission details, location, virtual service and patient location
+  input: patient, class, department, and optional appointment, pre-admission id, episodes, part_of, planned start, type, priority, reasons, admission details, location, virtual service and patient location
   output: the encounter
   errors:
   - ENCOUNTER_INVALID_PATIENT
@@ -895,6 +1053,8 @@ operations:
   - ENCOUNTER_INVALID_VIRTUAL
   - ENCOUNTER_READ_ONLY_FIELD
   - ENCOUNTER_IDEMPOTENCY_KEY_REUSED
+  - ENCOUNTER_CONCURRENT_STAY
+  - ENCOUNTER_PATIENT_DECEASED
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Get an encounter
   actor: Clinician
@@ -921,7 +1081,7 @@ operations:
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Update an encounter
   actor: Registrar
-  description: Change type, priority, reasons, department or virtual details of an open encounter.
+  description: Change type, priority, reasons, episodes, department or virtual details of an open encounter. A department change is added to department_history.
   method: PATCH
   path: /encounters/{id}
   success: 200
@@ -949,6 +1109,8 @@ operations:
   - ENCOUNTER_INVALID_TRANSITION
   - ENCOUNTER_INVALID_PERIOD
   - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_CONCURRENT_STAY
+  - ENCOUNTER_PATIENT_DECEASED
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Record subject status
   actor: System
@@ -1286,6 +1448,20 @@ events:
   payload:
   - encounter_id
   - revision
+- name: encounter.observation_started
+  description: The encounter entered observation; carries when the US observation notice is due.
+  payload:
+  - encounter_id
+  - observation_started_at
+  - observation_notice_due_at
+  - revision
+- name: encounter.department_changed
+  description: Another department took over responsibility.
+  payload:
+  - encounter_id
+  - department_id
+  - effective_at
+  - revision
 deliveryGuarantees:
 - id: DG-E1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -1382,13 +1558,21 @@ accessMatrix:
     System: none
   permission: encounter.audit
 personalData:
-- field: patient_id, period, class, department
-  category: health data; shows the person received care
+- field: patient_id, class, class_history, type, priority, department_id, department_history, appointment_id, part_of, episode_of_care_ids
+  category: health data; shows the person received care, where and of what kind
   purpose: The record of care
+  retention: record_retention of the Patients module
+- field: planned_start, actual_start, actual_end, length, status, subject_status
+  category: health data
+  purpose: When care happened
   retention: record_retention of the Patients module
 - field: reasons, diagnoses
   category: health data
   purpose: Care, quality reporting and billing
+  retention: record_retention of the Patients module
+- field: admission, departure_reason
+  category: health data; reveals origin, destination and outcome
+  purpose: The stay's admission and discharge
   retention: record_retention of the Patients module
 - field: participants, locations
   category: personal and health data
@@ -1402,10 +1586,14 @@ personalData:
   category: personal
   purpose: Joining and licensing a virtual encounter
   retention: record_retention of the Patients module
-- field: amendments, access log
+- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision
+  category: record metadata about the patient's care
+  purpose: Record completion and integrity
+  retention: record_retention of the Patients module
+- field: access log
   category: personal
-  purpose: Record integrity and access review
-  retention: record_retention, and access_log_retention for the log
+  purpose: Access review
+  retention: access_log_retention of the Patients module
 errors:
 - code: ENCOUNTER_NOT_FOUND
   http: 404
@@ -1476,6 +1664,12 @@ errors:
 - code: ENCOUNTER_DEPENDENCY_UNAVAILABLE
   http: 503
   message: A service this request needs is unavailable. Retry later.
+- code: ENCOUNTER_CONCURRENT_STAY
+  http: 409
+  message: The patient already has a hospital stay in progress.
+- code: ENCOUNTER_PATIENT_DECEASED
+  http: 409
+  message: The encounter can't start after the patient's recorded death.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -1483,9 +1677,11 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: does this patient exist and is the record in use, following replaced_by?'
+  - 'Asks: is the patient deceased, and since when?'
+  - 'Asks: is this newborn''s mother this patient? (for part_of)'
   - 'Asks: is the patient restricted, so opening needs a reason?'
   - 'Gives: care reported when an encounter starts'
-  - 'Receives: patient.merged, patient.unmerged and patient.deceased'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.legal_hold_changed'
 - service: appointment-service
   direction: upstream
   reason: reports check-ins and walk-ins
@@ -1508,9 +1704,11 @@ dependencies:
   reason: reports admissions, transfers, leave, class changes and discharges
   criticality: soft
   contract:
-  - 'Receives: admission, transfer, leave, return, class change, discharge and cancelled discharge'
+  - 'Receives: pre-admission, cancelled pre-admission, admission, transfer, leave, return, class change, re-admission, discharge and cancelled discharge'
   - 'Gives: the encounter id for each stay'
   - 'Gives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled and encounter.class_changed, confirming what was recorded'
+  - 'Gives: encounter.observation_started with when the US observation notice is due; deciding who gets the notice, and giving it, is ADT''s concern'
+  - 'Receives: discharge with disposition expired when a patient dies; recording the death is the Patients module''s concern'
   - Beds, orders and transfers are ADT's concern
 - service: organization-service
   direction: upstream
@@ -1549,7 +1747,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: encounter.completed with diagnoses, class history and length'
-  - 'Gives: encounter.amended, encounter.cancelled, encounter.discontinued and encounter.class_changed'
+  - 'Gives: encounter.amended, encounter.cancelled, encounter.discontinued, encounter.class_changed and encounter.department_changed'
   - Coding for claims and diagnosis-related groups is Billing's concern
 - service: consent-service
   direction: downstream
@@ -1564,6 +1762,13 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: who is the caller, and do they hold this permission?'
+- service: episode-service
+  direction: upstream
+  reason: owns episodes of care
+  criticality: soft
+  contract:
+  - 'Asks: does this episode exist for this patient?'
+  - Managing episodes is the Episodes module's concern
 risks:
 - id: RISK-E1
   risk: Records stay incomplete past the deadline.
@@ -1632,7 +1837,23 @@ references:
 - id: REF-E9
   title: RFC 9457, problem details for HTTP APIs
   url: https://www.rfc-editor.org/rfc/rfc9457
+- id: REF-E10
+  title: 42 CFR 489.20(y), notice of observation status (MOON)
+  url: https://www.ecfr.gov/current/title-42/section-489.20
+- id: REF-E11
+  title: HL7 FHIR R5, EpisodeOfCare
+  url: https://hl7.org/fhir/R5/episodeofcare.html
+- id: REF-E12
+  title: HL7 FHIR R5, Patient (mother and newborn relationships)
+  url: https://hl7.org/fhir/R5/patient.html
 changelog:
+- version: 0.2.0
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - A newborn's encounter can be part of the mother's (BR-E6), as FHIR advises.
+  - One stay at a time (BR-E21), no encounter after death (BR-E22), the US observation notice deadline (BR-E23), pre-admission (BR-E24), department history (BR-E25), legal holds (BR-E26) and re-admission (BR-E27).
+  - Links to episodes of care, and a Privacy page that names every field.
 - version: 0.1.0
   date: '2026-10-07'
   breaking: false
@@ -1651,6 +1872,8 @@ acronyms:
   definition: International Classification of Diseases, 10th Revision, Clinical Modification (US)
 - term: SUD
   definition: Substance use disorder
+- term: MOON
+  definition: Medicare Outpatient Observation Notice
 tables:
 - name: encounters
   description: One row per encounter.
