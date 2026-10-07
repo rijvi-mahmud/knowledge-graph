@@ -1,0 +1,36 @@
+name: Check
+
+# Validates every spec, the types and the generated OpenAPI files on each pull
+# request and push to main, so a broken id, a dash or an invalid OpenAPI file
+# never reaches production.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check specs
+        run: pnpm check:specs --strict
+      - name: Check types
+        run: pnpm types:check
+      - name: Build
+        run: pnpm build
+      - name: Lint the generated OpenAPI files
+        run: |
+          find .next/server/app/openapi -name '*.json.body' -exec sh -c 'cp "$1" "${1%.body}"' _ {} \;
+          find .next/server/app/openapi -name '*.json' -exec npx -y @redocly/cli@2 lint --extends=minimal {} +

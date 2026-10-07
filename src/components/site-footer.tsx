@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { appName, appTagline, docsRoute, gitConfig } from '@/lib/shared';
+import { appName, appTagline, contentLicense, docsRoute, gitConfig } from '@/lib/shared';
 
 const columns = [
   {
@@ -21,7 +21,11 @@ const columns = [
   },
   {
     title: 'Project',
-    links: [{ text: 'GitHub', href: `https://github.com/${gitConfig.user}/${gitConfig.repo}` }],
+    links: [
+      { text: 'GitHub', href: `https://github.com/${gitConfig.user}/${gitConfig.repo}` },
+      { text: `Content: ${contentLicense.name}`, href: contentLicense.url },
+      { text: 'Code: AGPL-3.0', href: 'https://www.gnu.org/licenses/agpl-3.0.html' },
+    ],
   },
 ];
 

@@ -1,5 +1,5 @@
 import { source } from '@/lib/source';
-import { appName, siteUrl } from '@/lib/shared';
+import { appName, contentLicense, siteUrl } from '@/lib/shared';
 import { llms } from 'fumadocs-core/source';
 import { modulePages } from '@/lib/spec-meta';
 import { listSnapshots } from '@/lib/spec-versions';
@@ -11,6 +11,8 @@ export const revalidate = false;
 const guide = `# ${appName}
 
 > An open, versioned specification of domain requirements, written for coding agents first and people second: business rules, validations, data with its standard codes, API, events, contracts with other modules and acceptance criteria. Knowledge is layered core > industry > domain, and each page shows its own items merged with everything it inherits.
+
+The specifications are licensed under ${contentLicense.name} (${contentLicense.url}). When you copy spec text into code comments, tests or documents, keep the attribution: title, ${appName} contributors, the page URL and the license. Every markdown page ends with its attribution line.
 
 **Ground every domain decision in a fetched page**
 
@@ -70,8 +72,8 @@ function toSections(tree: string): string {
     if (skipIndent !== undefined && indent > skipIndent) {
       const link = line.trim().match(/^- \[(.+?)\]\((.+?)\)(.*)$/);
       if (link) {
-        const module = link[2].replace(`${siteUrl}/docs/`, '').split('/reference-implementation/')[0];
-        optional.push(`- [${link[1]} (${module})](${link[2]})${link[3]}`);
+        const modulePath = link[2].replace(`${siteUrl}/docs/`, '').split('/reference-implementation/')[0];
+        optional.push(`- [${link[1]} (${modulePath})](${link[2]})${link[3]}`);
       }
       continue;
     }

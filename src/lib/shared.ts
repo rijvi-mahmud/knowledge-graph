@@ -24,3 +24,18 @@ export const siteUrl = (
 
 /** Hostname of siteUrl, without port, for domain allowlists such as WebFetch(domain:...). */
 export const siteHost = new URL(siteUrl).hostname;
+
+/**
+ * Licence of the knowledge content (content/), stated wherever specs are
+ * served so readers and agents reusing the text know the terms. The code is
+ * licensed separately (AGPL-3.0); see README.
+ */
+export const contentLicense = {
+  name: 'CC BY-SA 4.0',
+  spdx: 'CC-BY-SA-4.0',
+  url: 'https://creativecommons.org/licenses/by-sa/4.0/',
+};
+
+/** A TASL attribution line (Title, Author, Source, License), as Creative Commons recommends. */
+export const attribution = (title: string, url: string) =>
+  `"${title}" by ${appName} contributors, ${url}, licensed under ${contentLicense.name} (${contentLicense.url}).`;

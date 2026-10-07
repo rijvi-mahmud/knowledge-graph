@@ -1,7 +1,7 @@
 import { docs } from 'collections/server';
 import { loader, update, type LoaderPlugin } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
-import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
+import { attribution, docsContentRoute, docsImageRoute, docsRoute, siteUrl } from './shared';
 import { specToMarkdown } from './spec-markdown';
 import { resolveSpec, type SpecNode } from './spec-inherit';
 import { activeSpecGroups, variantSpec, type ModuleSpecData } from '@/components/module-spec';
@@ -189,7 +189,14 @@ export function getResolvedSpec(page: Page): ModuleSpecData {
   );
 }
 
+/** The TASL attribution line every markdown response ends with. */
+const licenseLine = (page: Page) => `License: ${attribution(page.data.title ?? page.url, `${siteUrl}${page.url}`)}`;
+
 export async function getLLMText(page: (typeof source)['$inferPage']) {
+  return `${await llmBody(page)}\n\n${licenseLine(page)}\n`;
+}
+
+async function llmBody(page: (typeof source)['$inferPage']) {
   // A sub-page is one section or one variant of the spec, with no prose of its own.
   const view = specViewOf(page);
   if (view?.variant) {

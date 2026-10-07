@@ -1,0 +1,46 @@
+name: Snapshot specs
+
+# After each successful production deployment, saves the published merged
+# markdown of every module version that has no snapshot yet
+# (scripts/snapshot-specs.ts), so a version an agent cited stays fetchable.
+on:
+  repository_dispatch:
+    types: ['vercel.deployment.success']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snapshot-specs
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    if: github.event_name == 'workflow_dispatch' || github.event.client_payload.environment == 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Save new snapshots from production
+        run: pnpm snapshot:specs
+      - name: Commit new snapshots
+        run: |
+          if [ -n "$(git status --porcelain content/versions)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add content/versions
+            git commit -m "chore: save spec version snapshots"
+            git push
+          else
+            echo "No new versions to save."
+          fi

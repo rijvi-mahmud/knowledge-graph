@@ -59,7 +59,7 @@ export function specToOpenApi(spec: ModuleSpecData, title: string, url: string) 
       title,
       version: spec.version ?? '0.0.0',
       description: `Generated from the ${title} specification (${siteUrl}${url}). The specification is normative; this file lists its endpoints, success statuses and error codes. Inputs and outputs are described in prose there. Authentication is set by each deployment (see the spec's API conventions).`,
-      license: { name: 'AGPL-3.0-only', identifier: 'AGPL-3.0-only' },
+      license: { name: 'CC BY-SA 4.0', identifier: 'CC-BY-SA-4.0' },
     },
     servers: [{ url: '/', description: 'Your deployment of this module' }],
     externalDocs: { url: `${siteUrl}${url}`, description: 'The full specification' },
