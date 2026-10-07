@@ -698,7 +698,7 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Encounters (`healthcare/ehr/encounter` 0.6.0, EHR-only), Patients (`healthcare/patient` 0.7.1, which has no core page by the
+  drafts: Encounters (`healthcare/ehr/encounter` 0.6.1, EHR-only), Patients (`healthcare/patient` 0.7.1, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.3.4) and Appointments
   (`healthcare/appointment` 0.7.1, `healthcare/ehr/appointment` 0.7.1; `core/appointment` 0.11.0). All
   support the US and EU through the `jurisdiction` setting. Next: Admission, discharge and transfer.

@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.6.0
+version: 0.6.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -281,6 +281,11 @@ dataModel:
   required: false
   description: 'Where a licensed professional decided the patient''s access to part of this encounter is reasonably likely to endanger life or physical safety: what is withheld, who decided, why, and the review.'
   constraints: set by the service through its operation
+- name: accuracy_contested
+  type: boolean
+  required: false
+  description: Set while the patient contests the accuracy of part of the encounter and asked for it to be restricted until the correction request is decided.
+  constraints: set by the service through correction requests
 relationships:
 - type: belongs_to
   target: patient
@@ -440,6 +445,9 @@ businessRules:
 - id: BR-E41
   text: When the patient, or someone other than the health plan, has paid in full for the encounter's services and asks that they not be disclosed to the health plan, health_plan_restriction is set. Billing must not disclose the encounter to that plan for payment or operations unless the law requires it. The restriction is never refused.
   rationale: HIPAA requires a covered entity to agree to this restriction when the care was paid in full out of pocket and the disclosure is for payment or operations and not otherwise required by law (45 CFR 164.522(a)(1)(vi)).
+- id: BR-E42
+  text: When a patient who requests a correction asks for the data to be restricted meanwhile, accuracy_contested is set. Everyone reading the encounter sees the contested part marked, and it is cleared when the request is decided.
+  rationale: GDPR gives a right to restriction while the accuracy of personal data is checked (Article 18(1)(a)). Marking it, rather than hiding it, keeps the data available for care while warning everyone it is disputed.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -477,7 +485,7 @@ validations:
 - field: virtual_service, patient_location
   rule: an https URL, and a US state or EU member state; required for class virtual
   error: ENCOUNTER_INVALID_VIRTUAL
-- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial
+- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial, accuracy_contested
   rule: never sent by clients (BR-E19)
   error: ENCOUNTER_READ_ONLY_FIELD
 - field: revision
@@ -833,6 +841,12 @@ edgeCases:
   covers:
   - BR-E41
   - AC-E55
+- id: EC-E35
+  situation: A patient disputes a mental health diagnosis on a past visit and asks that it be restricted while it is checked.
+  behaviour: The diagnosis stays available for care but is marked as disputed everywhere until the HIM specialist decides.
+  covers:
+  - BR-E42
+  - AC-E56
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -1319,6 +1333,12 @@ acceptanceCriteria:
   then: health_plan_restriction is set, encounter.restriction_changed is emitted, and Billing does not send the encounter to that plan
   verifies:
   - BR-E41
+- id: AC-E56
+  given: a patient contesting a discharge diagnosis
+  when: they request a correction and ask for restriction meanwhile, and the request is later decided
+  then: accuracy_contested is set and encounter.accuracy_contested is emitted; readers see the diagnosis marked as disputed; on the decision it is cleared and encounter.accuracy_contested is emitted again; a client sending accuracy_contested fails with ENCOUNTER_READ_ONLY_FIELD
+  verifies:
+  - BR-E42
 operations:
 - name: Open an encounter
   actor: System
@@ -1880,6 +1900,12 @@ events:
   - encounter_id
   - health_plan_restriction
   - revision
+- name: encounter.accuracy_contested
+  description: The patient contests part of the encounter, or the contest was resolved.
+  payload:
+  - encounter_id
+  - accuracy_contested
+  - revision
 deliveryGuarantees:
 - id: DG-E1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -2081,7 +2107,7 @@ personalData:
   category: personal
   purpose: Honouring the patient's choice about the facility directory
   retention: record_retention of the Patients module
-- field: health_plan_restriction, access_denial, correction requests
+- field: health_plan_restriction, access_denial, correction requests, accuracy_contested
   category: health data
   purpose: Honouring the patient's rights over the encounter
   retention: record_retention of the Patients module
@@ -2253,6 +2279,7 @@ dependencies:
   - 'Gives: encounter.created, encounter.updated, encounter.participant_changed and encounter.entered_in_error, and the sensitivity codes to carry'
   - 'Receives: data recorded against the encounter'
   - 'Gives: encounter.patient_review_needed after an undone patient merge'
+  - 'Gives: encounter.accuracy_contested, so modules showing encounter data mark it as disputed'
   - Moving entries to another encounter is each module's concern
 - service: billing-service
   direction: downstream
@@ -2401,6 +2428,11 @@ references:
   title: 45 CFR 164.524 and 164.526, access and amendment
   url: https://www.ecfr.gov/current/title-45/section-164.524
 changelog:
+- version: 0.6.1
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Restriction while a correction is checked (BR-E42, GDPR Article 18).
 - version: 0.6.0
   date: '2026-10-08'
   breaking: false
@@ -2762,10 +2794,11 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Articles 16 and 18
   obligation: Rectification, and restriction while accuracy is checked.
-  how: Correction requests.
+  how: Correction requests, and accuracy_contested while accuracy is checked.
   status: met
   covered_by:
   - BR-E40
+  - BR-E42
 - id: CMP-E20
   regulation: GDPR (EU) 2016/679
   provision: Article 17
