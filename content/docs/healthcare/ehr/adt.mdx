@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -41,6 +41,8 @@ actors:
   description: Reviews who accessed stays.
 - name: System
   description: Another module, such as Orders or the Emergency department, reporting an event.
+- name: Patient
+  description: The person the stay is about, or their personal representative within the authority the Patients module records.
 assumptions:
 - id: AS-E1
   text: Orders holds admission, observation and discharge orders, with who gave them and when.
@@ -113,6 +115,11 @@ dataModel:
   required: false
   description: The admission or observation order, owned by Orders.
   constraints: required to admit (BR-E1)
+- name: level_of_care
+  type: code
+  required: false
+  description: The level of care the order asks for, such as intensive care or general ward.
+  constraints: 'set from the admission or transfer order; codes: deployment list levels_of_care, mapped to the units Organization says provide them'
 - name: attending_practitioner_id
   type: string
   required: false
@@ -200,6 +207,16 @@ dataModel:
   required: false
   description: 'On a bed: the stay it is held for, by a pending transfer or a leave.'
   constraints: set by the service
+- name: accuracy_contested
+  type: boolean
+  required: false
+  description: Set while the patient contests part of the stay record and asked for it to be restricted.
+  constraints: set by the service through correction requests
+- name: shares_mother_location
+  type: boolean
+  required: false
+  description: Set when a newborn rooms in with their mother and has no bed of their own.
+  constraints: set by the service when rooming_in is on
 relationships:
 - type: belongs_to
   target: patient
@@ -229,8 +246,8 @@ businessRules:
   text: A patient can be admitted before a bed is ready. Until one is assigned, the stay records where they wait, such as the emergency department, and is listed as boarding.
   rationale: Admitted patients often wait for beds. Recording them as admitted, with their real location, keeps orders, staff and the census correct.
 - id: BR-E5
-  text: A bed takes a patient only if it is unoccupied and not reserved for another stay. One bed holds one patient. An isolated bed takes only a patient needing the same isolation; closed and contaminated beds take nobody.
-  rationale: HL7 bed status (Table 0116) tells the bed board what each bed can take. Putting a patient in a dirty or closed bed, or two in one, is a safety failure.
+  text: A bed takes a patient only if it is unoccupied, not reserved for another stay, and on a unit that provides the stay's level of care. One bed holds one patient, except a newborn rooming in with their mother. An isolated bed takes only a patient needing the same isolation; closed and contaminated beds take nobody. Where room_sharing_policy restricts who may share a room, it is applied too.
+  rationale: HL7 bed status (Table 0116) tells the bed board what each bed can take. Putting a patient in a dirty or closed bed, or two in one, is a safety failure. The level of care decides staffing and monitoring, so an intensive care patient in a ward bed is a safety failure.
 - id: BR-E6
   text: When a patient leaves a bed, by transfer, discharge or death, the bed becomes housekeeping until environmental services marks it unoccupied.
   rationale: A bed must be cleaned before the next patient. The housekeeping status is what stops the next assignment until it is.
@@ -276,6 +293,21 @@ businessRules:
 - id: BR-E20
   text: Fields the service sets, such as status, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for and revision, cannot be written by clients, and every change sends the revision it read.
   rationale: Status and times drive notices, billing and census; a client writing them skips the rules. Concurrent bed moves must not overwrite each other.
+- id: BR-E21
+  text: When the Patients module records a death, the patient's pending admissions are cancelled, and an admitted stay not already discharged as expired is discharged with disposition expired at the recorded time.
+  rationale: A death recorded elsewhere, such as by a registrar or from an outside report, must still close the stay, free the bed and stop the notices.
+- id: BR-E22
+  text: After a patient merge, if the remaining patient has two stays pending or admitted, both are kept and listed for a bed manager to resolve; the one-stay rule (BR-E2) is not applied to the move. When a merge is undone, stays recorded since the merge are listed for review.
+  rationale: Duplicate records can each hold an open stay for the same admission. Refusing the merge keeps the duplicate; closing one silently could discharge a real patient.
+- id: BR-E23
+  text: When the Patients module marks a patient entered in error, their pending admissions are cancelled.
+  rationale: The record was created by mistake, so the planned stay will never happen.
+- id: BR-E24
+  text: A patient, or their representative within the authority the Patients module records, can read their own stays electronically as soon as they are recorded, with no review delay. They can ask for part of a stay record to be corrected; an HIM specialist decides within the Patients module's correction_deadline, and accuracy_contested marks the disputed part meanwhile if they ask.
+  rationale: HIPAA gives rights of access and amendment (45 CFR 164.524 and 164.526), a delay in access is likely information blocking (45 CFR 171.103), and GDPR gives access, rectification and restriction (Articles 15, 16 and 18).
+- id: BR-E25
+  text: 'Where rooming_in is on, a newborn rooms in with their mother: the newborn''s stay shares the mother''s bed location without a bed of its own, and moves with her.'
+  rationale: WHO recommends mothers and infants stay together 24 hours a day (Ten Steps to Successful Breastfeeding, Step 7). Requiring a separate bed would separate them on paper and block recording the baby's stay.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -298,9 +330,12 @@ validations:
 - field: expected_admission_at, expected_discharge_at, leave
   rule: RFC 3339 instants; expected discharge not before admission; leave return not before its start
   error: STAY_INVALID_PERIOD
-- field: id, encounter_id, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for, revision
+- field: id, encounter_id, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for, revision, accuracy_contested, shares_mother_location
   rule: never sent by clients (BR-E20)
   error: STAY_READ_ONLY_FIELD
+- field: level_of_care
+  rule: from levels_of_care; the assigned bed's unit provides it
+  error: STAY_BED_UNAVAILABLE
 stateMachine:
   initial: pending_admission
   states:
@@ -440,6 +475,24 @@ edgeCases:
   covers:
   - FR-E12
   - AC-E19
+- id: EC-E12
+  situation: A family member tells the registrar a patient admitted yesterday died at home on leave.
+  behaviour: The death is recorded in Patients, and ADT discharges the stay with disposition expired.
+  covers:
+  - BR-E21
+  - AC-E29
+- id: EC-E13
+  situation: A newborn rooms in with their mother on the postnatal ward.
+  behaviour: The baby's stay has no bed of its own and moves with the mother.
+  covers:
+  - BR-E25
+  - AC-E33
+- id: EC-E14
+  situation: An intensive care patient is the only patient waiting when a ward bed frees up.
+  behaviour: The ward bed can't take them; they wait for an intensive care bed.
+  covers:
+  - BR-E5
+  - AC-E34
 functionalRequirements:
 - id: FR-E1
   text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
@@ -523,6 +576,16 @@ settings:
   type: send | ask
   default: send
   description: Whether admission, discharge and transfer notifications are sent unless the patient objects, or only after asking. Set with legal advice.
+- name: levels_of_care
+  type: code list
+  description: Levels of care orders can ask for, such as intensive care, step-down and general ward, each with the units that provide it. Required.
+- name: rooming_in
+  type: boolean
+  default: 'true'
+  description: Whether newborns room in with their mother without a bed of their own (WHO Ten Steps, Step 7).
+- name: room_sharing_policy
+  type: none | same_sex | patient_preference
+  description: Who may share a multi-bed room. Practice and law differ by hospital and country, so there is no default; set it with the hospital's policy.
 performanceTargets:
 - id: PERF-E1
   indicator: Boarding time
@@ -728,6 +791,48 @@ acceptanceCriteria:
   then: stay.admitted carries share_restricted until the patient agrees
   verifies:
   - BR-E14
+- id: AC-E29
+  given: a patient with a pending admission, and another with an admitted stay
+  when: Patients records each death from an outside report
+  then: the pending admission is cancelled; the admitted stay is discharged with disposition expired at the recorded time and its bed becomes housekeeping
+  verifies:
+  - BR-E21
+- id: AC-E30
+  given: duplicate records each with an admitted stay
+  when: they are merged, and later unmerged
+  then: both stays move to the remaining patient and stay.review_needed is emitted for each; after the unmerge, stays recorded since the merge are listed with stay.review_needed
+  verifies:
+  - BR-E22
+- id: AC-E31
+  given: a patient with a pending admission
+  when: Patients marks the patient entered in error
+  then: the pending admission is cancelled
+  verifies:
+  - BR-E23
+- id: AC-E32
+  given: a patient, and someone with no authority
+  when: each reads the patient's stay, and the patient requests a correction that is decided; deciding it again, or an unknown request
+  then: the patient sees it at once; the other fails with STAY_NOT_AUTHORISED_FOR_PATIENT (403); the decision emits stay.correction_decided; deciding again fails with STAY_CORRECTION_CLOSED (409); the unknown request fails with STAY_CORRECTION_NOT_FOUND (404)
+  verifies:
+  - BR-E24
+- id: AC-E33
+  given: rooming_in on, a mother in bed 12 and her newborn
+  when: the newborn is admitted, and the mother moves to bed 20
+  then: the newborn's stay shares bed 12 without its own bed and moves to bed 20 with her
+  verifies:
+  - BR-E25
+- id: AC-E34
+  given: an order for intensive care
+  when: a general ward bed is assigned
+  then: it fails with STAY_BED_UNAVAILABLE; an intensive care bed succeeds
+  verifies:
+  - BR-E5
+- id: AC-E35
+  given: room_sharing_policy same_sex and a two-bed room with one patient
+  when: a patient of the other recorded sex is assigned the empty bed
+  then: it fails with STAY_BED_UNAVAILABLE
+  verifies:
+  - BR-E5
 operations:
 - name: Request an admission
   actor: Clinician
@@ -913,6 +1018,7 @@ operations:
   output: the stay
   errors:
   - STAY_NOT_FOUND
+  - STAY_NOT_AUTHORISED_FOR_PATIENT
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Read the census
   actor: Bed manager
@@ -958,6 +1064,30 @@ operations:
   output: entries
   errors:
   - STAY_NOT_FOUND
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Request a correction
+  actor: Patient
+  description: Ask for part of a stay record to be corrected, and optionally restricted meanwhile.
+  method: POST
+  path: /stays/{id}/correction-requests
+  success: 201
+  input: stay id, what is wrong, the correct value, whether to restrict meanwhile
+  output: the request with its due date
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_NOT_AUTHORISED_FOR_PATIENT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Decide a correction
+  actor: Registrar
+  description: Accept or deny a correction request, with a written reason and any statement of disagreement.
+  method: POST
+  path: /stays/{id}/correction-requests/{requestId}/decision
+  success: 200
+  input: request id, decision, reason, statement of disagreement
+  output: the request
+  errors:
+  - STAY_CORRECTION_NOT_FOUND
+  - STAY_CORRECTION_CLOSED
   - STAY_DEPENDENCY_UNAVAILABLE
 apiConventions:
 - topic: Authentication
@@ -1073,6 +1203,19 @@ events:
   payload:
   - bed_id
   - bed_status
+- name: stay.review_needed
+  description: 'Someone must resolve this stay: two open stays after a merge, or a stay recorded since an undone merge.'
+  payload:
+  - stay_id
+  - reason
+  - revision
+- name: stay.correction_decided
+  description: A correction request was decided.
+  payload:
+  - stay_id
+  - request_id
+  - decision
+  - revision
 deliveryGuarantees:
 - id: DG-E1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -1101,6 +1244,7 @@ accessMatrix:
     Environmental services: none
     Privacy officer: none
     System: any
+    Patient: none
   permission: stay.write
   note: 'own: patients in their care.'
 - action: Admit, cancel, change class, start or end leave, discharge, cancel a discharge, record a notice
@@ -1111,6 +1255,7 @@ accessMatrix:
     Environmental services: none
     Privacy officer: none
     System: none
+    Patient: none
   permission: stay.write
 - action: Assign a bed, or transfer
   roles:
@@ -1120,6 +1265,7 @@ accessMatrix:
     Environmental services: none
     Privacy officer: none
     System: none
+    Patient: none
   permission: stay.write
 - action: Get a stay, read the census or the bed board
   roles:
@@ -1129,8 +1275,9 @@ accessMatrix:
     Environmental services: none
     Privacy officer: none
     System: any
+    Patient: own
   permission: stay.read
-  note: Masked as BR-E18 requires.
+  note: Masked as BR-E18 requires. Patients read only their own stays, not the census or bed board.
 - action: Update bed status
   roles:
     Bed manager: any
@@ -1139,6 +1286,7 @@ accessMatrix:
     Environmental services: any
     Privacy officer: none
     System: none
+    Patient: none
   permission: bed.write
 - action: Read the access log
   roles:
@@ -1148,9 +1296,31 @@ accessMatrix:
     Environmental services: none
     Privacy officer: any
     System: none
+    Patient: none
   permission: stay.audit
+- action: Request a correction
+  roles:
+    Bed manager: none
+    Registrar: none
+    Clinician: none
+    Environmental services: none
+    Privacy officer: none
+    System: none
+    Patient: own
+  permission: stay.read
+- action: Decide a correction
+  roles:
+    Bed manager: none
+    Registrar: any
+    Clinician: none
+    Environmental services: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: stay.write
+  note: An HIM specialist in the Registrar role.
 personalData:
-- field: patient_id, encounter_id, status, patient_class, admission_type, admit_source, admission_order_id, attending_practitioner_id, readmission
+- field: patient_id, encounter_id, status, patient_class, admission_type, admit_source, admission_order_id, attending_practitioner_id, readmission, level_of_care, shares_mother_location
   category: health data; shows the person was admitted, and how
   purpose: Managing the stay
   retention: record_retention of the Patients module
@@ -1178,6 +1348,10 @@ personalData:
   category: record metadata
   purpose: Integrity and access review
   retention: record_retention, and access_log_retention for the log
+- field: accuracy_contested, correction requests
+  category: health data
+  purpose: Honouring the patient's rights over the stay record
+  retention: record_retention of the Patients module
 errors:
 - code: STAY_NOT_FOUND
   http: 404
@@ -1224,6 +1398,15 @@ errors:
 - code: STAY_DEPENDENCY_UNAVAILABLE
   http: 503
   message: A service this request needs is unavailable. Retry later.
+- code: STAY_NOT_AUTHORISED_FOR_PATIENT
+  http: 403
+  message: Only the patient or their personal representative can request this.
+- code: STAY_CORRECTION_NOT_FOUND
+  http: 404
+  message: No such correction request.
+- code: STAY_CORRECTION_CLOSED
+  http: 409
+  message: This correction request was already decided.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -1232,9 +1415,10 @@ dependencies:
   contract:
   - 'Asks: does this patient exist, is the record in use, and is the patient alive?'
   - 'Asks: is the patient restricted, or using a privacy alias?'
+  - 'Asks: may this person act for this patient, and the correction_deadline for this jurisdiction'
   - 'Gives: whether this patient has an active stay'
   - 'Gives: a death during a stay, with its time and the source hospital pronouncement'
-  - 'Receives: patient.merged and patient.deceased'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.entered_in_error'
 - service: encounter-service
   direction: downstream
   reason: keeps the clinical record of each stay
@@ -1292,7 +1476,7 @@ dependencies:
   reason: tells staff about due notices and ready beds
   criticality: soft
   contract:
-  - 'Gives: stay.notice_due and bed.status_changed'
+  - 'Gives: stay.notice_due, stay.review_needed and bed.status_changed'
 - service: environmental-services
   direction: downstream
   reason: cleans beds
@@ -1306,6 +1490,13 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: who is the caller, and do they hold this permission?'
+- service: release-of-information-service
+  direction: downstream
+  reason: handles disclosures and accounting of disclosures
+  criticality: soft
+  contract:
+  - 'Gives: stay.correction_decided, with any statement of disagreement, for later disclosures'
+  - Accounting of disclosures (45 CFR 164.528) is Release of information's concern
 risks:
 - id: RISK-E1
   risk: Two patients are placed in one bed.
@@ -1356,6 +1547,9 @@ references:
 - id: REF-E9
   title: 45 CFR 164.510, facility directories
   url: https://www.ecfr.gov/current/title-45/section-164.510
+- id: REF-E10
+  title: WHO, Ten steps to successful breastfeeding (Step 7, rooming-in)
+  url: https://www.who.int/teams/nutrition-and-food-safety/food-and-nutrition-actions-in-health-systems/ten-steps-to-successful-breastfeeding
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
@@ -1491,7 +1685,68 @@ compliance:
   how: Organisational duties of the deployment.
   status: deployment
   covered_by: []
+- id: CMP-E18
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.524
+  obligation: Give patients access to their information.
+  how: Patients read their own stays at once.
+  status: met
+  covered_by:
+  - BR-E24
+- id: CMP-E19
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.103
+  obligation: Don't interfere with access to electronic health information.
+  how: No review delay on patients' own access.
+  status: met
+  covered_by:
+  - BR-E24
+- id: CMP-E20
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.526
+  obligation: Decide amendment requests within 60 days, with written denials.
+  how: Correction requests decided within the Patients module's deadlines.
+  status: met
+  covered_by:
+  - BR-E24
+- id: CMP-E21
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.528
+  obligation: Give an accounting of disclosures.
+  how: The Release of information module.
+  status: other module
+  covered_by: []
+- id: CMP-E22
+  regulation: HIPAA Breach Notification Rule
+  provision: 45 CFR 164.404
+  obligation: Notify individuals of a breach within 60 calendar days.
+  how: The Security module.
+  status: other module
+  covered_by: []
+- id: CMP-E23
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 12(3) and 15
+  obligation: Access within one month.
+  how: Immediate electronic access.
+  status: met
+  covered_by:
+  - BR-E24
+- id: CMP-E24
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 16 and 18
+  obligation: Rectification, and restriction while accuracy is checked.
+  how: Correction requests and accuracy_contested.
+  status: met
+  covered_by:
+  - BR-E24
 changelog:
+- version: 0.2.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Stays follow patient deaths (BR-E21), merges and unmerges (BR-E22) and patients entered in error (BR-E23).
+  - Patients read their own stays and request corrections (BR-E24); Compliance adds access, amendment, accounting and breach.
+  - Beds match the level of care, rooming-in for newborns (BR-E25), and a room-sharing policy setting (BR-E5).
 - version: 0.1.0
   date: '2026-10-08'
   breaking: false
