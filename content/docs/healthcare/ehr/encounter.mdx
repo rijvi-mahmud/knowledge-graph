@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.7.0
+version: 0.8.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -465,6 +465,14 @@ businessRules:
 - id: BR-E44
   text: Each correction request is kept and linked to the encounter it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the encounter, and in the United States for at least 6 years from its decision.
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)).
+- id: BR-E45
+  text: 'When Admission, discharge and transfer discharges a patient who is on leave, the encounter is discharged from on hold: the leave ends at the discharge time and the disposition and destination are recorded.'
+  rationale: A patient can die or decide not to return while on leave. Requiring the encounter to resume first would record care that never happened, and would leave length counting the leave (BR-E16).
+  variant: inpatient
+- id: BR-E46
+  text: When Admission, discharge and transfer cancels an admission recorded in error, the encounter it started is marked entered in error with the reason admission_cancelled. When it clears an expected discharge, planned_end is cleared.
+  rationale: FHIR uses cancelled only for encounters that never started, so a started encounter opened by mistake is entered in error. ADT cancels an admission only when no clinical data is recorded, which Encounters also requires. IHE PAM cancels a pending discharge with A25.
+  variant: inpatient
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -562,6 +570,9 @@ stateMachine:
   - from: on_hold
     to: in_progress
     trigger: leave of absence ends
+  - from: on_hold
+    to: discharged
+    trigger: discharge while on leave (BR-E45)
   - from: in_progress
     to: discharged
     trigger: discharge or end of visit
@@ -879,6 +890,12 @@ edgeCases:
   covers:
   - BR-E43
   - AC-E58
+- id: EC-E38
+  situation: A patient on weekend leave dies at home.
+  behaviour: ADT discharges the stay as expired and the encounter goes straight from on hold to discharged at that time.
+  covers:
+  - BR-E45
+  - AC-E60
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -1399,6 +1416,20 @@ acceptanceCriteria:
   then: the request, denial and statement are linked to the encounter; the request is still kept
   verifies:
   - BR-E44
+- id: AC-E60
+  given: an inpatient encounter on hold for leave from 18:00
+  when: ADT discharges the patient at 21:00 with disposition expired
+  then: the encounter goes from on hold to discharged at 21:00, the leave ends at 21:00 and length excludes 18:00 to 21:00
+  verifies:
+  - BR-E45
+  - BR-E16
+- id: AC-E61
+  given: an inpatient encounter in progress with no clinical data, and another with a planned_end
+  when: ADT cancels the first admission in error and clears the second expected discharge
+  then: the first is entered in error with status_reason admission_cancelled; the second has no planned_end
+  verifies:
+  - BR-E46
+  - BR-E36
 operations:
 - name: Open an encounter
   actor: System
@@ -2309,7 +2340,7 @@ dependencies:
   reason: reports admissions, transfers, leave, class changes and discharges
   criticality: soft
   contract:
-  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, bed swaps, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return and their cancels, attending changes and their cancels, class change, re-admission, discharge and cancelled discharge'
+  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, bed swaps, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return and their cancels, attending changes and their cancels, class change, re-admission, discharge (including from leave), cancelled discharge, admissions cancelled in error and cleared expected discharges'
   - 'Gives: the encounter id for each stay'
   - 'Gives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled and encounter.class_changed, confirming what was recorded'
   - 'Gives: encounter.observation_started with when the US observation notice is due; deciding who gets the notice, and giving it, is ADT''s concern'
@@ -2499,6 +2530,12 @@ references:
   title: 45 CFR 164.530(j), documentation and retention
   url: https://www.ecfr.gov/current/title-45/section-164.530
 changelog:
+- version: 0.8.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Discharge from on hold, for patients discharged while on leave (BR-E45).
+  - Admissions cancelled in error mark the encounter entered in error; cleared expected discharges clear planned_end (BR-E46).
 - version: 0.7.0
   date: '2026-10-08'
   breaking: false

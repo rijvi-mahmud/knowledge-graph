@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.3.0
+version: 0.4.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -73,6 +73,8 @@ glossary:
   definition: The Medicare Outpatient Observation Notice, given to patients in observation for more than 24 hours (42 CFR 489.20(y)).
 - term: Census
   definition: The patients in beds at a point in time, such as midnight, by unit.
+- term: Temporary location
+  definition: Where an admitted patient is for a while, such as imaging or dialysis, while their bed is kept for them.
 concepts:
 - name: This module moves the patient; Encounters records it
   description: Every admission, transfer, leave and discharge happens here and is reported to Encounters, which keeps it on the clinical record of the stay (FHIR keeps one Encounter for the stay).
@@ -157,6 +159,11 @@ dataModel:
   type: leave
   required: false
   description: 'A leave of absence in progress: when it started and when the patient is expected back.'
+- name: temporary_location
+  type: temporary location
+  required: false
+  description: Where the patient is for a while, such as imaging, with when they left. Owned by Organization; the bed stays reserved (BR-E35).
+  constraints: set through the temporary location operation
 - name: expected_discharge_at
   type: instant
   required: false
@@ -263,7 +270,7 @@ businessRules:
   text: A patient has at most one stay that is pending or admitted. A newborn's stay is its own, linked to the mother's through the Patients module.
   rationale: A patient is in one hospital bed at a time; two stays send orders and charges to the wrong one.
 - id: BR-E3
-  text: A pending admission opens a planned encounter through Encounters. Admission starts it. Cancelling the pending admission cancels it.
+  text: A pending admission opens a planned encounter through Encounters. Admission starts it. Cancelling the pending admission cancels it; cancelling an admission recorded in error has Encounters mark the encounter entered in error, with the reason admission_cancelled.
   rationale: IHE pending admit (A14) and its cancel (A27) let beds and staff be prepared; Encounters keeps one record from the start.
 - id: BR-E4
   text: A patient can be admitted before a bed is ready. Until one is assigned, the stay records where they wait, such as the emergency department, and is listed as boarding.
@@ -278,7 +285,7 @@ businessRules:
   text: A transfer is requested first, which reserves the target bed for this stay. The transfer moves the patient and frees the old bed; cancelling the request releases the reservation. A transfer recorded by mistake can be cancelled, returning the patient to the previous bed if it is still free.
   rationale: IHE defines pending transfer (A15), transfer (A02) and their cancels (A26, A12). Reserving the target stops another patient being placed there in the meantime.
 - id: BR-E8
-  text: During a leave of absence the stay keeps its bed, reserved, and Encounters puts the encounter on hold. The leave ends when the patient returns.
+  text: During a leave of absence the stay keeps its bed, reserved, and Encounters puts the encounter on hold. The leave ends when the patient returns, or at the discharge time if the patient is discharged while on leave (BR-E36).
   rationale: IHE leave of absence (A21) and return (A22). The bed is still the patient's, so nobody else may be placed in it.
 - id: BR-E9
   text: A patient is discharged with a discharge order, except when they leave against medical advice or die. The discharge records the disposition and destination, frees the bed, and is reported to Encounters, Appointments and Exchange.
@@ -347,10 +354,10 @@ businessRules:
   text: A leave of absence recorded by mistake can be cancelled while it is in progress, which returns the patient to the reserved bed as if the leave never started. A return recorded by mistake can be cancelled, which puts the stay back on leave with the bed reserved. Each needs a reason and is reported to Encounters.
   rationale: IHE defines cancel leave of absence (A52) and cancel return from leave (A53). Without them a mistaken leave keeps the encounter on hold, and its length wrong, with no way back.
 - id: BR-E31
-  text: Two admitted patients can swap beds in one step. Each bed must be able to take the other patient under BR-E5, apart from being occupied by them. Both stays change together or neither does, and each is reported to Encounters as a transfer.
+  text: Two admitted patients can swap beds in one step. Each bed must be able to take the other patient under BR-E5, apart from being occupied by them. Both stays change together or neither does, and each is reported to Encounters as a transfer. A newborn rooming in with either patient moves with them (BR-E25), and any pending transfer of either stay is cancelled, releasing its reserved bed.
   rationale: HL7 defines swap patients (A17). Two separate transfers would fail, because each target bed is occupied by the other patient, or would briefly leave one patient with no bed.
 - id: BR-E32
-  text: Every change to a stay is kept in history with who, when and the previous value. Cancelling an admission, a discharge, a leave, a return or an attending change, changing class, and correcting a movement each need a reason, which is kept with the change.
+  text: Every change to a stay is kept in history with who, when and the previous value. Cancelling an admission, a discharge, a leave, a return, a temporary departure or return, or an attending change, changing class, and correcting a movement each need a reason, which is kept with the change.
   rationale: Class changes are audited by Medicare reviewers (42 CFR 412.3), and cancels change what billing and the census already counted. Hospitals must protect the integrity of the record (42 CFR 482.24(b)), which needs who did what and why.
 - id: BR-E33
   text: A patient's stays can be listed, newest first, by staff who may read them and by the patient or their representative. Other modules use it to ask whether a patient has a stay that is pending or admitted.
@@ -358,6 +365,18 @@ businessRules:
 - id: BR-E34
   text: Each correction request is kept and linked to the stay it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the stay record, and in the United States for at least 6 years from its decision.
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). Later disclosures must include them (164.526(d)(5)).
+- id: BR-E35
+  text: 'A patient can go to another location for a while, such as imaging, dialysis or theatre, without leaving their stay: the bed stays reserved for them, the stay records where they are, and their return ends it. A departure or return recorded by mistake can be cancelled with a reason. Each is reported to Encounters.'
+  rationale: IHE PAM tracks temporary departures and arrivals (A09, A10, cancelled by A33 and A32) so staff can find the patient, and Encounters records the temporary location (its BR-E12). The bed must not be given away while the patient is at a scan.
+- id: BR-E36
+  text: A patient on leave can be discharged without returning, for example when they die or decide not to come back. The leave ends at the discharge time, the reserved bed becomes housekeeping (BR-E6), and Encounters discharges the encounter from on hold.
+  rationale: A patient who dies at home on leave (EC-E12) or doesn't return must still be discharged. Requiring a return first would record a return that never happened.
+- id: BR-E37
+  text: 'The census is counted at a given time, by unit, with each group separate: patients in a bed (inpatient and observation apart), patients temporarily elsewhere, patients boarding, patients on leave, and newborns rooming in.'
+  rationale: Medicare counts inpatient days at midnight, doesn't count a day on leave unless the patient is back by midnight, and treats observation as outpatient care (Medicare Benefit Policy Manual, chapter 3, section 20.1). Staffing and bed reports count differently, so separate groups let each report apply its own definition.
+- id: BR-E38
+  text: An expected discharge can be cleared when the plan changes, which is reported to Encounters and Care management.
+  rationale: IHE PAM cancels a pending discharge (A25). A plan left in place keeps the bed counted as freeing up and the encounter's planned_end wrong.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -371,7 +390,7 @@ validations:
 - field: attending_practitioner_id
   rule: Organization confirms admitting privileges on the date
   error: STAY_INVALID_PRACTITIONER
-- field: bed_id, waiting_location_id, discharge_destination_id
+- field: bed_id, waiting_location_id, discharge_destination_id, temporary_location
   rule: Organization confirms the bed or location; a bed must be able to take the patient (BR-E5)
   error: STAY_BED_UNAVAILABLE
 - field: pending_transfer
@@ -387,7 +406,7 @@ validations:
   rule: from levels_of_care; the assigned bed's unit provides it
   error: STAY_BED_UNAVAILABLE
 - field: reason
-  rule: required to cancel an admission, a discharge, a leave, a return or an attending change, to change class, and to correct a movement (BR-E32)
+  rule: required to cancel an admission, a discharge, a leave, a return, a temporary departure or return, or an attending change, to change class, and to correct a movement (BR-E32)
   error: STAY_REASON_REQUIRED
 - field: bed_history
   rule: a correction names an existing entry, keeps periods in order and within the stay, and never puts two stays in one bed at once (BR-E29)
@@ -579,6 +598,24 @@ edgeCases:
   covers:
   - BR-E30
   - AC-E40
+- id: EC-E20
+  situation: A patient goes for a two-hour MRI during a bed shortage.
+  behaviour: The bed stays reserved for them, the bed board shows where they are, and no one else is placed in it.
+  covers:
+  - BR-E35
+  - AC-E46
+- id: EC-E21
+  situation: A patient on weekend leave decides not to come back.
+  behaviour: They are discharged from leave; the leave ends at the discharge time and the bed goes to housekeeping.
+  covers:
+  - BR-E36
+  - AC-E47
+- id: EC-E22
+  situation: A patient goes on leave at 18:00 and returns at 08:00 the next day.
+  behaviour: The midnight census lists them on leave, not in a bed, so a Medicare report doesn't count that day.
+  covers:
+  - BR-E37
+  - AC-E48
 functionalRequirements:
 - id: FR-E1
   text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
@@ -613,7 +650,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-E9
-  text: The service must report the census of patients in beds, by unit, at any time and at midnight.
+  text: The service must report the census by unit at any time, including midnight, with each group of BR-E37 counted separately.
   priority: must
   verification: test
 - id: FR-E10
@@ -640,9 +677,13 @@ functionalRequirements:
   text: The service must list a patient's stays for staff, other modules and the patient.
   priority: must
   verification: test
+- id: FR-E16
+  text: The service must record temporary departures and returns, and their cancels, keeping the bed reserved.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: compatibility
-  text: 'Events map to HL7 v2 ADT messages: pre-admit A05 and its cancel A38, pending admit A14 and its cancel A27, admit A01 and cancel A11, transfer A02 and cancel A12, pending transfer A15 and cancel A26, swap patients A17, discharge A03 and cancel A13, pending discharge A16 and cancel A25, class changes A06 and A07, leave A21 and A22 and their cancels A52 and A53, change attending doctor A54 and its cancel A55, and corrected movements Z99. This follows IHE PAM (ITI-31).'
+  text: 'Events map to HL7 v2 ADT messages: pre-admit A05 and its cancel A38, pending admit A14 and its cancel A27, admit A01 and cancel A11, transfer A02 and cancel A12, pending transfer A15 and cancel A26, swap patients A17, temporary departure A09 and arrival A10 and their cancels A33 and A32, discharge A03 and cancel A13, pending discharge A16 and cancel A25, class changes A06 and A07, leave A21 and A22 and their cancels A52 and A53, change attending doctor A54 and its cancel A55, and corrected movements Z99. This follows IHE PAM (ITI-31).'
 - category: compatibility
   text: Bed status maps to FHIR Location.operationalStatus with HL7 v2 Table 0116.
 - category: security
@@ -833,13 +874,13 @@ acceptanceCriteria:
 - id: AC-E20
   given: patients in beds on three units
   when: the census is read at midnight, and with no unit or time
-  then: each unit's occupied beds are counted; the second fails with STAY_INVALID_QUERY (422)
+  then: each unit's patients in beds are counted, with inpatient and observation apart; the second fails with STAY_INVALID_QUERY (422)
   verifies:
   - FR-E9
 - id: AC-E21
   given: a pending admission, and one admitted in error with no clinical data
   when: each is cancelled
-  then: the first emits stay.admission_cancelled and Encounters cancels the planned encounter; the second is cancelled the same way
+  then: the first emits stay.admission_cancelled and Encounters cancels the planned encounter; the second emits stay.admission_cancelled and Encounters marks its encounter entered in error with the reason admission_cancelled
   verifies:
   - BR-E3
   - FR-E1
@@ -1000,6 +1041,40 @@ acceptanceCriteria:
   verifies:
   - BR-E3
   - FR-E1
+- id: AC-E46
+  given: an admitted patient in bed 6
+  when: they leave for imaging at 10:00, another stay is assigned bed 6 at 10:15, they return at 11:00, and a later departure is cancelled with a reason
+  then: stay.temporary_location_changed is emitted for each; assigning bed 6 fails with STAY_BED_UNAVAILABLE (409); the cancel removes the departure
+  verifies:
+  - BR-E35
+  - FR-E16
+- id: AC-E47
+  given: a patient on leave who dies at home
+  when: the stay is discharged with disposition expired
+  then: the leave ends at the discharge time, the bed becomes housekeeping, stay.discharged is emitted, and Encounters discharges the encounter from on hold
+  verifies:
+  - BR-E36
+  - BR-E8
+- id: AC-E48
+  given: 'at midnight, on one unit: 10 inpatients in beds, 2 in observation, 1 at dialysis, 1 on leave, 3 boarding in the emergency department for that unit, and 1 newborn rooming in'
+  when: the census is read for midnight
+  then: 'each group is reported with its own count: 10, 2, 1, 1, 3 and 1'
+  verifies:
+  - BR-E37
+  - FR-E9
+- id: AC-E49
+  given: a stay with an expected discharge tomorrow
+  when: the expected discharge is cleared
+  then: stay.discharge_expected is emitted with no time, and Encounters clears planned_end
+  verifies:
+  - BR-E38
+- id: AC-E50
+  given: a mother in bed 12 with her newborn rooming in, and a patient in bed 20 with a pending transfer to bed 30
+  when: the two patients swap beds
+  then: the mother and newborn move to bed 20, the other patient to bed 12, the transfer to bed 30 is cancelled and bed 30 released
+  verifies:
+  - BR-E31
+  - BR-E25
 operations:
 - name: Request an admission
   actor: Clinician
@@ -1122,6 +1197,22 @@ operations:
   - STAY_REASON_REQUIRED
   - STAY_REVISION_CONFLICT
   - STAY_DEPENDENCY_UNAVAILABLE
+- name: Record a temporary location
+  actor: Registrar
+  description: Record that the patient left for another location for a while, or returned, or cancel either.
+  method: POST
+  path: /stays/{id}/temporary-location
+  success: 200
+  input: 'stay id, revision, and one of: a location and departure time, a return time, or a cancel of the last departure or return with a reason'
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_BED_UNAVAILABLE
+  - STAY_INVALID_PERIOD
+  - STAY_INVALID_TRANSITION
+  - STAY_REASON_REQUIRED
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
 - name: Change the attending practitioner
   actor: Registrar
   description: Hand the stay to another attending practitioner from a given time, or cancel the last change.
@@ -1171,11 +1262,11 @@ operations:
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Set expected discharge
   actor: Clinician
-  description: Record or change when discharge is expected.
+  description: Record, change or clear when discharge is expected.
   method: PUT
   path: /stays/{id}/expected-discharge
   success: 200
-  input: stay id, revision, time
+  input: stay id, revision, a time or none to clear it
   output: the stay
   errors:
   - STAY_NOT_FOUND
@@ -1253,12 +1344,12 @@ operations:
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Read the census
   actor: Bed manager
-  description: Patients in beds by unit, now or at a past time such as midnight, and patients boarding.
+  description: Count patients by unit at a time, such as midnight, in separate groups (BR-E37).
   method: GET
   path: /stays/census
   success: 200
   input: unit or all units, time
-  output: counts and stays by unit
+  output: 'by unit: patients in a bed (inpatient and observation apart), temporarily elsewhere, boarding, on leave, and newborns rooming in, with counts and stays'
   errors:
   - STAY_INVALID_QUERY
   - STAY_DEPENDENCY_UNAVAILABLE
@@ -1414,6 +1505,15 @@ events:
   - stay_id
   - cancelled
   - revision
+- name: stay.temporary_location_changed
+  description: The patient left for a temporary location or returned, or either was cancelled.
+  payload:
+  - stay_id
+  - location_id
+  - departed_at
+  - returned_at
+  - cancelled
+  - revision
 - name: stay.class_changed
   description: The stay changed between observation and inpatient.
   payload:
@@ -1430,7 +1530,7 @@ events:
   - cancelled
   - revision
 - name: stay.discharge_expected
-  description: An expected discharge time was set or changed.
+  description: An expected discharge time was set, changed or cleared (empty when cleared).
   payload:
   - stay_id
   - expected_discharge_at
@@ -1505,7 +1605,7 @@ accessMatrix:
     Patient: none
   permission: stay.write
   note: 'own: patients in their care.'
-- action: Admit, cancel, change class, change the attending, start, end or cancel leave, discharge, cancel a discharge, record a notice
+- action: Admit, cancel, change class, change the attending, start, end or cancel leave, record a temporary location, discharge, cancel a discharge, record a notice
   roles:
     Bed manager: any
     Registrar: any
@@ -1597,7 +1697,7 @@ personalData:
   category: health data
   purpose: When the patient was in hospital
   retention: record_retention of the Patients module
-- field: bed_id, waiting_location_id, pending_transfer, bed_reserved_for, bed_status, bed_history
+- field: bed_id, waiting_location_id, pending_transfer, bed_reserved_for, bed_status, bed_history, temporary_location
   category: personal; reveals where the patient is
   purpose: Placing and finding the patient
   retention: record_retention of the Patients module
@@ -1699,7 +1799,8 @@ dependencies:
   reason: keeps the clinical record of each stay
   criticality: soft
   contract:
-  - 'Gives: stay.admission_requested (with pre_admission), stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.beds_swapped, stay.movement_corrected, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.leave_cancelled, stay.class_changed, stay.attending_changed, stay.discharge_expected, stay.discharged and stay.discharge_cancelled'
+  - 'Gives: stay.admission_requested (with pre_admission), stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.beds_swapped, stay.movement_corrected, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.leave_cancelled, stay.temporary_location_changed, stay.class_changed, stay.attending_changed, stay.discharge_expected, stay.discharged and stay.discharge_cancelled'
+  - 'Gives: an admission cancelled in error, so the encounter is marked entered in error'
   - 'Gives: a re-admission flag and the facility directory answer'
   - 'Receives: the encounter id for each stay, encounter.observation_started, and whether clinical data is recorded'
   - The clinical record is Encounters' concern
@@ -1844,6 +1945,9 @@ references:
 - id: REF-E14
   title: HL7 v2 Table 0003, event types (A17, A52 to A55)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
+- id: REF-E15
+  title: CMS Internet-Only Manuals (Medicare Benefit Policy Manual, Pub. 100-02, chapter 3, section 20.1)
+  url: https://www.cms.gov/medicare/regulations-guidance/manuals/internet-only-manuals-ioms
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
@@ -2061,6 +2165,13 @@ compliance:
   covered_by:
   - BR-E32
 changelog:
+- version: 0.4.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Temporary departures and returns, with their cancels (BR-E35, A09, A10, A32, A33).
+  - Discharge from leave (BR-E36); a census with each group counted separately (BR-E37); clearing an expected discharge (BR-E38).
+  - Bed swaps move rooming-in newborns and cancel pending transfers (BR-E31); an admission cancelled in error marks the encounter entered in error (BR-E3).
 - version: 0.3.0
   date: '2026-10-08'
   breaking: false
@@ -2123,7 +2234,7 @@ tables:
     nullable: true
   - name: details
     type: jsonb
-    note: admission type, source, pre-admission, orders, expected times, leave, pending transfer, discharge details, readmission, isolation
+    note: admission type, source, pre-admission, orders, expected times, leave, pending transfer, discharge details, readmission, isolation, temporary location
   - name: admitted_at
     type: timestamptz
     nullable: true
