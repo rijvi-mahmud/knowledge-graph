@@ -79,7 +79,8 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `src/lib/spec-inherit.ts` | Resolves a page's `extends` chain into one merged spec tagged with provenance. |
 | `src/lib/spec-sections.ts` | Reference sections and their groups (one sub-page each), in reading order. Shared by both renderers and the source loader. |
 | `content/docs/agentic/` | Agentic development: the copy-paste `AGENTS.md` section, how agents navigate and read specs, prompts, and Claude Code, Cursor and Copilot notes. |
-| `src/app/llms.txt/route.ts` | Agent entry point: a "How agents should use" guide, then every page as an absolute `.md` link. |
+| `src/app/llms.txt/route.ts` | Agent entry point, following llmstxt.org: H1, blockquote, the agent guide as plain paragraphs (no headings before the first H2), then one H2 file list per top-level group (Docs, Agentic development, Core, each industry) and `## Optional` (reference implementation pages, `llms-full.txt`). Generated from the page tree. |
+| `src/app/sitemap.ts`, `src/app/robots.ts` | Every page (module, section and variant pages included) in `/sitemap.xml`, and `/robots.txt` allowing all crawlers and pointing to it, so agents' web searches can find pages. Both generated, so new modules need no change. |
 | `src/components/module-spec.tsx` | Renders frontmatter to HTML for humans. |
 | `src/lib/spec-markdown.ts` | Renders the same frontmatter to Markdown for AI. |
 | `src/lib/source.ts` | `getLLMText()` joins spec markdown + prose for `llms.txt` routes. |
