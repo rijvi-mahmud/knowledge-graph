@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "patient",
-    "appointment"
+    "appointment",
+    "encounter"
   ]
 }
