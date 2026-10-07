@@ -27,16 +27,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Check specs
         run: pnpm check:specs --strict
-      - name: Check types
-        run: pnpm types:check
-      - name: Show generated sources if types fail
-        if: failure()
-        run: |
-          node -v; pnpm -v; pnpm exec tsc -v
-          ls -la .source
-          head -c 600 .source/server.ts
+      # The build generates .source through the fumadocs-mdx Next.js plugin.
+      # Run it before the type check: the standalone fumadocs-mdx command
+      # wrote empty files on GitHub's runners.
       - name: Build
         run: pnpm build
+      - name: Check types
+        run: pnpm exec next typegen && pnpm exec tsc --noEmit
+      - name: Show generated sources if a step fails
+        if: failure()
+        run: |
+          node -v; pnpm -v
+          ls -la .source
       - name: Lint the generated OpenAPI files
         run: |
           find .next/server/app/openapi -name '*.json.body' -exec sh -c 'cp "$1" "${1%.body}"' _ {} \;
