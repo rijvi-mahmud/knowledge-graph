@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.6.0
+version: 0.6.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -99,7 +99,7 @@ dataModel:
   type: enum
   required: false
   description: Why needs_review was set.
-  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged; set only with needs_review; codes: none standard, local to this specification'
+  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged | encounter_entered_in_error; set only with needs_review; codes: none standard, local to this specification'
 - name: equipment_ids
   type: string[]
   required: false
@@ -188,6 +188,9 @@ businessRules:
 - id: BR-E19
   text: In the EHR, charges for care come from encounters. Appointments give Billing only no-shows and the late cancellation flag, for missed-appointment fees where the jurisdiction allows them.
   rationale: The encounter is what was done and is coded; the appointment is the plan. Charging from both would bill one visit twice.
+- id: BR-E20
+  text: When the encounter opened at check-in is marked entered in error, a checked-in appointment that has not ended returns to booked, as an undone check-in, so it can be checked in correctly. One that has ended is flagged needs_review with review_reason encounter_entered_in_error.
+  rationale: The encounter was opened by mistake, often for the wrong patient. Leaving the appointment checked in would keep it out of every worklist, and only a person can tell what happened at a visit that has already ended.
 validations:
 - field: department_id
   rule: Organization confirms the department exists
@@ -403,6 +406,12 @@ edgeCases:
   covers:
   - BR-E19
   - AC-E28
+- id: EC-E22
+  situation: The encounter opened at a 10:00 check-in is marked entered in error at 10:20.
+  behaviour: The appointment returns to booked and can be checked in for the right patient.
+  covers:
+  - BR-E20
+  - AC-E29
 functionalRequirements:
 - id: FR-E1
   text: The service must book appointments into a department and, optionally, a room and equipment, all of which belong to the department.
@@ -663,7 +672,7 @@ dependencies:
   contract:
   - 'Gives: appointment.checked_in'
   - 'Receives: the id of the encounter it opened'
-  - 'Receives: encounter.started, encounter.discontinued and encounter.cancelled for the encounter opened at check-in'
+  - 'Receives: encounter.started, encounter.discontinued, encounter.cancelled and encounter.entered_in_error for the encounter opened at check-in'
   - 'Gives: appointment.check_in_undone, so the planned encounter is cancelled'
   - 'Gives: appointment.encounter_linked, confirming the link it recorded'
   - How encounters are documented is Encounter's concern
@@ -990,6 +999,12 @@ acceptanceCriteria:
   then: only the encounter.completed and appointment.no_show reach Billing as charges; appointment.completed does not
   verifies:
   - BR-E19
+- id: AC-E29
+  given: a checked-in appointment that has not ended, and one that has
+  when: Encounters reports encounter.entered_in_error for each
+  then: the first returns to booked and appointment.check_in_undone is emitted; the second is flagged needs_review with review_reason encounter_entered_in_error
+  verifies:
+  - BR-E20
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit and no default, and it never applies to patients.
@@ -1052,6 +1067,11 @@ references:
   title: CMS Interoperability and Prior Authorization Final Rule (CMS-0057-F), fact sheet
   url: https://www.cms.gov/newsroom/fact-sheets/cms-interoperability-and-prior-authorization-final-rule-cms-0057-f
 changelog:
+- version: 0.6.1
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Appointments follow an encounter marked entered in error (BR-E20).
 - version: 0.6.0
   date: '2026-10-08'
   breaking: false

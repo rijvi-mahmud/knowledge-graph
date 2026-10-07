@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.3.0
+version: 0.3.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -359,6 +359,12 @@ businessRules:
 - id: BR-E30
   text: When Appointments undoes a check-in, the planned encounter opened for it is cancelled.
   rationale: The check-in was a mistake, so the visit it opened never happened.
+- id: BR-E31
+  text: When the Patients module marks a patient entered in error, the patient's planned encounters are cancelled with the reason patient_entered_in_error.
+  rationale: The record was created by mistake, so a planned visit or stay for it will never happen. Leaving it planned keeps it on lists and schedules.
+- id: BR-E32
+  text: When the Patients module retracts a death, the encounters cancelled for it (BR-E28) are listed, and encounter.patient_review_needed is emitted for each so they can be planned again.
+  rationale: A death recorded for the wrong patient must not silently cost them a planned admission. A person decides whether each one still stands.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -677,6 +683,18 @@ edgeCases:
   covers:
   - BR-E30
   - AC-E42
+- id: EC-E25
+  situation: A record created by mistake has a pre-admission next week.
+  behaviour: When Patients marks it entered in error, the planned encounter is cancelled with reason patient_entered_in_error.
+  covers:
+  - BR-E31
+  - AC-E43
+- id: EC-E26
+  situation: A death recorded for the wrong patient cancelled their pre-admission, and the death is retracted.
+  behaviour: The cancelled encounter is listed and encounter.patient_review_needed is emitted so it can be planned again.
+  covers:
+  - BR-E32
+  - AC-E44
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -1074,6 +1092,18 @@ acceptanceCriteria:
   then: the encounter is cancelled and encounter.cancelled is emitted
   verifies:
   - BR-E30
+- id: AC-E43
+  given: a patient with a planned encounter
+  when: Patients marks the patient entered in error
+  then: the encounter is cancelled with reason patient_entered_in_error and encounter.cancelled is emitted
+  verifies:
+  - BR-E31
+- id: AC-E44
+  given: a planned encounter cancelled with reason patient_deceased
+  when: Patients retracts the death
+  then: encounter.patient_review_needed is emitted for it
+  verifies:
+  - BR-E32
 operations:
 - name: Open an encounter
   actor: System
@@ -1485,7 +1515,7 @@ events:
   - encounter_id
   - record_due_at
 - name: encounter.patient_review_needed
-  description: After a patient merge was undone, someone must check whose encounter this is.
+  description: 'Someone must check this encounter: after a patient merge was undone, or after a death that cancelled it was retracted.'
   payload:
   - encounter_id
   - revision
@@ -1722,7 +1752,7 @@ dependencies:
   - 'Asks: is this newborn''s mother this patient? (for part_of)'
   - 'Asks: is the patient restricted, so opening needs a reason?'
   - 'Gives: care reported when an encounter starts'
-  - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.legal_hold_changed'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error and patient.legal_hold_changed'
 - service: appointment-service
   direction: upstream
   reason: reports check-ins and walk-ins
@@ -1730,7 +1760,7 @@ dependencies:
   contract:
   - 'Receives: appointment.checked_in'
   - 'Receives: appointment.check_in_undone'
-  - 'Gives: encounter.started, encounter.discontinued and encounter.cancelled, so the appointment follows its encounter'
+  - 'Gives: encounter.started, encounter.discontinued, encounter.cancelled and encounter.entered_in_error, so the appointment follows its encounter'
   - 'Gives: the id of the encounter it opened'
   - 'Gives: encounter.created, so Appointments links the encounter'
   - Booking and the appointment lifecycle are Appointments' concern
@@ -1891,6 +1921,12 @@ references:
   title: HL7 FHIR R5, Patient (mother and newborn relationships)
   url: https://hl7.org/fhir/R5/patient.html
 changelog:
+- version: 0.3.1
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Planned encounters are cancelled for a patient entered in error (BR-E31), and encounters cancelled for a retracted death are listed for review (BR-E32).
+  - Appointments receive encounter.entered_in_error.
 - version: 0.3.0
   date: '2026-10-08'
   breaking: true
