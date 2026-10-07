@@ -7,6 +7,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,6 +29,12 @@ jobs:
         run: pnpm check:specs --strict
       - name: Check types
         run: pnpm types:check
+      - name: Show generated sources if types fail
+        if: failure()
+        run: |
+          node -v; pnpm -v; pnpm exec tsc -v
+          ls -la .source
+          head -c 600 .source/server.ts
       - name: Build
         run: pnpm build
       - name: Lint the generated OpenAPI files
