@@ -652,6 +652,8 @@ confusing. Every folder with an `index.mdx` lists `"index"` first in its
 default, including the module and Functions. Fumadocs still opens whichever
 folder holds the current page.
 
+**Pull before you push.** The Snapshot specs workflow commits to `main` after each production deploy, so run `git pull --rebase origin main` before pushing.
+
 **`pnpm types:check` fails on GitHub's runners**: the standalone `fumadocs-mdx` command writes empty `.source` files there, so CI relies on `next build` for type checking. Locally it works.
 
 **Never run `pnpm build` while a dev server is running.** Both write to `.next`,
