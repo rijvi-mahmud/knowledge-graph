@@ -5,6 +5,7 @@
     "index",
     "patient",
     "appointment",
-    "encounter"
+    "encounter",
+    "adt"
   ]
 }

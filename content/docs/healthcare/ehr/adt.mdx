@@ -1,0 +1,1606 @@
+---
+title: Admission, discharge and transfer
+description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
+module: adt
+version: 0.1.0
+status: draft
+industry: healthcare
+domain: ehr
+purpose: 'Manage each hospital stay from the decision to admit to the moment the patient leaves: admission requests and orders, beds and the bed board, transfers, leave, changes between observation and inpatient, discharge, and the notices and notifications the law ties to each step. Every step is reported to Encounters, which keeps the clinical record of the stay.'
+scope:
+- Pending admissions, admissions and cancelled admissions
+- Admission orders and the practitioners allowed to give them
+- 'The bed board: bed status, occupancy and reservations'
+- Bed assignment, including patients admitted and waiting for a bed
+- Pending and actual transfers inside the hospital, and cancelled transfers
+- Leave of absence
+- Changes between observation and inpatient
+- Pending discharge, discharge, and cancelled discharge
+- The Medicare discharge-rights notice and the observation notice
+- Admission, discharge and transfer notifications to the patient's practitioners
+- The census of patients in beds
+nonGoals:
+- The clinical record of the stay. Encounters owns it; this module reports each step to it.
+- Emergency department arrival, triage and emergency transfers to other hospitals under EMTALA. The Emergency department module owns them.
+- 'Bed and room definitions: which beds exist, where, and what they can be used for. The Organization module owns them.'
+- Discharge planning content, care coordination and the discharge summary. Care management and Clinical documentation own them.
+- Infection control decisions, such as who needs isolation. Clinical modules decide; this module only places patients accordingly.
+- Visitation rights and visitor policies. A Visitors module owns them.
+- Admission and discharge orders themselves. Orders owns them; this module checks one exists.
+- Insurance, utilization review decisions and billing. Coverage and Billing own them.
+actors:
+- name: Bed manager
+  description: Assigns beds, approves transfers and keeps the bed board current.
+- name: Registrar
+  description: Records admissions and discharges, and delivers notices.
+- name: Clinician
+  description: Requests admissions, transfers and discharges for patients in their care.
+- name: Environmental services
+  description: Cleans beds and marks them ready.
+- name: Privacy officer
+  description: Reviews who accessed stays.
+- name: System
+  description: Another module, such as Orders or the Emergency department, reporting an event.
+assumptions:
+- id: AS-E1
+  text: Orders holds admission, observation and discharge orders, with who gave them and when.
+  rationale: Medicare requires an inpatient admission order from a qualified practitioner (42 CFR 412.3); this module needs only to know it exists.
+- id: AS-E2
+  text: Organization defines beds, their unit and features, and which practitioners have admitting privileges.
+  rationale: Admitting privileges are granted by the hospital to a practitioner, not by this module.
+- id: AS-E3
+  text: Coverage says whether a patient is a Medicare beneficiary.
+  rationale: The discharge-rights and observation notices apply to Medicare beneficiaries.
+- id: AS-E4
+  text: The jurisdiction and notice settings are set with legal advice before go-live.
+  rationale: Notices and notification duties differ by country and US state.
+glossary:
+- term: Stay
+  definition: A patient's time in a hospital bed as an inpatient or under observation, from admission to discharge.
+- term: Pending admission
+  definition: A decision to admit that hasn't happened yet, such as an elective surgery next week or an emergency patient waiting for a bed (IHE pending admit, HL7 A14).
+- term: Boarding
+  definition: An admitted patient still waiting in the emergency department, or elsewhere, for an inpatient bed.
+- term: Bed board
+  definition: The live view of every bed's status and occupant.
+- term: Important Message from Medicare
+  definition: The standardized notice of a Medicare inpatient's rights, including discharge appeal rights (42 CFR 405.1205).
+- term: MOON
+  definition: The Medicare Outpatient Observation Notice, given to patients in observation for more than 24 hours (42 CFR 489.20(y)).
+- term: Census
+  definition: The patients in beds at a point in time, such as midnight, by unit.
+concepts:
+- name: This module moves the patient; Encounters records it
+  description: Every admission, transfer, leave and discharge happens here and is reported to Encounters, which keeps it on the clinical record of the stay (FHIR keeps one Encounter for the stay).
+dataModel:
+- name: id
+  type: string
+  required: true
+  description: The stay id.
+  constraints: set by the service
+- name: patient_id
+  type: string
+  required: true
+  description: The patient, owned by the Patients module.
+  constraints: a record in use
+- name: encounter_id
+  type: string
+  required: false
+  description: The encounter Encounters opened for the stay.
+  constraints: set from Encounters
+- name: status
+  type: enum
+  required: true
+  description: Where the stay is.
+  constraints: 'pending_admission | admitted | discharged | cancelled; changed only through operations; codes: none standard; reported to Encounters as FHIR EncounterStatus planned, in-progress and discharged'
+- name: patient_class
+  type: enum
+  required: true
+  description: Inpatient or observation.
+  constraints: 'inpatient | observation; codes: HL7 v3 ActCode IMP, OBSENC'
+- name: admission_type
+  type: code
+  required: false
+  description: Why and how urgently the patient is admitted.
+  constraints: 'codes: HL7 v2 Table 0007 (A accident, C elective, E emergency, L labor and delivery, N newborn, R routine, U urgent)'
+- name: admit_source
+  type: code
+  required: false
+  description: Where the patient came from.
+  constraints: 'codes: HL7 admit-source (such as emd, outp, hosp-trans, born, gp)'
+- name: admission_order_id
+  type: string
+  required: false
+  description: The admission or observation order, owned by Orders.
+  constraints: required to admit (BR-E1)
+- name: attending_practitioner_id
+  type: string
+  required: false
+  description: The practitioner responsible for the stay, owned by Organization.
+- name: expected_admission_at
+  type: instant
+  required: false
+  description: When a pending admission is expected.
+- name: admitted_at
+  type: instant
+  required: false
+  description: When the patient was admitted.
+  constraints: set by the service
+- name: bed_id
+  type: string
+  required: false
+  description: The bed the patient occupies, owned by Organization. Unset while boarding.
+- name: waiting_location_id
+  type: string
+  required: false
+  description: Where an admitted patient waits for a bed, such as the emergency department.
+- name: pending_transfer
+  type: transfer request
+  required: false
+  description: 'A requested transfer: the target bed, the reason and who asked.'
+- name: leave
+  type: leave
+  required: false
+  description: 'A leave of absence in progress: when it started and when the patient is expected back.'
+- name: expected_discharge_at
+  type: instant
+  required: false
+  description: When discharge is expected.
+- name: discharge_order_id
+  type: string
+  required: false
+  description: The discharge order, owned by Orders.
+  constraints: required to discharge, except against medical advice or death (BR-E9)
+- name: discharged_at
+  type: instant
+  required: false
+  description: When the patient left.
+  constraints: set by the service
+- name: discharge_disposition
+  type: code
+  required: false
+  description: Where the patient went, or why they left.
+  constraints: 'codes: HL7 discharge-disposition (such as home, snf, other-hcf, aadvice, exp)'
+- name: discharge_destination_id
+  type: string
+  required: false
+  description: The facility the patient went to, owned by Organization or Exchange.
+- name: readmission
+  type: code
+  required: false
+  description: Set when this admission is a re-admission.
+  constraints: 'codes: HL7 v2 Table 0092 (R)'
+- name: observation_started_at
+  type: instant
+  required: false
+  description: When observation began.
+  constraints: set by the service
+- name: notices
+  type: notice[]
+  required: false
+  description: 'Notices owed and given: the Important Message from Medicare (initial and follow-up) and the MOON, each with due and given times.'
+  constraints: set by the service; given times recorded through the notice operation
+- name: isolation_required
+  type: code[]
+  required: false
+  description: Isolation the patient needs, reported by clinical modules, for bed placement.
+  constraints: 'codes: deployment list isolation_types, such as contact, droplet, airborne'
+- name: revision
+  type: integer
+  required: true
+  description: Increases with every change.
+  constraints: set by the service
+- name: bed_status
+  type: enum
+  required: true
+  description: 'On each bed in the bed board: whether it can take a patient.'
+  constraints: 'unoccupied | occupied | housekeeping | closed | contaminated | isolated; codes: HL7 v2 Table 0116 (U, O, H, C, K, I), as FHIR Location.operationalStatus'
+- name: bed_reserved_for
+  type: string
+  required: false
+  description: 'On a bed: the stay it is held for, by a pending transfer or a leave.'
+  constraints: set by the service
+relationships:
+- type: belongs_to
+  target: patient
+  note: every stay has one patient
+- type: has_one
+  target: encounter
+  note: the clinical record of the stay, owned by Encounters
+- type: belongs_to
+  target: order
+  note: the admission and discharge orders
+- type: belongs_to
+  target: bed
+  note: the bed occupied, owned by Organization
+- type: can_trigger
+  target: event:stay.admitted
+businessRules:
+- id: BR-E1
+  text: A patient is admitted only with an admission order, or an observation order for observation, from a practitioner with admitting privileges. The order and practitioner are recorded on the stay.
+  rationale: Medicare treats a patient as an inpatient only if formally admitted under an order from a qualified practitioner with admitting privileges (42 CFR 412.3(a) and (b)).
+- id: BR-E2
+  text: A patient has at most one stay that is pending or admitted. A newborn's stay is its own, linked to the mother's through the Patients module.
+  rationale: A patient is in one hospital bed at a time; two stays send orders and charges to the wrong one.
+- id: BR-E3
+  text: A pending admission opens a planned encounter through Encounters. Admission starts it. Cancelling the pending admission cancels it.
+  rationale: IHE pending admit (A14) and its cancel (A27) let beds and staff be prepared; Encounters keeps one record from the start.
+- id: BR-E4
+  text: A patient can be admitted before a bed is ready. Until one is assigned, the stay records where they wait, such as the emergency department, and is listed as boarding.
+  rationale: Admitted patients often wait for beds. Recording them as admitted, with their real location, keeps orders, staff and the census correct.
+- id: BR-E5
+  text: A bed takes a patient only if it is unoccupied and not reserved for another stay. One bed holds one patient. An isolated bed takes only a patient needing the same isolation; closed and contaminated beds take nobody.
+  rationale: HL7 bed status (Table 0116) tells the bed board what each bed can take. Putting a patient in a dirty or closed bed, or two in one, is a safety failure.
+- id: BR-E6
+  text: When a patient leaves a bed, by transfer, discharge or death, the bed becomes housekeeping until environmental services marks it unoccupied.
+  rationale: A bed must be cleaned before the next patient. The housekeeping status is what stops the next assignment until it is.
+- id: BR-E7
+  text: A transfer is requested first, which reserves the target bed for this stay. The transfer moves the patient and frees the old bed; cancelling the request releases the reservation. A transfer recorded by mistake can be cancelled, returning the patient to the previous bed if it is still free.
+  rationale: IHE defines pending transfer (A15), transfer (A02) and their cancels (A26, A12). Reserving the target stops another patient being placed there in the meantime.
+- id: BR-E8
+  text: During a leave of absence the stay keeps its bed, reserved, and Encounters puts the encounter on hold. The leave ends when the patient returns.
+  rationale: IHE leave of absence (A21) and return (A22). The bed is still the patient's, so nobody else may be placed in it.
+- id: BR-E9
+  text: A patient is discharged with a discharge order, except when they leave against medical advice or die. The discharge records the disposition and destination, frees the bed, and is reported to Encounters, Appointments and Exchange.
+  rationale: A discharge is a clinical decision recorded as an order. A patient who leaves against advice, or dies, is discharged without one, with that disposition.
+- id: BR-E10
+  text: A discharge recorded by mistake can be cancelled while the patient's bed is still free or reserved; the stay returns to admitted.
+  rationale: IHE cancel discharge (A13). If the bed has been given away, a new bed must be assigned first.
+- id: BR-E11
+  text: A change from observation to inpatient needs an inpatient admission order and takes effect at the order's time. A change from inpatient to observation is allowed only before discharge, with who approved it and why recorded.
+  rationale: Medicare counts inpatient status from the admission order (42 CFR 412.3); observation time before it stays outpatient. Changing an inpatient back needs a recorded decision because it changes what the patient pays.
+- id: BR-E12
+  text: For a Medicare beneficiary admitted as an inpatient, the Important Message from Medicare is due no later than 2 calendar days after admission, and a follow-up copy no more than 2 calendar days before discharge, unless the first was given within 2 days of discharge. Due notices are listed until recorded as given.
+  rationale: Hospitals must give Medicare inpatients a standardized notice of their rights, including discharge appeal rights, at these times (42 CFR 405.1205(b) and (c)).
+- id: BR-E13
+  text: For a Medicare beneficiary in observation, the MOON is due no later than 36 hours after observation starts, or sooner on transfer, discharge or admission. It is listed until recorded as given.
+  rationale: Hospitals must give the notice to Medicare patients receiving observation as outpatients for more than 24 hours (42 CFR 489.20(y)).
+- id: BR-E14
+  text: Admissions, discharges and transfers out of the hospital are announced so the Exchange module can notify the patient's established practitioners and post-acute providers, unless the patient's privacy preferences or the law prevent it. notification_preferences_default decides whether notifications go unless the patient objects, or only after asking.
+  rationale: Hospitals with electronic records must send notifications at inpatient admission and at or just before discharge or transfer, consistent with the patient's expressed privacy preferences (42 CFR 482.24(d)).
+- id: BR-E15
+  text: Admission is announced to Care management, so patients likely to need discharge planning are identified early, and discharge is announced with its destination so necessary information goes with the patient.
+  rationale: Hospitals must identify patients needing discharge planning at an early stage and send necessary medical information at discharge to the providers responsible for follow-up (42 CFR 482.43(a) and (b)).
+- id: BR-E16
+  text: When a patient dies during a stay, the discharge records disposition expired, and the Patients module is told the time and that the death was pronounced in the hospital.
+  rationale: The death must be recorded once, by the module that owns it, and the stay must close so the bed and record follow.
+- id: BR-E17
+  text: At admission, the patient is asked about the facility directory, and Encounters records the answer.
+  rationale: HIPAA lets a hospital list a patient in its directory only after telling them and giving them a chance to object (45 CFR 164.510(a)). Admission is the first chance.
+- id: BR-E18
+  text: A patient in a sensitive department, or with a restricted record, is placed and shown on the bed board only to staff who need it, with name masking where the Patients module requires.
+  rationale: The bed board is visible across the hospital. It must not reveal what Part 2 or a privacy alias protects.
+- id: BR-E19
+  text: Every view and change of a stay is logged with who, when and what.
+  rationale: HIPAA requires audit controls (45 CFR 164.312(b)).
+- id: BR-E20
+  text: Fields the service sets, such as status, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for and revision, cannot be written by clients, and every change sends the revision it read.
+  rationale: Status and times drive notices, billing and census; a client writing them skips the rules. Concurrent bed moves must not overwrite each other.
+validations:
+- field: patient_id
+  rule: Patients confirms a record in use, not deceased
+  error: STAY_INVALID_PATIENT
+- field: status, patient_class, admission_type, admit_source, discharge_disposition, readmission, bed_status, isolation_required
+  rule: values from their code lists
+  error: STAY_INVALID_CODE
+- field: admission_order_id, discharge_order_id
+  rule: Orders confirms an open order of the right kind for this patient
+  error: STAY_ORDER_REQUIRED
+- field: attending_practitioner_id
+  rule: Organization confirms admitting privileges on the date
+  error: STAY_INVALID_PRACTITIONER
+- field: bed_id, waiting_location_id, discharge_destination_id
+  rule: Organization confirms the bed or location; a bed must be able to take the patient (BR-E5)
+  error: STAY_BED_UNAVAILABLE
+- field: pending_transfer
+  rule: a target bed that can take the patient, and a reason
+  error: STAY_BED_UNAVAILABLE
+- field: expected_admission_at, expected_discharge_at, leave
+  rule: RFC 3339 instants; expected discharge not before admission; leave return not before its start
+  error: STAY_INVALID_PERIOD
+- field: id, encounter_id, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for, revision
+  rule: never sent by clients (BR-E20)
+  error: STAY_READ_ONLY_FIELD
+stateMachine:
+  initial: pending_admission
+  states:
+  - pending_admission
+  - admitted
+  - discharged
+  - cancelled
+  transitions:
+  - from: pending_admission
+    to: admitted
+    trigger: admit
+    guard: an admission or observation order (BR-E1), and no other open stay (BR-E2)
+  - from: pending_admission
+    to: cancelled
+    trigger: cancel pending admission
+  - from: admitted
+    to: cancelled
+    trigger: cancel admission recorded in error
+    guard: Encounters reports no clinical data on the stay
+  - from: admitted
+    to: admitted
+    trigger: assign bed, transfer, leave, return or class change
+  - from: admitted
+    to: discharged
+    trigger: discharge
+    guard: a discharge order, unless against medical advice or death (BR-E9)
+  - from: discharged
+    to: admitted
+    trigger: cancel discharge
+    guard: the bed is still free or reserved (BR-E10)
+workflows:
+- name: Admit from the emergency department
+  trigger: An emergency physician decides to admit
+  actor: Bed manager
+  steps:
+  - Record a pending admission with the admission order
+  - Admit the patient; with no bed ready, record the emergency department as where they wait
+  - Assign a bed when one is unoccupied and suitable
+  - Ask about the facility directory, and start notice due dates
+  - Announce the admission to Encounters, Exchange and Care management
+  outcome: The patient is admitted at once, boarding is visible, and the notices and notifications start.
+- name: Admit an elective patient
+  trigger: A planned admission, such as surgery next week
+  actor: Registrar
+  steps:
+  - Record the pending admission with the expected time; Encounters opens a planned encounter
+  - On the day, admit with the order and assign the reserved or available bed
+  outcome: Pre-admission work attaches to the stay before it starts.
+- name: Transfer a patient
+  trigger: A clinician or bed manager requests a move
+  actor: Bed manager
+  steps:
+  - Request the transfer, reserving the target bed
+  - Move the patient; the old bed becomes housekeeping
+  - Announce the transfer to Encounters
+  outcome: No one else is placed in the target bed, and the old bed is cleaned before reuse.
+- name: Discharge a patient
+  trigger: A discharge order is given
+  actor: Registrar
+  steps:
+  - Record the expected discharge time when known, and the Medicare follow-up notice due date
+  - Discharge with disposition and destination
+  - Free the bed for housekeeping
+  - Announce the discharge to Encounters, Appointments, Exchange and Care management
+  outcome: The stay closes, follow-up providers are notified, and the bed is cleaned.
+- name: Clean a bed
+  trigger: A bed becomes housekeeping
+  actor: Environmental services
+  steps:
+  - Clean the bed
+  - Mark it unoccupied
+  outcome: The bed is ready for the next patient.
+edgeCases:
+- id: EC-E1
+  situation: An emergency patient is admitted at 02:00 and no bed is ready until 09:00.
+  behaviour: The stay is admitted at 02:00 with the emergency department as where they wait, listed as boarding, and assigned a bed at 09:00.
+  covers:
+  - BR-E4
+  - AC-E2
+- id: EC-E2
+  situation: Two bed managers assign the same bed at once.
+  behaviour: One succeeds; the other fails with STAY_BED_UNAVAILABLE or STAY_REVISION_CONFLICT.
+  covers:
+  - BR-E5
+  - AC-E3
+- id: EC-E3
+  situation: A patient is discharged and the next admission is placed in the bed before it is cleaned.
+  behaviour: 'Rejected with STAY_BED_UNAVAILABLE: the bed is housekeeping until marked unoccupied.'
+  covers:
+  - BR-E6
+  - AC-E5
+- id: EC-E4
+  situation: A patient leaves against medical advice with no discharge order.
+  behaviour: Discharged with disposition aadvice; no order is needed.
+  covers:
+  - BR-E9
+  - AC-E7
+- id: EC-E5
+  situation: A patient dies overnight.
+  behaviour: Discharged with disposition expired; Patients records the death; the bed becomes housekeeping.
+  covers:
+  - BR-E16
+  - AC-E14
+- id: EC-E6
+  situation: A Medicare patient admitted on Friday is discharged the following Thursday.
+  behaviour: The initial notice was due by Sunday; a follow-up is due no earlier than Tuesday and before discharge.
+  covers:
+  - BR-E12
+  - AC-E11
+- id: EC-E7
+  situation: A Medicare patient goes into observation at 20:00 and is admitted at 14:00 the next day.
+  behaviour: The MOON was due by 08:00 two days later, but admission makes it due at once if not yet given.
+  covers:
+  - BR-E13
+  - AC-E12
+- id: EC-E8
+  situation: A patient who asked that their stay not be shared is discharged.
+  behaviour: Exchange is told the patient's preference applies, and no notification is sent to their practitioners.
+  covers:
+  - BR-E14
+  - AC-E13
+- id: EC-E9
+  situation: A patient on contact isolation needs a bed.
+  behaviour: Only an unoccupied bed, or an isolated one for the same isolation, can take them.
+  covers:
+  - BR-E5
+  - AC-E4
+- id: EC-E10
+  situation: A discharge was recorded for the wrong patient, and their bed is still free.
+  behaviour: The discharge is cancelled and the stay returns to admitted in the same bed.
+  covers:
+  - BR-E10
+  - AC-E8
+- id: EC-E11
+  situation: Orders is down when an admission is recorded.
+  behaviour: Rejected with STAY_DEPENDENCY_UNAVAILABLE; the patient is cared for and the admission recorded when Orders returns.
+  covers:
+  - FR-E12
+  - AC-E19
+functionalRequirements:
+- id: FR-E1
+  text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
+  priority: must
+  verification: test
+- id: FR-E2
+  text: 'The service must keep the bed board: each bed''s status, occupant and reservation.'
+  priority: must
+  verification: test
+- id: FR-E3
+  text: The service must assign beds only as BR-E5 allows, including to patients already admitted.
+  priority: must
+  verification: test
+- id: FR-E4
+  text: The service must request, perform and cancel transfers, and record leave of absence.
+  priority: must
+  verification: test
+- id: FR-E5
+  text: The service must record class changes between observation and inpatient.
+  priority: must
+  verification: test
+- id: FR-E6
+  text: The service must record pending discharge, discharge and cancelled discharge.
+  priority: must
+  verification: test
+- id: FR-E7
+  text: The service must track the Medicare notices due for each stay and record when they are given.
+  priority: must
+  verification: test
+- id: FR-E8
+  text: The service must announce admissions, discharges and transfers for practitioner notifications, honouring privacy preferences.
+  priority: must
+  verification: test
+- id: FR-E9
+  text: The service must report the census of patients in beds, by unit, at any time and at midnight.
+  priority: must
+  verification: test
+- id: FR-E10
+  text: The service must log every view and change, and let a privacy officer read the log.
+  priority: must
+  verification: test
+- id: FR-E11
+  text: The service must accept an Idempotency-Key on every change, so a retried request never admits or moves a patient twice.
+  priority: must
+  verification: test
+- id: FR-E12
+  text: The service must fail fast with STAY_DEPENDENCY_UNAVAILABLE when Patients, Orders or Organization cannot be reached.
+  priority: must
+  verification: test
+nonFunctionalRequirements:
+- category: compatibility
+  text: 'Events map to HL7 v2 ADT messages: pending admit A14 and its cancel A27, admit A01 and cancel A11, transfer A02 and cancel A12, pending transfer A15 and cancel A26, discharge A03 and cancel A13, pending discharge A16 and cancel A25, class changes A06 and A07, leave A21 and A22. This follows IHE PAM (ITI-31).'
+- category: compatibility
+  text: Bed status maps to FHIR Location.operationalStatus with HL7 v2 Table 0116.
+- category: security
+  text: Only staff who need it see who is in which bed; restricted and sensitive patients are masked (BR-E18).
+- category: availability
+  text: 'Patient care never waits for this module: an outage delays recording, not admission or treatment.'
+- category: reliability
+  text: A change is acknowledged only after it is committed together with its events.
+- category: portability
+  text: No requirement depends on a particular database, language or framework.
+constraints:
+- id: CON-E1
+  text: Stay data is encrypted in transit and at rest.
+  rationale: GDPR Article 32 and HIPAA 45 CFR 164.312.
+- id: CON-E2
+  text: Times are RFC 3339 instants in UTC; notice due dates are computed in calendar days in the hospital's time zone.
+  rationale: The Medicare notices count calendar days, which depend on the local date.
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. The Medicare notices apply only in the United States. Required.
+- name: hospital_time_zone
+  type: IANA time zone
+  description: Used to count calendar days for notices and the midnight census. Required.
+- name: isolation_types
+  type: code list
+  description: Isolation types used for bed placement, such as contact, droplet and airborne. Required.
+- name: notification_preferences_default
+  type: send | ask
+  default: send
+  description: Whether admission, discharge and transfer notifications are sent unless the patient objects, or only after asking. Set with legal advice.
+performanceTargets:
+- id: PERF-E1
+  indicator: Boarding time
+  target: Set by each deployment
+  measurement: Median and 90th percentile time from admission to bed assignment, by unit.
+- id: PERF-E2
+  indicator: Bed turnaround
+  target: Set by each deployment
+  measurement: Time from a bed becoming housekeeping to unoccupied.
+- id: PERF-E3
+  indicator: Notices given on time
+  target: 100%
+  measurement: Share of Medicare notices recorded as given before their due time.
+- id: PERF-E4
+  indicator: Double occupancy
+  target: '0'
+  measurement: Beds with two occupants at once. Any non-zero value is a defect.
+acceptanceCriteria:
+- id: AC-E1
+  given: a pending admission with an admission order from a practitioner with privileges, and one without an order
+  when: each is admitted
+  then: the first is admitted, Encounters starts its encounter and stay.admitted is emitted; the second fails with STAY_ORDER_REQUIRED (422)
+  verifies:
+  - BR-E1
+  - BR-E3
+  - FR-E1
+- id: AC-E2
+  given: an admitted patient with no bed ready
+  when: admission is recorded, then a bed is assigned
+  then: the stay is admitted with the emergency department as waiting location and listed as boarding; assignment emits stay.bed_assigned
+  verifies:
+  - BR-E4
+  - FR-E3
+- id: AC-E3
+  given: one unoccupied bed
+  when: two assignments to it arrive together
+  then: one succeeds; the other fails with STAY_BED_UNAVAILABLE (409)
+  verifies:
+  - BR-E5
+  - FR-E3
+- id: AC-E4
+  given: a patient needing contact isolation, a bed isolated for droplet, and one unoccupied
+  when: each bed is assigned
+  then: the isolated bed fails with STAY_BED_UNAVAILABLE; the unoccupied bed succeeds
+  verifies:
+  - BR-E5
+- id: AC-E5
+  given: a discharged patient's bed
+  when: it is assigned to the next patient, then cleaned and assigned again
+  then: the first fails with STAY_BED_UNAVAILABLE; after environmental services marks it unoccupied, bed.status_changed is emitted and the assignment succeeds
+  verifies:
+  - BR-E6
+  - FR-E2
+- id: AC-E6
+  given: an admitted patient
+  when: a transfer is requested, performed, and another is requested and cancelled
+  then: the target bed is reserved with stay.transfer_requested, the move emits stay.transferred and frees the old bed; the cancel releases the reservation with stay.transfer_cancelled
+  verifies:
+  - BR-E7
+  - FR-E4
+- id: AC-E7
+  given: an admitted patient
+  when: they are discharged without an order, once as routine and once against medical advice
+  then: the routine one fails with STAY_ORDER_REQUIRED; the other is discharged with disposition aadvice and stay.discharged is emitted
+  verifies:
+  - BR-E9
+  - FR-E6
+- id: AC-E8
+  given: a discharge recorded in error, with the bed still free, and another where the bed is now occupied
+  when: each discharge is cancelled
+  then: the first returns to admitted with stay.discharge_cancelled; the second fails with STAY_BED_UNAVAILABLE (409)
+  verifies:
+  - BR-E10
+  - FR-E6
+- id: AC-E9
+  given: an admitted patient
+  when: leave starts and ends
+  then: the bed is reserved during leave, stay.leave_started and stay.leave_ended are emitted, and Encounters puts the encounter on hold and back
+  verifies:
+  - BR-E8
+  - FR-E4
+- id: AC-E10
+  given: a patient in observation
+  when: an inpatient admission order arrives, and later a change back to observation is attempted after discharge
+  then: the class changes at the order time with stay.class_changed; the later change fails with STAY_INVALID_TRANSITION (409)
+  verifies:
+  - BR-E11
+  - FR-E5
+- id: AC-E11
+  given: jurisdiction us and a Medicare inpatient admitted on a Friday
+  when: the stay continues for six days
+  then: the initial notice is due by Sunday, stay.notice_due is emitted, and a follow-up is due no more than 2 calendar days before discharge; recording a notice as given clears it
+  verifies:
+  - BR-E12
+  - FR-E7
+- id: AC-E12
+  given: a Medicare patient in observation from 20:00
+  when: they are admitted the next afternoon without a MOON recorded
+  then: the MOON is listed as due at once
+  verifies:
+  - BR-E13
+  - FR-E7
+- id: AC-E13
+  given: a patient with no objection, and one whose preference prevents sharing
+  when: each is admitted and discharged
+  then: Exchange receives stay.admitted and stay.discharged for both, with the preference flag set on the second, so only the first is notified
+  verifies:
+  - BR-E14
+  - FR-E8
+- id: AC-E14
+  given: an admitted patient who dies
+  when: the death is recorded as a discharge with disposition expired
+  then: the stay is discharged, the bed becomes housekeeping, and Patients is told the time with source hospital pronouncement
+  verifies:
+  - BR-E16
+- id: AC-E15
+  given: a patient with a stay already admitted
+  when: another admission is recorded for them
+  then: it fails with STAY_CONCURRENT (409)
+  verifies:
+  - BR-E2
+- id: AC-E16
+  given: an admission by a practitioner without admitting privileges, an invalid admission type, and expected discharge before admission
+  when: each is sent
+  then: they fail with STAY_INVALID_PRACTITIONER, STAY_INVALID_CODE and STAY_INVALID_PERIOD, all HTTP 422
+  verifies:
+  - BR-E1
+- id: AC-E17
+  given: a deceased or unknown patient, and an unknown stay
+  when: a stay is requested for the patient, and the unknown stay is read
+  then: they fail with STAY_INVALID_PATIENT (422) and STAY_NOT_FOUND (404)
+  verifies:
+  - BR-E2
+- id: AC-E18
+  given: a stay at revision 4
+  when: two changes send revision 4, one sends admitted_at, and a retried admission reuses its key with different details
+  then: one change succeeds; the others fail with STAY_REVISION_CONFLICT (409), STAY_READ_ONLY_FIELD (422) and STAY_IDEMPOTENCY_KEY_REUSED (409)
+  verifies:
+  - BR-E20
+  - FR-E11
+- id: AC-E19
+  given: Orders unreachable
+  when: an admission is recorded
+  then: it fails with STAY_DEPENDENCY_UNAVAILABLE (503)
+  verifies:
+  - FR-E12
+- id: AC-E20
+  given: patients in beds on three units
+  when: the census is read at midnight, and with no unit or time
+  then: each unit's occupied beds are counted; the second fails with STAY_INVALID_QUERY (422)
+  verifies:
+  - FR-E9
+- id: AC-E21
+  given: a pending admission, and one admitted in error with no clinical data
+  when: each is cancelled
+  then: the first emits stay.admission_cancelled and Encounters cancels the planned encounter; the second is cancelled the same way
+  verifies:
+  - BR-E3
+  - FR-E1
+- id: AC-E22
+  given: an admitted patient
+  when: an expected discharge time is set
+  then: stay.discharge_expected is emitted for Care management and Encounters
+  verifies:
+  - BR-E15
+- id: AC-E23
+  given: a restricted patient and a privacy officer
+  when: a nurse on another unit reads the bed board, and the officer reads the access log
+  then: the patient is masked for the nurse; the officer sees every view and change
+  verifies:
+  - BR-E18
+  - BR-E19
+  - FR-E10
+- id: AC-E24
+  given: a new admission
+  when: it is recorded
+  then: Encounters is asked to record the facility directory answer
+  verifies:
+  - BR-E17
+- id: AC-E25
+  given: stay data stored and in transit, and a stay crossing a daylight saving change
+  when: it is inspected and notice due dates computed
+  then: data is encrypted and due dates follow local calendar days
+  verifies:
+  - CON-E1
+  - CON-E2
+- id: AC-E26
+  given: no pending transfer
+  when: Transfer is sent to perform one
+  then: it fails with STAY_NO_PENDING_TRANSFER (409)
+  verifies:
+  - BR-E7
+- id: AC-E27
+  given: a planned elective admission
+  when: it is requested
+  then: the stay is pending_admission, stay.admission_requested is emitted, and Encounters opens a planned encounter
+  verifies:
+  - BR-E3
+  - FR-E1
+- id: AC-E28
+  given: notification_preferences_default ask, and a patient not yet asked
+  when: they are admitted
+  then: stay.admitted carries share_restricted until the patient agrees
+  verifies:
+  - BR-E14
+operations:
+- name: Request an admission
+  actor: Clinician
+  description: Record a pending admission. Accepts a retry key.
+  method: POST
+  path: /stays
+  success: 201
+  input: patient, class, admission type, admit source, expected time, order, attending practitioner
+  output: the pending stay
+  errors:
+  - STAY_INVALID_PATIENT
+  - STAY_CONCURRENT
+  - STAY_INVALID_CODE
+  - STAY_INVALID_PRACTITIONER
+  - STAY_INVALID_PERIOD
+  - STAY_READ_ONLY_FIELD
+  - STAY_IDEMPOTENCY_KEY_REUSED
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Admit
+  actor: Registrar
+  description: Admit the patient, with a bed or a waiting location.
+  method: POST
+  path: /stays/{id}/admit
+  success: 200
+  input: stay id, revision, order, bed or waiting location
+  output: the admitted stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_ORDER_REQUIRED
+  - STAY_CONCURRENT
+  - STAY_BED_UNAVAILABLE
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Cancel an admission
+  actor: Registrar
+  description: Cancel a pending admission, or an admission recorded in error with no clinical data.
+  method: POST
+  path: /stays/{id}/cancel
+  success: 200
+  input: stay id, revision, reason
+  output: the cancelled stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Assign a bed
+  actor: Bed manager
+  description: Place an admitted patient in a bed.
+  method: POST
+  path: /stays/{id}/bed
+  success: 200
+  input: stay id, revision, bed
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_BED_UNAVAILABLE
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Request a transfer
+  actor: Clinician
+  description: Request a move to another bed, reserving it.
+  method: POST
+  path: /stays/{id}/transfer-requests
+  success: 201
+  input: stay id, revision, target bed, reason
+  output: the stay with its pending transfer
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_BED_UNAVAILABLE
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Transfer
+  actor: Bed manager
+  description: Move the patient to the reserved bed, or cancel the pending transfer or the last transfer.
+  method: POST
+  path: /stays/{id}/transfer
+  success: 200
+  input: stay id, revision, perform or cancel
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_NO_PENDING_TRANSFER
+  - STAY_BED_UNAVAILABLE
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Start or end leave
+  actor: Registrar
+  description: Start or end a leave of absence.
+  method: POST
+  path: /stays/{id}/leave
+  success: 200
+  input: stay id, revision, start with expected return, or end
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_INVALID_TRANSITION
+  - STAY_INVALID_PERIOD
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Change class
+  actor: Registrar
+  description: Change between observation and inpatient.
+  method: POST
+  path: /stays/{id}/class
+  success: 200
+  input: stay id, revision, new class, order or approval and reason
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_ORDER_REQUIRED
+  - STAY_INVALID_TRANSITION
+  - STAY_INVALID_CODE
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Set expected discharge
+  actor: Clinician
+  description: Record or change when discharge is expected.
+  method: PUT
+  path: /stays/{id}/expected-discharge
+  success: 200
+  input: stay id, revision, time
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_INVALID_PERIOD
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Discharge
+  actor: Registrar
+  description: Discharge the patient, with disposition and destination.
+  method: POST
+  path: /stays/{id}/discharge
+  success: 200
+  input: stay id, revision, order unless against advice or death, time, disposition, destination
+  output: the discharged stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_ORDER_REQUIRED
+  - STAY_INVALID_CODE
+  - STAY_INVALID_PERIOD
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Cancel a discharge
+  actor: Registrar
+  description: Undo a discharge recorded in error.
+  method: POST
+  path: /stays/{id}/discharge/cancel
+  success: 200
+  input: stay id, revision, reason
+  output: the stay, admitted
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_BED_UNAVAILABLE
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Record a notice
+  actor: Registrar
+  description: Record that a notice was given.
+  method: POST
+  path: /stays/{id}/notices
+  success: 200
+  input: stay id, revision, notice, time given, to whom
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_INVALID_CODE
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Get a stay
+  actor: Clinician
+  description: Read a stay.
+  method: GET
+  path: /stays/{id}
+  success: 200
+  input: stay id
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Read the census
+  actor: Bed manager
+  description: Patients in beds by unit, now or at a past time such as midnight, and patients boarding.
+  method: GET
+  path: /stays/census
+  success: 200
+  input: unit or all units, time
+  output: counts and stays by unit
+  errors:
+  - STAY_INVALID_QUERY
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Read the bed board
+  actor: Bed manager
+  description: Every bed's status, occupant and reservation, masked as BR-E18 requires.
+  method: GET
+  path: /beds
+  success: 200
+  input: unit, status; limit and cursor
+  output: beds
+  errors:
+  - STAY_INVALID_QUERY
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Update bed status
+  actor: Environmental services
+  description: Mark a bed cleaned, closed, contaminated or isolated.
+  method: POST
+  path: /beds/{id}/status
+  success: 200
+  input: bed id, status, isolation type where isolated
+  output: the bed
+  errors:
+  - STAY_INVALID_CODE
+  - STAY_BED_UNAVAILABLE
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Read the access log
+  actor: Privacy officer
+  description: Every view and change of a stay.
+  method: GET
+  path: /stays/{id}/access-log
+  success: 200
+  input: stay id; limit and cursor
+  output: entries
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_DEPENDENCY_UNAVAILABLE
+apiConventions:
+- topic: Authentication
+  text: Every request carries the caller's identity from Identity, and permissions are checked against it.
+- topic: Errors
+  text: Errors use problem details (application/problem+json) with a code member, such as STAY_BED_UNAVAILABLE.
+  reference: RFC 9457
+- topic: Concurrency
+  text: Every change sends the revision it read; a stale revision fails with STAY_REVISION_CONFLICT. Bed assignment also checks the bed's own state, so two stays never get one bed.
+- topic: Retries
+  text: Every change accepts an Idempotency-Key header (FR-E11).
+  reference: IETF draft-ietf-httpapi-idempotency-key-header
+- topic: Pagination
+  text: 'Lists are cursor-based: limit and cursor in, next_cursor out.'
+- topic: Times
+  text: Instants are RFC 3339 timestamps in UTC (CON-E2).
+  reference: RFC 3339
+- topic: Versioning
+  text: Additive changes don't change the version; a breaking change ships as a new major version with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
+events:
+- name: stay.admission_requested
+  description: A pending admission was recorded.
+  payload:
+  - stay_id
+  - patient_id
+  - expected_admission_at
+  - revision
+- name: stay.admitted
+  description: The patient was admitted.
+  payload:
+  - stay_id
+  - patient_id
+  - patient_class
+  - admitted_at
+  - share_restricted
+  - revision
+- name: stay.admission_cancelled
+  description: A pending or mistaken admission was cancelled.
+  payload:
+  - stay_id
+  - revision
+- name: stay.bed_assigned
+  description: The patient was placed in a bed.
+  payload:
+  - stay_id
+  - bed_id
+  - revision
+- name: stay.transfer_requested
+  description: A transfer was requested and the target bed reserved.
+  payload:
+  - stay_id
+  - bed_id
+  - revision
+- name: stay.transferred
+  description: The patient moved to another bed.
+  payload:
+  - stay_id
+  - from_bed_id
+  - bed_id
+  - revision
+- name: stay.transfer_cancelled
+  description: A pending or recorded transfer was cancelled.
+  payload:
+  - stay_id
+  - revision
+- name: stay.leave_started
+  description: A leave of absence started.
+  payload:
+  - stay_id
+  - revision
+- name: stay.leave_ended
+  description: The patient returned from leave.
+  payload:
+  - stay_id
+  - revision
+- name: stay.class_changed
+  description: The stay changed between observation and inpatient.
+  payload:
+  - stay_id
+  - patient_class
+  - effective_at
+  - revision
+- name: stay.discharge_expected
+  description: An expected discharge time was set or changed.
+  payload:
+  - stay_id
+  - expected_discharge_at
+  - revision
+- name: stay.discharged
+  description: The patient left.
+  payload:
+  - stay_id
+  - patient_id
+  - discharged_at
+  - discharge_disposition
+  - discharge_destination_id
+  - share_restricted
+  - revision
+- name: stay.discharge_cancelled
+  description: A discharge was undone.
+  payload:
+  - stay_id
+  - revision
+- name: stay.notice_due
+  description: A Medicare notice is due.
+  payload:
+  - stay_id
+  - notice
+  - due_at
+- name: bed.status_changed
+  description: A bed's status changed.
+  payload:
+  - bed_id
+  - bed_status
+deliveryGuarantees:
+- id: DG-E1
+  text: Events are published at least once; consumers drop one with a source and id they have seen.
+  rationale: CloudEvents defines source plus id as the duplicate check.
+- id: DG-E2
+  text: Events for one stay can arrive out of order; each carries the revision, and consumers ignore a lower one.
+  rationale: Brokers and retries don't guarantee order.
+- id: DG-E3
+  text: Events carry ids, codes and times, never names or diagnoses. share_restricted tells Exchange the patient's preference prevents notifications.
+  rationale: Minimum necessary (45 CFR 164.502(b)) and GDPR data minimisation (Article 5(1)(c)).
+permissions:
+- name: stay.read
+  description: Read stays, the census and the bed board.
+- name: stay.write
+  description: Admit, transfer, discharge and record notices.
+- name: bed.write
+  description: Change bed status.
+- name: stay.audit
+  description: Read the access log.
+accessMatrix:
+- action: Request an admission, a transfer, or set expected discharge
+  roles:
+    Bed manager: any
+    Registrar: none
+    Clinician: own
+    Environmental services: none
+    Privacy officer: none
+    System: any
+  permission: stay.write
+  note: 'own: patients in their care.'
+- action: Admit, cancel, change class, start or end leave, discharge, cancel a discharge, record a notice
+  roles:
+    Bed manager: any
+    Registrar: any
+    Clinician: none
+    Environmental services: none
+    Privacy officer: none
+    System: none
+  permission: stay.write
+- action: Assign a bed, or transfer
+  roles:
+    Bed manager: any
+    Registrar: none
+    Clinician: none
+    Environmental services: none
+    Privacy officer: none
+    System: none
+  permission: stay.write
+- action: Get a stay, read the census or the bed board
+  roles:
+    Bed manager: any
+    Registrar: any
+    Clinician: own
+    Environmental services: none
+    Privacy officer: none
+    System: any
+  permission: stay.read
+  note: Masked as BR-E18 requires.
+- action: Update bed status
+  roles:
+    Bed manager: any
+    Registrar: none
+    Clinician: none
+    Environmental services: any
+    Privacy officer: none
+    System: none
+  permission: bed.write
+- action: Read the access log
+  roles:
+    Bed manager: none
+    Registrar: none
+    Clinician: none
+    Environmental services: none
+    Privacy officer: any
+    System: none
+  permission: stay.audit
+personalData:
+- field: patient_id, encounter_id, status, patient_class, admission_type, admit_source, admission_order_id, attending_practitioner_id, readmission
+  category: health data; shows the person was admitted, and how
+  purpose: Managing the stay
+  retention: record_retention of the Patients module
+- field: expected_admission_at, admitted_at, expected_discharge_at, discharged_at, observation_started_at, leave
+  category: health data
+  purpose: When the patient was in hospital
+  retention: record_retention of the Patients module
+- field: bed_id, waiting_location_id, pending_transfer, bed_reserved_for, bed_status
+  category: personal; reveals where the patient is
+  purpose: Placing and finding the patient
+  retention: record_retention of the Patients module
+- field: discharge_order_id, discharge_disposition, discharge_destination_id
+  category: health data; reveals outcome and destination
+  purpose: Discharge and follow-up care
+  retention: record_retention of the Patients module
+- field: notices
+  category: personal
+  purpose: Showing the required notices were given
+  retention: record_retention of the Patients module
+- field: isolation_required
+  category: health data; can reveal an infection
+  purpose: Safe bed placement
+  retention: Until discharge
+- field: id, revision, access log
+  category: record metadata
+  purpose: Integrity and access review
+  retention: record_retention, and access_log_retention for the log
+errors:
+- code: STAY_NOT_FOUND
+  http: 404
+  message: No stay exists with that id.
+- code: STAY_INVALID_QUERY
+  http: 422
+  message: Give a unit or ask for all units, with a valid time.
+- code: STAY_INVALID_PATIENT
+  http: 422
+  message: The patient doesn't exist, isn't in use, or has died.
+- code: STAY_CONCURRENT
+  http: 409
+  message: The patient already has a stay pending or admitted.
+- code: STAY_INVALID_CODE
+  http: 422
+  message: A code isn't in the allowed list for its field.
+- code: STAY_ORDER_REQUIRED
+  http: 422
+  message: This needs an open order of the right kind.
+- code: STAY_INVALID_PRACTITIONER
+  http: 422
+  message: The practitioner doesn't have admitting privileges on that date.
+- code: STAY_BED_UNAVAILABLE
+  http: 409
+  message: 'That bed can''t take this patient now: it is occupied, reserved, being cleaned, closed, contaminated or isolated for something else.'
+- code: STAY_INVALID_PERIOD
+  http: 422
+  message: The times are out of order or not valid instants.
+- code: STAY_INVALID_TRANSITION
+  http: 409
+  message: The stay's status doesn't allow that.
+- code: STAY_NO_PENDING_TRANSFER
+  http: 409
+  message: There is no pending or recent transfer to perform or cancel.
+- code: STAY_REVISION_CONFLICT
+  http: 409
+  message: The stay changed since you read it. Read it again and retry.
+- code: STAY_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service and can't be written.
+- code: STAY_IDEMPOTENCY_KEY_REUSED
+  http: 409
+  message: That Idempotency-Key was used for a different request.
+- code: STAY_DEPENDENCY_UNAVAILABLE
+  http: 503
+  message: A service this request needs is unavailable. Retry later.
+dependencies:
+- service: patient-service
+  direction: upstream
+  reason: owns patients
+  criticality: hard
+  contract:
+  - 'Asks: does this patient exist, is the record in use, and is the patient alive?'
+  - 'Asks: is the patient restricted, or using a privacy alias?'
+  - 'Gives: whether this patient has an active stay'
+  - 'Gives: a death during a stay, with its time and the source hospital pronouncement'
+  - 'Receives: patient.merged and patient.deceased'
+- service: encounter-service
+  direction: downstream
+  reason: keeps the clinical record of each stay
+  criticality: soft
+  contract:
+  - 'Gives: stay.admission_requested, stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.class_changed, stay.discharge_expected, stay.discharged and stay.discharge_cancelled'
+  - 'Gives: a re-admission flag and the facility directory answer'
+  - 'Receives: the encounter id for each stay, encounter.observation_started, and whether clinical data is recorded'
+  - The clinical record is Encounters' concern
+- service: appointment-service
+  direction: downstream
+  reason: books services for patients in a stay
+  criticality: soft
+  contract:
+  - 'Gives: whether a patient is in an active stay, its kind and its encounter id'
+  - 'Gives: stay.discharged and stay.class_changed, so appointments for the stay are reviewed'
+- service: orders-service
+  direction: upstream
+  reason: owns admission, observation and discharge orders
+  criticality: hard
+  contract:
+  - 'Asks: is there an open order of this kind for this patient, and who gave it?'
+  - Writing orders is Orders' concern
+- service: organization-service
+  direction: upstream
+  reason: defines beds and admitting privileges
+  criticality: hard
+  contract:
+  - 'Asks: does this bed or location exist, and on which unit?'
+  - 'Asks: does this practitioner have admitting privileges on this date?'
+- service: coverage-service
+  direction: upstream
+  reason: says who is a Medicare beneficiary
+  criticality: soft
+  contract:
+  - 'Asks: is this patient a Medicare beneficiary?'
+  - 'Gives: stay.admitted, stay.class_changed and stay.discharged for coverage and utilization review'
+- service: exchange-service
+  direction: downstream
+  reason: sends admission, discharge and transfer notifications
+  criticality: soft
+  contract:
+  - 'Gives: stay.admitted, stay.transferred and stay.discharged with share_restricted'
+  - Choosing recipients and sending notifications (42 CFR 482.24(d)) is Exchange's concern
+- service: care-management-service
+  direction: downstream
+  reason: plans discharges
+  criticality: soft
+  contract:
+  - 'Gives: stay.admitted, stay.discharge_expected and stay.discharged with destination'
+  - 'Receives: an expected discharge time'
+  - Discharge planning (42 CFR 482.43) is Care management's concern
+- service: notification-service
+  direction: downstream
+  reason: tells staff about due notices and ready beds
+  criticality: soft
+  contract:
+  - 'Gives: stay.notice_due and bed.status_changed'
+- service: environmental-services
+  direction: downstream
+  reason: cleans beds
+  criticality: soft
+  contract:
+  - 'Gives: bed.status_changed when a bed needs cleaning'
+  - 'Receives: a bed marked unoccupied once cleaned'
+- service: identity-service
+  direction: upstream
+  reason: authenticates callers
+  criticality: hard
+  contract:
+  - 'Asks: who is the caller, and do they hold this permission?'
+risks:
+- id: RISK-E1
+  risk: Two patients are placed in one bed.
+  impact: Care and medication given to the wrong patient.
+  mitigation: BR-E5 checked against the bed's own state, and PERF-E4.
+- id: RISK-E2
+  risk: A Medicare notice is missed.
+  impact: The patient loses appeal rights and the hospital is out of compliance.
+  mitigation: Due dates tracked and listed (BR-E12, BR-E13, PERF-E3).
+- id: RISK-E3
+  risk: Boarding hides admitted patients.
+  impact: Orders and staffing miss them.
+  mitigation: Admitted with their real location and listed as boarding (BR-E4).
+decisions:
+- id: ADR-E1
+  decision: This module moves patients; Encounters keeps the record.
+  rationale: Bed management and orders change fast and involve non-clinical staff; the encounter is the clinical record. IHE separates the Patient Encounter Supplier from its consumers the same way.
+  date: '2026-10-08'
+- id: ADR-E2
+  decision: Admission doesn't wait for a bed.
+  rationale: Real hospitals admit and then board patients. Waiting for a bed to record the admission would hide them.
+  date: '2026-10-08'
+references:
+- id: REF-E1
+  title: 42 CFR 412.3, admissions (orders, two-midnight)
+  url: https://www.ecfr.gov/current/title-42/section-412.3
+- id: REF-E2
+  title: 42 CFR 405.1205, notifying beneficiaries of hospital discharge appeal rights
+  url: https://www.ecfr.gov/current/title-42/section-405.1205
+- id: REF-E3
+  title: 42 CFR 489.20(y), Medicare Outpatient Observation Notice
+  url: https://www.ecfr.gov/current/title-42/section-489.20
+- id: REF-E4
+  title: 42 CFR 482.24(d), electronic notifications
+  url: https://www.ecfr.gov/current/title-42/section-482.24
+- id: REF-E5
+  title: 42 CFR 482.43, discharge planning and transfer protocols
+  url: https://www.ecfr.gov/current/title-42/section-482.43
+- id: REF-E6
+  title: IHE ITI-31 Patient Encounter Management
+  url: https://profiles.ihe.net/ITI/TF/Volume2/ITI-31.html
+- id: REF-E7
+  title: HL7 v2 Table 0116 (bed status) and 0007 (admission type)
+  url: https://terminology.hl7.org/CodeSystem-v2-0116.html
+- id: REF-E8
+  title: HL7 FHIR R5, Location (operationalStatus)
+  url: https://hl7.org/fhir/R5/location.html
+- id: REF-E9
+  title: 45 CFR 164.510, facility directories
+  url: https://www.ecfr.gov/current/title-45/section-164.510
+compliance:
+- id: CMP-E1
+  regulation: Medicare payment rules
+  provision: 42 CFR 412.3
+  obligation: Admit only under an order from a qualified practitioner with admitting privileges.
+  how: Admission needs an order and a privileged practitioner; class changes follow the order time.
+  status: met
+  covered_by:
+  - BR-E1
+  - BR-E11
+- id: CMP-E2
+  regulation: Medicare beneficiary notices
+  provision: 42 CFR 405.1205
+  obligation: Give the Important Message from Medicare within 2 days of admission, and a follow-up copy within 2 days before discharge.
+  how: Due dates tracked and listed until given.
+  status: met
+  covered_by:
+  - BR-E12
+- id: CMP-E3
+  regulation: Medicare Outpatient Observation Notice
+  provision: 42 CFR 489.20(y)
+  obligation: Give the MOON within 36 hours of observation starting.
+  how: Due dates tracked and listed until given.
+  status: met
+  covered_by:
+  - BR-E13
+- id: CMP-E4
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.24(d)
+  obligation: Send notifications at admission and at or before discharge or transfer, honouring privacy preferences.
+  how: Events to Exchange carry share_restricted; Exchange sends.
+  status: partly met
+  covered_by:
+  - BR-E14
+- id: CMP-E5
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.43(a) and (b)
+  obligation: Identify patients needing discharge planning early, and send necessary information at discharge.
+  how: Admission and discharge go to Care management with the destination.
+  status: partly met
+  covered_by:
+  - BR-E15
+- id: CMP-E6
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.43(c)
+  obligation: Written transfer protocols and staff training.
+  how: An organisational duty of the hospital.
+  status: deployment
+  covered_by: []
+- id: CMP-E7
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.13(h)
+  obligation: Visitation rights.
+  how: The Visitors module.
+  status: other module
+  covered_by: []
+- id: CMP-E8
+  regulation: EMTALA
+  provision: 42 CFR 489.24(e)
+  obligation: Appropriate transfers of emergency patients.
+  how: The Emergency department module.
+  status: other module
+  covered_by: []
+- id: CMP-E9
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.510(a)
+  obligation: Facility directory only after the patient can object.
+  how: Asked at admission and recorded by Encounters.
+  status: met
+  covered_by:
+  - BR-E17
+- id: CMP-E10
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Minimum necessary.
+  how: Events carry ids and codes; the bed board masks restricted patients.
+  status: met
+  covered_by:
+  - BR-E18
+- id: CMP-E11
+  regulation: 42 CFR Part 2
+  provision: 42 CFR 2.13
+  obligation: Protect substance use disorder program records.
+  how: Sensitive departments are masked on the bed board.
+  status: met
+  covered_by:
+  - BR-E18
+- id: CMP-E12
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(b)
+  obligation: Audit controls.
+  how: Every view and change is logged.
+  status: met
+  covered_by:
+  - BR-E19
+  - FR-E10
+- id: CMP-E13
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(2)(iv) and (e)
+  obligation: Encryption at rest and in transit.
+  how: Stay data is encrypted.
+  status: met
+  covered_by:
+  - CON-E1
+- id: CMP-E14
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(c)
+  obligation: Data minimisation.
+  how: Events carry no names or diagnoses.
+  status: met
+  covered_by:
+  - BR-E18
+- id: CMP-E15
+  regulation: GDPR (EU) 2016/679
+  provision: Article 9(2)(h) and 17(3)(c)
+  obligation: Process and keep health data for care.
+  how: Retention follows the Patients module.
+  status: met
+  covered_by: []
+- id: CMP-E16
+  regulation: GDPR (EU) 2016/679
+  provision: Article 32
+  obligation: Security appropriate to the risk.
+  how: Encryption, masking and access logging.
+  status: met
+  covered_by:
+  - CON-E1
+  - BR-E19
+- id: CMP-E17
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 30, 33 to 35 and 37
+  obligation: Records of processing, breach notification, impact assessment and a data protection officer.
+  how: Organisational duties of the deployment.
+  status: deployment
+  covered_by: []
+changelog:
+- version: 0.1.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - 'First Admission, discharge and transfer module: stays, the bed board, transfers, leave, discharge, Medicare notices and notifications, following IHE PAM and CMS rules.'
+acronyms:
+- term: ADT
+  definition: Admission, discharge and transfer
+- term: EMTALA
+  definition: Emergency Medical Treatment and Labor Act
+- term: IHE PAM
+  definition: Integrating the Healthcare Enterprise Patient Administration Management profile
+- term: IMM
+  definition: Important Message from Medicare
+- term: MOON
+  definition: Medicare Outpatient Observation Notice
+tables:
+- name: stays
+  description: One row per stay.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: encounter_id
+    type: uuid
+    nullable: true
+  - name: status
+    type: text
+  - name: patient_class
+    type: text
+  - name: bed_id
+    type: uuid
+    nullable: true
+  - name: waiting_location_id
+    type: uuid
+    nullable: true
+  - name: details
+    type: jsonb
+    note: admission type, source, orders, practitioner, expected times, leave, pending transfer, discharge details, readmission, isolation
+  - name: admitted_at
+    type: timestamptz
+    nullable: true
+  - name: discharged_at
+    type: timestamptz
+    nullable: true
+  - name: observation_started_at
+    type: timestamptz
+    nullable: true
+  - name: notices
+    type: jsonb
+    default: '''[]'''
+  - name: revision
+    type: integer
+    default: '0'
+  indexes:
+  - name: one_open_stay
+    definition: UNIQUE (patient_id) WHERE status IN ('pending_admission', 'admitted')
+    note: BR-E2
+- name: beds
+  description: Bed board state; the beds themselves are defined by Organization.
+  columns:
+  - name: bed_id
+    type: uuid
+  - name: bed_status
+    type: text
+  - name: isolation_type
+    type: text
+    nullable: true
+  - name: occupant_stay_id
+    type: uuid
+    nullable: true
+  - name: reserved_for
+    type: uuid
+    nullable: true
+  - name: updated_at
+    type: timestamptz
+  constraints:
+  - name: one_occupant
+    definition: UNIQUE (occupant_stay_id) WHERE occupant_stay_id IS NOT NULL
+    note: one bed per stay
+technicalNotes:
+- id: TN-E1
+  title: Lock the bed, not just the stay
+  text: Assign beds with a conditional update on the bed row (status unoccupied and not reserved), so two concurrent assignments can't both succeed even when they touch different stays.
+- id: TN-E2
+  title: Count notice days in local time
+  text: Compute calendar-day deadlines in hospital_time_zone, using the IANA database, so an admission at 23:30 counts that day as day 0.
+---
+This module moves patients into, around and out of the hospital's beds. Each
+step is reported to Encounters, which keeps the clinical record of the stay.
+
+## Admitted doesn't mean in a bed
+
+A patient admitted at 2 a.m. may wait in the emergency department until
+morning. They're admitted at 2 a.m., with their real location, and listed as
+boarding until a bed is ready (BR-E4), so orders, staffing and the census see
+them.
+
+## A bed is clean before it's reused
+
+When a patient leaves, their bed goes to housekeeping until environmental
+services marks it ready (BR-E6). Transfers reserve the target bed first, so
+nobody else is placed there in between (BR-E7).
+
+## The law ties notices to the stay's clock
+
+Medicare inpatients get their rights notice within 2 days of admission and a
+follow-up within 2 days before discharge (BR-E12). Patients in observation get
+the MOON within 36 hours (BR-E13). This module knows the dates, so it lists
+what's due until someone records it as given.
