@@ -81,7 +81,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `content/docs/agentic/` | Agentic development: the copy-paste `AGENTS.md` section, how agents navigate and read specs, prompts, and Claude Code, Cursor and Copilot notes. |
 | `src/app/llms.txt/route.ts` | Agent entry point, following llmstxt.org: H1, blockquote, the agent guide as plain paragraphs (no headings before the first H2), then one H2 file list per top-level group (Docs, Agentic development, Core, each industry) and `## Optional` (reference implementation pages, `llms-full.txt`). Generated from the page tree. |
 | `src/app/openapi/[...slug]/route.ts`, `src/lib/spec-openapi.ts` | `/openapi/<module>.json`: OpenAPI 3.1 generated from each module's merged operations and errors. Inputs and outputs stay prose. Validate with `npx @redocly/cli lint --extends=minimal`. |
-| `.github/workflows/check.yml` | CI on every pull request and push to `main`: `check:specs --strict`, `types:check`, `build`, and Redocly lint of the generated OpenAPI files. |
+| `.github/workflows/check.yml` | CI on every pull request and push to `main`: `check:specs --strict`, `build` (which type-checks), and Redocly lint of the generated OpenAPI files. |
 | `.github/workflows/snapshot.yml` | Runs `snapshot:specs` after each successful Vercel production deployment (`repository_dispatch` `vercel.deployment.success`) and commits new snapshots. Can also be run by hand (`workflow_dispatch`). |
 | `contentLicense`, `attribution()` in `src/lib/shared.ts` | Content is CC BY-SA 4.0 (code is AGPL-3.0). Every markdown response ends with a TASL attribution line, `/llms.txt` states the license, and OpenAPI files carry `CC-BY-SA-4.0`. Never label content with the code license. |
 | `scripts/snapshot-specs.ts`, `src/app/versions/[...slug]/route.ts` | `pnpm snapshot:specs` saves each module's published merged markdown once per version to `content/versions/<module>/<version>.md`, served at `/versions/...` and listed in `/llms.txt` Optional. It only saves when production shows the source version. |
@@ -651,6 +651,8 @@ confusing. Every folder with an `index.mdx` lists `"index"` first in its
 **No sidebar folder starts open.** The user wants every folder collapsed by
 default, including the module and Functions. Fumadocs still opens whichever
 folder holds the current page.
+
+**`pnpm types:check` fails on GitHub's runners**: the standalone `fumadocs-mdx` command writes empty `.source` files there, so CI relies on `next build` for type checking. Locally it works.
 
 **Never run `pnpm build` while a dev server is running.** Both write to `.next`,
 and the build clobbers the dev chunks, producing misleading
