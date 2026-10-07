@@ -607,7 +607,9 @@ and content:
 - Visual reference: Supabase / Neon / Upstash - bento cards with live mini
   visuals, two-tone headings, tinted glow, small transitions, no shadows.
 - Home page data is read from the specs (`src/app/(home)/page.tsx`), so counts
-  and examples stay true as content changes.
+  and examples stay true as content changes. That includes the hero badge,
+  which names the richest domain's modules. Never list modules by hand in
+  copy; link the domain overview instead.
 
 ### Agents are grounded, not trusted
 
@@ -676,7 +678,7 @@ scaffold's own pages fail validation.
 - EHR is specified in the order of its overview's build list. Done as
   drafts: Encounters (`healthcare/ehr/encounter` 0.2.0, EHR-only), Patients (`healthcare/patient` 0.5.1, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.3.3) and Appointments
-  (`healthcare/appointment` 0.4.0, `healthcare/ehr/appointment` 0.5.0; `core/appointment` 0.10.0). Both
+  (`healthcare/appointment` 0.4.0, `healthcare/ehr/appointment` 0.5.0; `core/appointment` 0.10.0). All
   support the US and EU through the `jurisdiction` setting. Next: Admission, discharge and transfer.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import Link from 'next/link';
 import { ArrowRight, BookOpen, Bot, Sparkles } from 'lucide-react';
 import { INHERITED_FIELDS } from '@/lib/spec-inherit';
-import { getPageMarkdownUrl, getResolvedSpec, source } from '@/lib/source';
+import { getPageMarkdownUrl, getResolvedSpec, source, specViewOf } from '@/lib/source';
 import { specToMarkdown } from '@/lib/spec-markdown';
 import { docsRoute } from '@/lib/shared';
 import type { ModuleSpecData } from '@/components/module-spec';
@@ -235,9 +237,35 @@ function stats() {
   ];
 }
 
+
+/**
+ * The hero badge names the specified modules of the richest domain, in its
+ * sidebar order, so it stays true as modules are added.
+ */
+function heroBadge(): { text: string; url: string } | undefined {
+  const domainPages = specPages().filter((p) => dataOf(p).domain && !specViewOf(p));
+  const domains = [...new Set(domainPages.map((p) => `${dataOf(p).industry}/${dataOf(p).domain}`))];
+  const count = (d: string) => domainPages.filter((p) => `${dataOf(p).industry}/${dataOf(p).domain}` === d).length;
+  const top = domains.sort((a, b) => count(b) - count(a))[0];
+  if (!top) return undefined;
+  let order: string[] = [];
+  try {
+    order = JSON.parse(readFileSync(join(process.cwd(), 'content/docs', top, 'meta.json'), 'utf8')).pages ?? [];
+  } catch {}
+  const modules = domainPages
+    .filter((p) => `${dataOf(p).industry}/${dataOf(p).domain}` === top)
+    .sort((a, b) => order.indexOf(a.slugs.at(-1)!) - order.indexOf(b.slugs.at(-1)!))
+    .map((p) => p.data.title ?? '');
+  const overview = source.getPage(top.split('/'));
+  const domainName = overview?.data.title?.match(/\(([^)]+)\)/)?.[1] ?? overview?.data.title ?? top;
+  const list = modules.length > 1 ? `${modules.slice(0, -1).join(', ')} and ${modules.at(-1)}` : modules[0];
+  return { text: `${list} for the ${domainName}`, url: overview?.url ?? docsRoute };
+}
+
 // --- page ------------------------------------------------------------------
 
 export default function HomePage() {
+  const badge = heroBadge();
   return (
     <main className="relative isolate overflow-hidden">
       {/* Hero */}
@@ -247,17 +275,19 @@ export default function HomePage() {
         <Glow className="top-[-12rem] left-1/2 h-[32rem] w-[60rem] -translate-x-1/2" />
 
         <div className="mx-auto flex w-full max-w-fd-container flex-col items-center px-4 pt-20 pb-16 text-center sm:pt-28">
+          {badge && (
           <Link
-            href={`${docsRoute}/agentic#quickstart`}
+            href={badge.url}
             className="group inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-background/80 py-1 pr-3 pl-1 text-sm backdrop-blur transition-colors duration-150 hover:border-fd-primary/40"
           >
             <span className="inline-flex items-center gap-1 rounded-full bg-fd-primary/10 px-2 py-0.5 text-xs font-medium text-fd-primary">
               <Sparkles className="size-3" />
               New
             </span>
-            Patients and Appointments for hospital EHRs
+            {badge.text}
             <ArrowRight className="size-3.5 text-fd-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5" />
           </Link>
+          )}
 
           <h1 className="font-display mt-8 max-w-3xl text-5xl leading-[1.02] font-semibold tracking-tight text-balance sm:text-6xl">
             Your AI agent guesses domain rules.{' '}
