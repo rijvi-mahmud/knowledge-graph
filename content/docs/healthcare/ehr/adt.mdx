@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.2.0
+version: 0.2.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -308,6 +308,12 @@ businessRules:
 - id: BR-E25
   text: 'Where rooming_in is on, a newborn rooms in with their mother: the newborn''s stay shares the mother''s bed location without a bed of its own, and moves with her.'
   rationale: WHO recommends mothers and infants stay together 24 hours a day (Ten Steps to Successful Breastfeeding, Step 7). Requiring a separate bed would separate them on paper and block recording the baby's stay.
+- id: BR-E26
+  text: 'When the Patients module retracts a death, a stay discharged as expired because of it is restored: if its bed is still free or reserved, the discharge is cancelled and the stay is admitted in that bed again; either way stay.review_needed is emitted at once for a bed manager. Pending admissions cancelled because of the death are listed for review, so they can be planned again.'
+  rationale: A death recorded for the wrong patient must not leave a living patient discharged while still in their bed. Restoring the stay at once, and asking a person to confirm, protects their care.
+- id: BR-E27
+  text: Stays of a patient under legal hold are never erased or anonymised, even after the Patients module's retention ends.
+  rationale: The Patients module stops erasure during litigation, and the stay records are part of the record in question.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -493,6 +499,12 @@ edgeCases:
   covers:
   - BR-E5
   - AC-E34
+- id: EC-E15
+  situation: A death is recorded for the wrong Maria Garcia, who is still in bed 7, and retracted ten minutes later.
+  behaviour: Her stay is restored in bed 7 and a bed manager is asked to confirm at once.
+  covers:
+  - BR-E26
+  - AC-E36
 functionalRequirements:
 - id: FR-E1
   text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
@@ -833,6 +845,18 @@ acceptanceCriteria:
   then: it fails with STAY_BED_UNAVAILABLE
   verifies:
   - BR-E5
+- id: AC-E36
+  given: a stay discharged as expired because of a death, with its bed still housekeeping, and a pending admission cancelled for the same death
+  when: Patients retracts the death
+  then: the discharge is cancelled and the stay is admitted in the same bed, stay.discharge_cancelled and stay.review_needed are emitted, and the cancelled pending admission is listed for review
+  verifies:
+  - BR-E26
+- id: AC-E37
+  given: a patient under legal hold whose retention has ended
+  when: retention is applied
+  then: their stays are kept unchanged
+  verifies:
+  - BR-E27
 operations:
 - name: Request an admission
   actor: Clinician
@@ -1418,7 +1442,7 @@ dependencies:
   - 'Asks: may this person act for this patient, and the correction_deadline for this jurisdiction'
   - 'Gives: whether this patient has an active stay'
   - 'Gives: a death during a stay, with its time and the source hospital pronouncement'
-  - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.entered_in_error'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error and patient.legal_hold_changed'
 - service: encounter-service
   direction: downstream
   reason: keeps the clinical record of each stay
@@ -1666,9 +1690,10 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Article 9(2)(h) and 17(3)(c)
   obligation: Process and keep health data for care.
-  how: Retention follows the Patients module.
+  how: Retention follows the Patients module, and stays under legal hold are never erased.
   status: met
-  covered_by: []
+  covered_by:
+  - BR-E27
 - id: CMP-E16
   regulation: GDPR (EU) 2016/679
   provision: Article 32
@@ -1740,6 +1765,11 @@ compliance:
   covered_by:
   - BR-E24
 changelog:
+- version: 0.2.1
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - A retracted death restores the stay (BR-E26); legal holds stop erasure (BR-E27).
 - version: 0.2.0
   date: '2026-10-08'
   breaking: false
