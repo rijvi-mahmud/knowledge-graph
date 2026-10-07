@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.8.0
+version: 0.9.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -2735,6 +2735,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: this module''s part of a copy request'
+  - 'Gives: this module''s data for a single-patient electronic health information export (45 CFR 170.315(b)(10)); producing the export is Release of information''s concern'
   - Accounting of disclosures (45 CFR 164.528) is its concern
   - 'Receives: patient.corrected, to pass the correction to recipients (45 CFR 164.526(c)(3), GDPR Article 19)'
   - 'Receives: patient.disagreement_filed, to include with later disclosures (45 CFR 164.526(d)(5))'
@@ -2995,7 +2996,15 @@ references:
 - id: REF-H45
   title: 45 CFR 164.530(j), documentation and retention
   url: https://www.ecfr.gov/current/title-45/section-164.530
+- id: REF-H46
+  title: 45 CFR 170.315(b)(10), electronic health information export
+  url: https://www.ecfr.gov/current/title-45/section-170.315
 changelog:
+- version: 0.9.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Gives its data for the EHI export to Release of information.
 - version: 0.8.0
   date: '2026-10-08'
   breaking: false
@@ -3649,6 +3658,13 @@ compliance:
   status: met
   covered_by:
   - BR-H51
+- id: CMP-H32
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(b)(10)
+  obligation: Certified health IT lets a user export all of one patient's electronic health information at any time.
+  how: This module gives its data for the export; Release of information produces it.
+  status: other module
+  covered_by: []
 ---
 Every clinical module refers to a patient by id. This module keeps that id
 pointing at one person, and keeps who that person is accurate over the years.

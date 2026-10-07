@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.8.0
+version: 0.9.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -2424,6 +2424,8 @@ dependencies:
   reason: handles disclosures, copies and accounting of disclosures
   criticality: soft
   contract:
+  - 'Gives: this module''s part of a copy request (45 CFR 164.524, GDPR Article 15)'
+  - 'Gives: this module''s data for a single-patient electronic health information export (45 CFR 170.315(b)(10)); producing the export is Release of information''s concern'
   - 'Gives: encounter.correction_decided, with any statement of disagreement, to include with later disclosures (45 CFR 164.526(d)(5))'
   - Accounting of disclosures (45 CFR 164.528) and copies in other forms are Release of information's concern
 risks:
@@ -2529,7 +2531,15 @@ references:
 - id: REF-E19
   title: 45 CFR 164.530(j), documentation and retention
   url: https://www.ecfr.gov/current/title-45/section-164.530
+- id: REF-E20
+  title: 45 CFR 170.315(b)(10), electronic health information export
+  url: https://www.ecfr.gov/current/title-45/section-170.315
 changelog:
+- version: 0.9.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Gives its part of copy requests and the EHI export to Release of information.
 - version: 0.8.0
   date: '2026-10-08'
   breaking: false
@@ -3002,6 +3012,13 @@ compliance:
   status: met
   covered_by:
   - BR-E44
+- id: CMP-E23
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(b)(10)
+  obligation: Certified health IT lets a user export all of one patient's electronic health information at any time.
+  how: This module gives its data for the export; Release of information produces it.
+  status: other module
+  covered_by: []
 ---
 Every note, order and result in the record belongs to an encounter. This
 module keeps that record of each visit and stay: when it happened, who was

@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.8.0
+version: 0.9.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -99,7 +99,7 @@ dataModel:
   type: enum
   required: false
   description: Why needs_review was set.
-  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged | encounter_entered_in_error; set only with needs_review; codes: none standard, local to this specification'
+  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged | encounter_entered_in_error | patient_on_leave; set only with needs_review; codes: none standard, local to this specification'
 - name: equipment_ids
   type: string[]
   required: false
@@ -217,6 +217,10 @@ businessRules:
 - id: BR-E24
   text: 'The cancellation reasons this layer sets map to HL7 appointment cancellation reasons for exchange: left_without_being_seen to pat, because the patient left, and encounter_cancelled to other.'
   rationale: BR-H22 requires every service-set reason to map to one HL7 code. HL7 has no code for leaving before being seen, and an encounter cancelled before care has no single cause, so these are the closest codes that don't misstate who cancelled.
+- id: BR-E25
+  text: When a patient in a stay starts a leave of absence, each of their observation and inpatient appointments that starts before the expected return is flagged needs_review with review_reason patient_on_leave. If the leave is cancelled, the flag is removed from those appointments; a Scheduler decides the rest.
+  rationale: A patient on leave isn't on the ward. Without a review, staff go to an empty bed or record a no-show for a patient the hospital let go home for the weekend. IHE PAM sends leave (A21) and its cancel (A52).
+  variant: inpatient
 validations:
 - field: department_id
   rule: Organization confirms the department exists
@@ -453,6 +457,12 @@ edgeCases:
   covers:
   - BR-E22
   - AC-E31
+- id: EC-E25
+  situation: A patient goes home for the weekend with a wound check booked on Sunday.
+  behaviour: The wound check is flagged for a Scheduler, who moves it to Monday or cancels it.
+  covers:
+  - BR-E25
+  - AC-E34
 functionalRequirements:
 - id: FR-E1
   text: The service must book appointments into a department and, optionally, a room and equipment, all of which belong to the department.
@@ -731,6 +741,7 @@ dependencies:
   contract:
   - 'Asks: is this patient in an active stay, of which kind (inpatient or observation), and what is its encounter id?'
   - 'Receives: the stay ended, or changed from observation to inpatient with its encounter id'
+  - 'Receives: stay.leave_started, stay.leave_ended and stay.leave_cancelled, with the expected return'
   - Admitting, transferring and discharging patients is ADT's concern
 - service: authorization-service
   direction: downstream
@@ -1107,6 +1118,12 @@ acceptanceCriteria:
   verifies:
   - BR-E24
   - BR-E15
+- id: AC-E34
+  given: an inpatient with physiotherapy on Saturday and a scan on Tuesday, going on leave Friday until Monday
+  when: ADT reports the leave, and later a second leave is cancelled
+  then: the physiotherapy is flagged needs_review with patient_on_leave and the scan is not; for the cancelled leave the flag is removed
+  verifies:
+  - BR-E25
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit and no default, and it never applies to patients.
@@ -1172,6 +1189,11 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.9.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Appointments during a leave of absence are flagged for review (BR-E25).
 - version: 0.8.0
   date: '2026-10-08'
   breaking: false

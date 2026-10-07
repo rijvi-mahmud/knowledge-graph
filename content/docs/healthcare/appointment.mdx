@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.8.0
+version: 0.9.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -1129,7 +1129,15 @@ references:
 - id: REF-H29
   title: HL7 appointment-cancellation-reason code system
   url: https://terminology.hl7.org/CodeSystem-appointment-cancellation-reason.html
+- id: REF-H30
+  title: 45 CFR 170.315(b)(10), electronic health information export
+  url: https://www.ecfr.gov/current/title-45/section-170.315
 changelog:
+- version: 0.9.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Gives its part of copy requests and the EHI export to Release of information.
 - version: 0.8.0
   date: '2026-10-08'
   breaking: false
@@ -1242,6 +1250,14 @@ dependencies:
   - 'Gives: appointment.entered_in_error, so nothing is charged for an appointment recorded by mistake'
   - 'Gives: appointment.booked and appointment.rescheduled with the booking time and scheduled date, for good faith estimates in the United States (45 CFR 149.610)'
   - What to charge, and whether to charge at all, is Billing's concern
+- service: release-of-information-service
+  direction: downstream
+  reason: answers requests for the whole medical record
+  criticality: soft
+  contract:
+  - 'Gives: this module''s part of a copy request (45 CFR 164.524, GDPR Article 15)'
+  - 'Gives: this module''s data for a single-patient electronic health information export (45 CFR 170.315(b)(10)); producing the export is Release of information''s concern'
+  - Accounting of disclosures (45 CFR 164.528) is Release of information's concern
 compliance:
 - id: CMP-H1
   regulation: HIPAA Privacy Rule
@@ -1373,6 +1389,13 @@ compliance:
   provision: 45 CFR 164.528
   obligation: Give an accounting of disclosures.
   how: The Release of information module.
+  status: other module
+  covered_by: []
+- id: CMP-H17
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(b)(10)
+  obligation: Certified health IT lets a user export all of one patient's electronic health information at any time.
+  how: This module gives its data for the export; Release of information produces it.
   status: other module
   covered_by: []
 tables:
