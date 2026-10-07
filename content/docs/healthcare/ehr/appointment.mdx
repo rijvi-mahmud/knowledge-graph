@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.5.0
+version: 0.6.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -99,7 +99,7 @@ dataModel:
   type: enum
   required: false
   description: Why needs_review was set.
-  constraints: 'stay_ended | previous_cancelled | authorization_denied; set only with needs_review; codes: none standard, local to this specification'
+  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged; set only with needs_review; codes: none standard, local to this specification'
 - name: equipment_ids
   type: string[]
   required: false
@@ -117,6 +117,11 @@ dataModel:
   type: string
   required: false
   description: The Authorization module's reference for the request.
+- name: sensitivity
+  type: code[]
+  required: false
+  description: Kinds of information needing extra protection, from the department, such as SUD for a substance use disorder program.
+  constraints: 'set by the service from Organization; codes: HL7 v3 ActCode SUD, PSY, HIV, SDV'
 businessRules:
 - id: BR-4
   text: A patient cannot have two active appointments whose slots overlap. A practitioner can, only when their department has allow_overbooking on, and with no more than max_overbooked_per_slot appointments overlapping one slot. Slots are half-open.
@@ -168,6 +173,21 @@ businessRules:
 - id: BR-E14
   text: A virtual appointment has care_setting virtual, and an appointment with care_setting virtual has virtual_service.
   rationale: HL7 classes remote care as VR, not AMB. Keeping the setting and the connection details in step keeps encounters and statistics right.
+- id: BR-E15
+  text: When the encounter for a checked-in appointment starts, the appointment completes. When that encounter is discontinued or cancelled before care, the appointment is cancelled with the reason left_without_being_seen or encounter_cancelled.
+  rationale: FHIR marks an appointment fulfilled and linked to its encounter; once the encounter decides what happened, the appointment follows. Without this, checked-in appointments never close and worklists fill with old visits.
+- id: BR-E16
+  text: Undoing a check-in (the Clinical appointments rule) tells Encounters to cancel the planned encounter opened for it. It is refused once that encounter has started.
+  rationale: The wrong visit's encounter must not stay on record, and once care has started the check-in was real.
+- id: BR-E17
+  text: An appointment in a department Organization marks as sensitive, such as a substance use disorder program, carries that department's sensitivity codes. It is shown only to the department's staff and the patient, and its messages name neither the department nor the service.
+  rationale: Records that identify someone as a patient of a US federally assisted substance use disorder program are protected by 42 CFR Part 2, compliance date February 16, 2026. An appointment at that program identifies the patient as much as the encounter does.
+- id: BR-E18
+  text: After a patient merge, appointments that now overlap are flagged needs_review with review_reason patient_merged.
+  rationale: Duplicate records often hold the same visit booked twice. A Scheduler decides which booking is real.
+- id: BR-E19
+  text: In the EHR, charges for care come from encounters. Appointments give Billing only no-shows and the late cancellation flag, for missed-appointment fees where the jurisdiction allows them.
+  rationale: The encounter is what was done and is coded; the appointment is the plan. Charging from both would bill one visit twice.
 validations:
 - field: department_id
   rule: Organization confirms the department exists
@@ -193,7 +213,7 @@ validations:
 - field: previous_appointment_id
   rule: an existing appointment for the same patient
   error: APPOINTMENT_INVALID_PREVIOUS
-- field: encounter_id, overbooked, needs_review, review_reason, authorization_status, authorization_id, walk_in
+- field: encounter_id, overbooked, needs_review, review_reason, authorization_status, authorization_id, walk_in, sensitivity
   rule: set by the service, from Encounter, Authorization or its own rules, never sent by clients
   error: APPOINTMENT_READ_ONLY_FIELD
 workflows:
@@ -353,6 +373,36 @@ edgeCases:
   - BR-E14
   - AC-E18
   variant: outpatient
+- id: EC-E17
+  situation: A patient checks in, waits two hours and leaves before being seen.
+  behaviour: Encounters discontinues the encounter, and the appointment is cancelled with reason left_without_being_seen.
+  covers:
+  - BR-E15
+  - AC-E24
+- id: EC-E18
+  situation: A patient is checked in to the wrong clinic and the mistake is caught before they are seen.
+  behaviour: Undoing the check-in cancels the planned encounter; after the doctor has started, it fails with APPOINTMENT_ENCOUNTER_STARTED.
+  covers:
+  - BR-E16
+  - AC-E25
+- id: EC-E19
+  situation: A patient books at the hospital's addiction medicine clinic.
+  behaviour: The appointment carries SUD sensitivity, appears only to that clinic and the patient, and the reminder gives the address but not the clinic name.
+  covers:
+  - BR-E17
+  - AC-E26
+- id: EC-E20
+  situation: Duplicate records each held a 10:00 radiology appointment before the merge.
+  behaviour: Both are flagged needs_review with review_reason patient_merged.
+  covers:
+  - BR-E18
+  - AC-E27
+- id: EC-E21
+  situation: A clinic visit is completed.
+  behaviour: Billing charges from encounter.completed only; appointment.completed raises no charge.
+  covers:
+  - BR-E19
+  - AC-E28
 functionalRequirements:
 - id: FR-E1
   text: The service must book appointments into a department and, optionally, a room and equipment, all of which belong to the department.
@@ -556,6 +606,20 @@ operations:
   - APPOINTMENT_TERMINAL_STATE
   - APPOINTMENT_REVISION_CONFLICT
   - APPOINTMENT_NOT_FLAGGED
+- name: Undo check-in
+  actor: Front desk
+  description: Return a checked-in appointment to booked, before care starts, and cancel its planned encounter.
+  method: POST
+  path: /appointments/{id}/undo-check-in
+  success: 200
+  input: appointment id, revision, reason
+  output: the appointment, booked
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_NOT_CHECKED_IN
+  - APPOINTMENT_CARE_STARTED
+  - APPOINTMENT_ENCOUNTER_STARTED
+  - APPOINTMENT_REVISION_CONFLICT
 events:
 - name: appointment.encounter_linked
   description: The encounter opened at check-in was linked.
@@ -590,6 +654,7 @@ dependencies:
   - 'Asks: does this department exist?'
   - 'Asks: which rooms and equipment belong to this department?'
   - 'Asks: does this practitioner hold a role in this department on this date?'
+  - 'Asks: which sensitivity codes apply to this department?'
   - Staffing departments and managing rooms and equipment is Organization's concern
 - service: encounter-service
   direction: downstream
@@ -598,6 +663,8 @@ dependencies:
   contract:
   - 'Gives: appointment.checked_in'
   - 'Receives: the id of the encounter it opened'
+  - 'Receives: encounter.started, encounter.discontinued and encounter.cancelled for the encounter opened at check-in'
+  - 'Gives: appointment.check_in_undone, so the planned encounter is cancelled'
   - 'Gives: appointment.encounter_linked, confirming the link it recorded'
   - How encounters are documented is Encounter's concern
 - service: referral-service
@@ -641,6 +708,14 @@ dependencies:
   - 'Gives: appointment.patient_review_needed, so a Scheduler checks which patient the appointment belongs to'
   - 'Gives: appointment.review_needed, appointment.reviewed and appointment.authorization_updated, so the department worklist and its Schedulers see what needs a decision'
   - Delivery, channels and message templates are Notification's concern
+- service: billing-service
+  direction: downstream
+  reason: charges missed-appointment fees where allowed
+  criticality: soft
+  contract:
+  - 'Gives: appointment.no_show and the late cancellation flag on appointment.cancelled, for missed-appointment fees where the jurisdiction allows'
+  - Charges for care come from encounters (encounter.completed), never from appointment.completed
+  - What to charge, and whether to charge at all, is Billing's concern
 accessMatrix:
 - action: Register a walk-in
   roles:
@@ -708,6 +783,9 @@ errors:
 - code: APPOINTMENT_NOT_FLAGGED
   http: 409
   message: The appointment isn't flagged for review.
+- code: APPOINTMENT_ENCOUNTER_STARTED
+  http: 409
+  message: The encounter for this check-in has started, so the check-in can't be undone.
 settings:
 - name: allow_overbooking
   type: boolean per department
@@ -882,6 +960,36 @@ acceptanceCriteria:
   then: encounter_id is recorded and appointment.encounter_linked is emitted; a client sending encounter_id fails with APPOINTMENT_READ_ONLY_FIELD
   verifies:
   - BR-E2
+- id: AC-E24
+  given: a checked-in outpatient appointment
+  when: Encounters reports encounter.started, and for another, encounter.discontinued
+  then: the first appointment completes; the second is cancelled with reason left_without_being_seen
+  verifies:
+  - BR-E15
+- id: AC-E25
+  given: a checked-in appointment whose encounter has started
+  when: Undo check-in is sent
+  then: it fails with APPOINTMENT_ENCOUNTER_STARTED (409); before the start it succeeds and appointment.check_in_undone is emitted
+  verifies:
+  - BR-E16
+- id: AC-E26
+  given: Organization marks the addiction clinic SUD
+  when: an appointment is booked there
+  then: its sensitivity is SUD, other departments cannot list it, and its reminder names neither the clinic nor the service
+  verifies:
+  - BR-E17
+- id: AC-E27
+  given: duplicate records S and T each with a 10:00 appointment
+  when: S is merged into T
+  then: both appointments are flagged needs_review with review_reason patient_merged
+  verifies:
+  - BR-E18
+- id: AC-E28
+  given: a completed clinic visit and a no-show
+  when: Billing receives events
+  then: only the encounter.completed and appointment.no_show reach Billing as charges; appointment.completed does not
+  verifies:
+  - BR-E19
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit and no default, and it never applies to patients.
@@ -944,6 +1052,13 @@ references:
   title: CMS Interoperability and Prior Authorization Final Rule (CMS-0057-F), fact sheet
   url: https://www.cms.gov/newsroom/fact-sheets/cms-interoperability-and-prior-authorization-final-rule-cms-0057-f
 changelog:
+- version: 0.6.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - 'Appointments follow their encounter: complete when it starts, cancel when it is discontinued or cancelled (BR-E15); undoing a check-in cancels the planned encounter (BR-E16).'
+  - Appointments in sensitive departments carry the department's sensitivity codes, from Organization (BR-E17).
+  - Merged overlaps are flagged for review (BR-E18); charges come from encounters, not appointments (BR-E19).
 - version: 0.5.0
   date: '2026-10-07'
   breaking: false

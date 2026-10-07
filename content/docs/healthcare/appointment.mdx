@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.4.0
+version: 0.5.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -45,7 +45,7 @@ assumptions:
   text: 'The deployment has a lawful basis to process health data for care: treatment under HIPAA in the United States, and GDPR Article 9(2)(h) in the European Union.'
   rationale: Without it, no appointment data could be held at all. The legal basis is the deployment's responsibility, not this module's.
 - id: AS-H3
-  text: The jurisdiction setting and record_retention are set with legal advice before go-live.
+  text: The jurisdiction setting is set with legal advice before go-live. Record retention is the Patients module's setting.
   rationale: Retention and erasure rules differ by US state and EU member state. Guessing them risks both unlawful deletion and unlawful retention.
 glossary:
 - term: Active appointment
@@ -147,7 +147,7 @@ businessRules:
   text: Check-in is allowed from check_in_window before the start until the end.
   rationale: Checking in much earlier would mark someone as present who has not arrived for this appointment.
 - id: BR-11
-  text: A request to erase a patient's appointment data is refused while record_retention applies, because the appointment and its history are part of the medical record. When retention ends, personal fields are erased as the core Appointment specification describes.
+  text: A request to erase a patient's appointment data is refused while the Patients module's record retention for the patient applies, because the appointment and its history are part of the medical record. When retention ends, personal fields are erased as the core Appointment specification describes.
   rationale: HIPAA gives no right to erasure, and US hospitals must keep records for at least 5 years (42 CFR 482.24(b)(1)), longer in many states. In the EU, GDPR Article 17(3)(c) lets health data be kept for care under Article 9(2)(h). Erasing on request would break the record.
 - id: BR-H11
   text: When a patient needs a disability accommodation, such as a sign-language interpreter or an accessible room, the appointment records it so it can be arranged at no cost to the patient.
@@ -165,14 +165,20 @@ businessRules:
   text: reason and service_type are coded with the configured code systems, and a code must be valid in the release in effect on the appointment date.
   rationale: 'HIPAA adopts ICD-10-CM for diagnoses and HCPCS with CPT-4 for services (45 CFR 162.1002). In Europe, coding is set nationally: WHO''s ICD-11 has been the global standard since 1 January 2022, but countries are still moving from ICD-10. Codes are revised over time, so a code is checked against the release in force on the day.'
 - id: BR-H16
-  text: 'When the Patients module merges two patient records, every appointment of the retired record is moved to the record that remains: the patient participant changes, the appointment keeps its id, and the change is recorded in its history.'
-  rationale: After a merge, the retired record is never used again. An appointment left on it would disappear from the patient's schedule and from check-in.
+  text: 'When the Patients module merges two patient records, every appointment of the retired record is moved to the record that remains: the patient participant changes, the appointment keeps its id, and the change is recorded in its history. The overlap rule (BR-4) is not applied to the move: appointments that now overlap are kept, and appointment.patient_review_needed is emitted for each so a Scheduler decides.'
+  rationale: After a merge, the retired record is never used again. An appointment left on it would disappear from the patient's schedule and from check-in. Duplicate records often hold the same visit booked twice; refusing the merge would keep the duplicate, and silently cancelling one would lose a real booking.
 - id: BR-H17
   text: When a patient dies, their appointments that have not started are cancelled with the reason patient_deceased, and no message about them is sent to the patient. If the death is retracted, the cancelled appointments are listed for a Scheduler to rebook.
   rationale: Reminders and appointment letters to a person who has died distress their family. A death recorded in error is corrected by a person, so rebooking is a person's decision too.
 - id: BR-H18
   text: When a merge is undone, appointments moved by it return to the restored record. Appointments booked on the remaining record since the merge stay there, and appointment.patient_review_needed is emitted for each so a Scheduler checks whose they are.
   rationale: Only the appointments the merge moved are known to belong to the restored record. Those booked since could belong to either person, so a person checks.
+- id: BR-H19
+  text: When the Patients module marks a patient entered in error, their appointments that have not started are cancelled with the reason patient_entered_in_error, and no message is sent.
+  rationale: The record was created by mistake, so there is nobody to remind. Keeping the bookings holds slots other patients need.
+- id: BR-H20
+  text: A checked-in appointment can return to booked, by undoing the check-in, until care has started. Undoing it emits appointment.check_in_undone.
+  rationale: Checking a patient in to the wrong appointment is a common front-desk mistake. Without a way back, the right appointment can't be checked in and the wrong visit stays on record.
 validations:
 - field: participants
   rule: at least one participant with the role patient and one with the role practitioner
@@ -274,6 +280,10 @@ stateMachine:
     to: completed
     trigger: correct_attendance
     guard: actor is a Scheduler
+  - from: checked_in
+    to: booked
+    trigger: undo check-in
+    guard: care has not started, revision matches
 workflows:
 - name: Check in
   trigger: The patient arrives
@@ -281,6 +291,7 @@ workflows:
   steps:
   - Find the appointment
   - Verify the patient with two identifiers, such as name and date of birth
+  - Ask the patient to confirm their details, and record it in the Patients module
   - Record checked_in_at and identity_verified_with, set status to checked_in and increase revision
   - Emit appointment.checked_in
   - Report care to the Patients module
@@ -309,6 +320,14 @@ workflows:
   - Cancel each with the reason patient_deceased, without messaging the patient
   - Emit appointment.cancelled for each
   outcome: No one is booked or reminded after their death.
+- name: Follow a patient entered in error
+  trigger: Patients emits patient.entered_in_error
+  actor: System
+  steps:
+  - Find the patient's appointments that have not started
+  - Cancel each with the reason patient_entered_in_error, without messaging anyone
+  - Emit appointment.cancelled for each
+  outcome: No slot is held for a record that never existed.
 edgeCases:
 - id: EC-H1
   situation: Two patients with the same name arrive for appointments at the same time.
@@ -330,7 +349,7 @@ edgeCases:
   - AC-H4
 - id: EC-H4
   situation: A patient asks for their appointment history to be erased two years after a visit to a US hospital.
-  behaviour: Refused with APPOINTMENT_RETENTION_REQUIRED, because record_retention has not ended.
+  behaviour: Refused with APPOINTMENT_RETENTION_REQUIRED, because the Patients module's record retention has not ended.
   covers:
   - BR-11
   - AC-H5
@@ -411,6 +430,24 @@ edgeCases:
   covers:
   - BR-H18
   - AC-H23
+- id: EC-H18
+  situation: The front desk checks Ana into her 10:00 appointment, then sees it was Ana Lopes, not Ana Lopez.
+  behaviour: The check-in is undone before care starts; the appointment is booked again and appointment.check_in_undone is emitted.
+  covers:
+  - BR-H20
+  - AC-H27
+- id: EC-H19
+  situation: Two duplicate records each hold a 10:00 cardiology appointment, and they are merged.
+  behaviour: Both appointments move to the remaining record and appointment.patient_review_needed is emitted for each.
+  covers:
+  - BR-H16
+  - AC-H28
+- id: EC-H20
+  situation: A patient record created by mistake has an appointment next week.
+  behaviour: When Patients marks it entered in error, the appointment is cancelled with reason patient_entered_in_error and no message is sent.
+  covers:
+  - BR-H19
+  - AC-H29
 functionalRequirements:
 - id: FR-H1
   text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
@@ -482,9 +519,6 @@ settings:
 - name: jurisdiction
   type: us | eu
   description: Which legal regime applies. Decides defaults for retention and communication rules. Required.
-- name: record_retention
-  type: duration
-  description: How long appointment data is kept as part of the medical record. At least 5 years for US hospitals (42 CFR 482.24(b)(1)); set per state or EU member state law. Required.
 - name: check_in_window
   type: duration
   description: How long before the start a patient can check in. No standard sets this, so each department chooses it. Required.
@@ -525,7 +559,7 @@ acceptanceCriteria:
   - BR-H4
   - FR-H4
 - id: AC-H5
-  given: jurisdiction us, a record_retention of 5 years, and an appointment that ended 2 years ago
+  given: jurisdiction us, a patient whose record retention in the Patients module is 5 years, and an appointment that ended 2 years ago
   when: the patient's appointment data is asked to be erased
   then: the request fails with APPOINTMENT_RETENTION_REQUIRED and nothing changes
   verifies:
@@ -670,6 +704,30 @@ acceptanceCriteria:
   verifies:
   - BR-H9
   - BR-H6
+- id: AC-H27
+  given: a checked-in appointment where care has not started, and one where it has
+  when: Undo check-in is sent for each
+  then: the first returns to booked and appointment.check_in_undone is emitted; the second fails with APPOINTMENT_CARE_STARTED (409); a booked appointment fails with APPOINTMENT_NOT_CHECKED_IN (409)
+  verifies:
+  - BR-H20
+- id: AC-H28
+  given: duplicate records S and T each with an appointment at 10:00
+  when: S is merged into T
+  then: both appointments are on T and appointment.patient_review_needed is emitted for each
+  verifies:
+  - BR-H16
+- id: AC-H29
+  given: a patient with an appointment next week
+  when: Patients marks the patient entered in error
+  then: the appointment is cancelled with reason patient_entered_in_error and no message is sent
+  verifies:
+  - BR-H19
+- id: AC-H30
+  given: a returning patient at check-in
+  when: they confirm their details
+  then: the confirmation is recorded in the Patients module before appointment.checked_in is emitted
+  verifies:
+  - BR-H2
 operations:
 - name: Book an appointment
   actor: Requester
@@ -703,7 +761,7 @@ operations:
   - APPOINTMENT_INVALID_REFERENCE
 - name: Erase a participant's personal data
   actor: Scheduler
-  description: Erase personal fields as BR-11 describes. Refused while record_retention applies.
+  description: Erase personal fields as BR-11 describes. Refused while the Patients module's record retention for the patient applies.
   method: POST
   path: /appointment-erasures
   success: 202
@@ -767,6 +825,19 @@ operations:
   output: accepted; the copy is delivered when ready
   errors:
   - APPOINTMENT_NOT_AUTHORISED_FOR_PATIENT
+- name: Undo check-in
+  actor: Front desk
+  description: Return a checked-in appointment to booked, before care starts.
+  method: POST
+  path: /appointments/{id}/undo-check-in
+  success: 200
+  input: appointment id, revision, reason
+  output: the appointment, booked
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_NOT_CHECKED_IN
+  - APPOINTMENT_CARE_STARTED
+  - APPOINTMENT_REVISION_CONFLICT
 events:
 - name: appointment.checked_in
   description: The patient arrived and was verified.
@@ -782,6 +853,11 @@ events:
   - revision
 - name: appointment.patient_review_needed
   description: After a merge was undone, a Scheduler must check which patient this appointment belongs to.
+  payload:
+  - appointment_id
+  - revision
+- name: appointment.check_in_undone
+  description: A check-in was undone; anything opened for it should be cancelled.
   payload:
   - appointment_id
   - revision
@@ -820,6 +896,13 @@ accessMatrix:
     Privacy officer: none
   permission: appointment.read
   note: A personal representative can request for the patient they represent (BR-H5).
+- action: Undo check-in
+  roles:
+    Patient: none
+    Practitioner: none
+    Front desk: any
+    Privacy officer: none
+  permission: appointment.check_in
 errors:
 - code: APPOINTMENT_PATIENT_AND_PRACTITIONER_REQUIRED
   http: 422
@@ -835,7 +918,7 @@ errors:
   message: Priority must be from 1 to 9.
 - code: APPOINTMENT_RETENTION_REQUIRED
   http: 409
-  message: This data is part of the medical record and must be kept until record_retention ends.
+  message: This data is part of the medical record and must be kept while the patient's record retention applies.
 - code: APPOINTMENT_INVALID_CODE
   http: 422
   message: The code is not valid in the configured code system on the appointment date.
@@ -848,23 +931,29 @@ errors:
 - code: APPOINTMENT_INVALID_VIRTUAL_SERVICE
   http: 422
   message: Connection details need an https URL.
+- code: APPOINTMENT_NOT_CHECKED_IN
+  http: 409
+  message: Only a checked-in appointment's check-in can be undone.
+- code: APPOINTMENT_CARE_STARTED
+  http: 409
+  message: Care has started, so the check-in can't be undone.
 personalData:
 - field: reason
   category: health data
   purpose: Why the patient is being seen
-  retention: record_retention
+  retention: the Patients module's record retention for the patient
 - field: service_type
   category: health data
   purpose: The service to be performed, which can reveal a condition
-  retention: record_retention
+  retention: the Patients module's record retention for the patient
 - field: patient_instruction
   category: health data
   purpose: What the patient must do before the visit
-  retention: record_retention
+  retention: the Patients module's record retention for the patient
 - field: interpreter_language
   category: personal
   purpose: Arranging an interpreter
-  retention: record_retention
+  retention: the Patients module's record retention for the patient
 - field: virtual_service
   category: personal
   purpose: Joining a virtual appointment
@@ -872,15 +961,15 @@ personalData:
 - field: access log
   category: personal
   purpose: Showing who accessed health data
-  retention: record_retention
+  retention: the Patients module's record retention for the patient
 - field: accommodation_needs
   category: health data
   purpose: Arranging accommodations; can reveal a disability
-  retention: record_retention
+  retention: the Patients module's record retention for the patient
 - field: patient_location
   category: personal
   purpose: Checking where a virtual appointment may lawfully be held
-  retention: record_retention
+  retention: the Patients module's record retention for the patient
 risks:
 - id: RISK-H1
   risk: A reminder reveals a sensitive condition to someone else.
@@ -993,6 +1082,14 @@ references:
   url: https://medicaid.ncdhhs.gov/providers-billing-beneficiaries/open
   note: 'For the Billing module: quotes the CMS policy that Medicaid beneficiaries may not be billed for missed appointments.'
 changelog:
+- version: 0.5.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Undo a check-in before care starts (BR-H20), and cancel appointments of a patient entered in error (BR-H19).
+  - Merged appointments that overlap are kept and flagged for review (BR-H16).
+  - Retention follows the Patients module's record retention; the record_retention setting is removed.
+  - Check-in asks the patient to confirm their details and records it in the Patients module.
 - version: 0.4.0
   date: '2026-10-07'
   breaking: false
@@ -1046,8 +1143,10 @@ dependencies:
   - 'Asks: where to contact the patient, honouring confidential communications'
   - 'Asks: the patient''s preferred language and whether they need an interpreter'
   - 'Asks: may this person act for this patient on this appointment? (Covers minors, guardians, proxies and confidential care.)'
-  - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.death_retracted'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted and patient.entered_in_error'
   - 'Gives: care reported at check-in'
+  - 'Asks: does record retention or a legal hold still apply to this patient?'
+  - 'Gives: details confirmed at check-in, recorded with the Patients module''s Confirm details'
   - Registering patients and deciding who may act for them is the Patients module's concern
 - service: terminology-service
   direction: upstream
@@ -1103,5 +1202,5 @@ every view and change is logged (BR-H7).
 
 ## The United States and Europe, from one setting
 
-The `jurisdiction` setting chooses the legal regime, and `record_retention` is
+The `jurisdiction` setting chooses the legal regime, and the Patients module's record retention is
 set per state or member state, with legal advice (AS-H3).

@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.2.0
+version: 0.3.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -304,7 +304,7 @@ businessRules:
   text: 'Each diagnosis has a role and a rank, and a code valid in diagnosis_code_system on the right date: the discharge date for inpatient encounters, the encounter date otherwise. A completed encounter has at least one discharge or billing diagnosis.'
   rationale: CMS applies each fiscal year's ICD-10-CM codes to discharges and encounters from October 1 (the FY 2027 files to those from October 1, 2026). A code valid at admission may be retired by discharge.
 - id: BR-E14
-  text: An encounter at a department listed in sensitive_departments carries that department's sensitivity codes, such as SUD for a substance use disorder program. Data attached to it carries the same codes, and disclosure follows the Consent module.
+  text: An encounter carries the sensitivity codes Organization gives for its department, such as SUD for a substance use disorder program. Data attached to it carries the same codes, and disclosure follows the Consent module.
   rationale: Records from US federally assisted substance use disorder programs have extra protection under 42 CFR Part 2, revised with a compliance date of February 16, 2026. Marking the encounter is what lets every module apply it.
 - id: BR-E15
   text: A virtual encounter records its connection details and where the patient is.
@@ -326,7 +326,7 @@ businessRules:
   text: Every change sends the revision it read, and a stale revision is rejected.
   rationale: Registrars, clinicians and HIM staff change the same encounter; without this, one silently undoes another.
 - id: BR-E21
-  text: A patient has at most one inpatient or observation encounter that is in progress or on hold.
+  text: A patient has at most one inpatient or observation encounter that is in progress or on hold. A patient merge can break this; BR-E29 handles it.
   rationale: A patient is in one hospital stay at a time. Two open stays send orders, results and charges to the wrong one.
   variant: inpatient
 - id: BR-E22
@@ -350,6 +350,15 @@ businessRules:
   text: A re-admission is marked on the admission when Admission, discharge and transfer reports it.
   rationale: Readmissions are tracked for quality and payment. FHIR records it as admission.reAdmission.
   variant: inpatient
+- id: BR-E28
+  text: When the Patients module records a death, the patient's planned encounters are cancelled with the reason patient_deceased. Encounters in progress are discharged by Admission, discharge and transfer or a clinician.
+  rationale: A planned stay or visit for someone who has died would stay on lists and schedules. Encounters in progress need a person to record what happened.
+- id: BR-E29
+  text: After a patient merge, if the remaining patient has two inpatient or observation encounters in progress or on hold, both are kept and encounter.patient_review_needed is emitted for each, so an HIM specialist resolves them.
+  rationale: Duplicate records can each hold an open stay for the same admission. Refusing the merge keeps the duplicate; keeping both silently breaks the one-stay rule (BR-E21).
+- id: BR-E30
+  text: When Appointments undoes a check-in, the planned encounter opened for it is cancelled.
+  rationale: The check-in was a mistake, so the visit it opened never happened.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -650,6 +659,24 @@ edgeCases:
   covers:
   - BR-E26
   - AC-E37
+- id: EC-E22
+  situation: A patient with a pre-admission for next week dies today.
+  behaviour: The planned encounter is cancelled with reason patient_deceased.
+  covers:
+  - BR-E28
+  - AC-E40
+- id: EC-E23
+  situation: Two duplicate records each have a stay in progress, and they are merged.
+  behaviour: Both stays move and encounter.patient_review_needed is emitted for each; BR-E21 is not applied to the move.
+  covers:
+  - BR-E29
+  - AC-E41
+- id: EC-E24
+  situation: The front desk undoes a wrong check-in.
+  behaviour: The planned encounter is cancelled and encounter.cancelled is emitted.
+  covers:
+  - BR-E30
+  - AC-E42
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -745,10 +772,6 @@ settings:
 - name: departure_reasons
   type: code list
   description: Reasons an encounter is discontinued, such as left without being seen or left against advice. Required.
-- name: sensitive_departments
-  type: map of department to sensitivity codes
-  default: '{}'
-  description: Departments whose encounters carry sensitivity codes, such as a Part 2 substance use disorder program with SUD (BR-E14).
 - name: observation_notice_deadline
   type: duration
   description: 'How long after observation starts the US notice must be given: 36 hours (42 CFR 489.20(y)). Unset outside the United States.'
@@ -869,7 +892,7 @@ acceptanceCriteria:
   - BR-E11
   variant: inpatient
 - id: AC-E14
-  given: sensitive_departments maps the addiction clinic to SUD
+  given: Organization marks the addiction clinic SUD
   when: an encounter opens there
   then: its sensitivity is SUD and modules attaching data receive it
   verifies:
@@ -1033,6 +1056,24 @@ acceptanceCriteria:
   then: it fails with ENCOUNTER_INVALID_REFERENCE and HTTP 422
   verifies:
   - FR-E3
+- id: AC-E40
+  given: a patient with a planned encounter and one in progress
+  when: Patients reports their death
+  then: the planned one is cancelled with reason patient_deceased; the one in progress is unchanged
+  verifies:
+  - BR-E28
+- id: AC-E41
+  given: duplicate records each with a stay in progress
+  when: they are merged
+  then: both stays are on the remaining patient and encounter.patient_review_needed is emitted for each
+  verifies:
+  - BR-E29
+- id: AC-E42
+  given: a planned encounter opened at check-in
+  when: Appointments reports appointment.check_in_undone
+  then: the encounter is cancelled and encounter.cancelled is emitted
+  verifies:
+  - BR-E30
 operations:
 - name: Open an encounter
   actor: System
@@ -1688,6 +1729,8 @@ dependencies:
   criticality: soft
   contract:
   - 'Receives: appointment.checked_in'
+  - 'Receives: appointment.check_in_undone'
+  - 'Gives: encounter.started, encounter.discontinued and encounter.cancelled, so the appointment follows its encounter'
   - 'Gives: the id of the encounter it opened'
   - 'Gives: encounter.created, so Appointments links the encounter'
   - Booking and the appointment lifecycle are Appointments' concern
@@ -1717,6 +1760,7 @@ dependencies:
   contract:
   - 'Asks: does this department or location exist?'
   - 'Asks: does this practitioner hold a role in this department on this date?'
+  - 'Asks: which sensitivity codes apply to this department?'
 - service: terminology-service
   direction: upstream
   reason: validates diagnosis and reason codes
@@ -1847,6 +1891,12 @@ references:
   title: HL7 FHIR R5, Patient (mother and newborn relationships)
   url: https://hl7.org/fhir/R5/patient.html
 changelog:
+- version: 0.3.0
+  date: '2026-10-08'
+  breaking: true
+  changes:
+  - Sensitivity comes from Organization for the department; the sensitive_departments setting is removed (breaking for deployments that set it).
+  - Planned encounters are cancelled when the patient dies (BR-E28); merged stays are kept and flagged (BR-E29); an undone check-in cancels its encounter (BR-E30).
 - version: 0.2.0
   date: '2026-10-07'
   breaking: false

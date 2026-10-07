@@ -333,6 +333,12 @@ every module and layer, and for every "is there any gap?" request.
      permission matrix row, events no contract consumes, coded fields with no
      `codes:`, and error codes or events no acceptance criterion tests (each
      error needs one naming its code and HTTP status).
+   - **Cross-module business logic**: walk every lifecycle event through each
+     module that receives it (merge, unmerge, death, entered in error,
+     check-in, discharge, legal hold) and check the result still obeys each
+     module's own rules. Check that linked records (an appointment and its
+     encounter) can't drift apart, that one fact has one owner (retention,
+     sensitivity, charges), and that every mistake can be undone.
    - **Domain**: compare against the SRS checklist above and the sources.
      For healthcare, the ONC SAFER Guides are the best checklist of what
      hospitals get wrong.
@@ -676,9 +682,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Encounters (`healthcare/ehr/encounter` 0.2.0, EHR-only), Patients (`healthcare/patient` 0.5.1, which has no core page by the
+  drafts: Encounters (`healthcare/ehr/encounter` 0.3.0, EHR-only), Patients (`healthcare/patient` 0.6.0, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.3.3) and Appointments
-  (`healthcare/appointment` 0.4.0, `healthcare/ehr/appointment` 0.5.0; `core/appointment` 0.10.0). All
+  (`healthcare/appointment` 0.5.0, `healthcare/ehr/appointment` 0.6.0; `core/appointment` 0.10.0). All
   support the US and EU through the `jurisdiction` setting. Next: Admission, discharge and transfer.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

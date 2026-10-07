@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.5.1
+version: 0.6.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -453,6 +453,9 @@ businessRules:
 - id: BR-H49
   text: In the European Union, from 26 March 2029, the Exchange module gives the patient's personal details to the national electronic health data access service whenever they change, so the patient can see them at once.
   rationale: The EHDS gives patients access to their patient summary, which includes personal details and contact information, immediately after it is registered, through the access services (Articles 3 and 4, Annex I), applying to patient summaries from 26 March 2029 (Article 105).
+- id: BR-H50
+  text: A record is not inactivated automatically while the patient has an appointment that has not started or an encounter that is open.
+  rationale: inactive_after looks back at care. A patient booked for next month, or in hospital now, is in active use whatever their history.
 validations:
 - field: names
   rule: at least one usual, official or temp name; a name may have only a given name or only a family name
@@ -971,6 +974,12 @@ edgeCases:
   covers:
   - BR-H49
   - AC-H58
+- id: EC-H50
+  situation: A patient not seen for 11 years is booked for next month.
+  behaviour: The record is not inactivated.
+  covers:
+  - BR-H50
+  - AC-H77
 functionalRequirements:
 - id: FR-H1
   text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
@@ -1720,6 +1729,13 @@ acceptanceCriteria:
   then: patient.legal_hold_changed is emitted each time with the hold state
   verifies:
   - BR-H24
+- id: AC-H77
+  given: inactive_after of 10 years, and a patient with no care for 11 years but an appointment next month
+  when: the inactivation job runs
+  then: the record stays active
+  verifies:
+  - BR-H50
+  - FR-H15
 operations:
 - name: Search patients
   actor: Registrar
@@ -2652,6 +2668,8 @@ dependencies:
   - 'Gives: the patient''s preferred language and whether they need an interpreter'
   - 'Gives: whether a person may act for the patient for an appointment'
   - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted and patient.entered_in_error'
+  - 'Asks: does this patient have an appointment that has not started?'
+  - 'Receives: details confirmed at check-in'
   - 'Receives: care reported at check-in'
 - service: encounter-service
   direction: downstream
@@ -2660,6 +2678,7 @@ dependencies:
   contract:
   - 'Gives: patient.merged, patient.unmerged and patient.deceased'
   - 'Receives: care reported when an encounter starts'
+  - 'Asks: does this patient have an open encounter?'
   - Moving clinical data between records after a merge is Encounter's concern
 - service: adt-service
   direction: upstream
@@ -2949,6 +2968,12 @@ references:
   title: 'ONC FAQ: when a delay in fulfilling a request for EHI is an interference'
   url: https://healthit.gov/faq/when-would-delay-fulfilling-request-access-exchange-or-use-ehi-be-considered-interference-under/
 changelog:
+- version: 0.6.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Records with upcoming appointments or open encounters are not inactivated (BR-H50).
+  - Appointments report details confirmed at check-in.
 - version: 0.5.1
   date: '2026-10-07'
   breaking: false
