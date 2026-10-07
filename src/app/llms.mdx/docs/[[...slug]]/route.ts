@@ -1,4 +1,5 @@
 import { getLLMText, getPageMarkdownUrl, source } from '@/lib/source';
+import { siteUrl } from '@/lib/shared';
 import { notFound } from 'next/navigation';
 
 export const revalidate = false;
@@ -10,7 +11,10 @@ export async function GET(_req: Request, { params }: RouteContext<'/llms.mdx/doc
 
   return new Response(await getLLMText(page), {
     headers: {
-      'Content-Type': 'text/markdown',
+      // RFC 7763 requires the charset parameter for text/markdown.
+      'Content-Type': 'text/markdown; charset=utf-8',
+      // The HTML page is canonical for search engines; agents fetch this copy directly.
+      Link: `<${siteUrl}${page.url}>; rel="canonical"`,
     },
   });
 }

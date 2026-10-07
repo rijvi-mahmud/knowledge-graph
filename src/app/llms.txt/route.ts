@@ -1,6 +1,8 @@
 import { source } from '@/lib/source';
 import { appName, siteUrl } from '@/lib/shared';
 import { llms } from 'fumadocs-core/source';
+import { modulePages } from '@/lib/spec-meta';
+import { listSnapshots } from '@/lib/spec-versions';
 
 export const revalidate = false;
 
@@ -26,7 +28,8 @@ const guide = `# ${appName}
 - Use only pages on the project's path: /docs/core/, /docs/<industry>/ and /docs/<industry>/<domain>/. Never use a page from another industry or domain, even for a module with the same name: each domain specifies a module from its own purpose. Every module page starts with "Module identity" and its layer; check it matches the project before using the page. If a web search led you to a page that doesn't match, come back here.
 - Example: a hospital EHR (healthcare > ehr) uses /docs/healthcare/ehr/patient for patient registration, never another domain's patient page. A lending app (finance > lending, illustrative) would use /docs/finance/lending/appointment, then /docs/finance/appointment, then /docs/core/appointment, never /docs/healthcare/ pages.
 - For each domain concept a task touches, use the deepest page on the project's path: the domain page, otherwise the industry page, otherwise the module's core page. A deeper page already includes everything above it. Some modules start at the industry level and have no core page.
-- Pages below are grouped under one heading per industry, plus Core. Read Core and your own industry's section only. Optional lists non-normative pages and the all-in-one file, which agents can skip.
+- Pages below are grouped under one heading per industry, plus Core. Read Core and your own industry's section only. Optional lists non-normative pages, OpenAPI files, earlier versions of each spec and the all-in-one file, which agents can skip unless a task needs them.
+- To compare with the version your code cites, fetch /versions/<module path>/<version>.md when Optional lists it, and the module's Version history section.
 - Industry overview pages list the domains in that industry and which modules are specified yet.
 - A module page's markdown is its complete spec, often over 100 KB. Fetch only the sections a task needs. The pages listed under a module are its sections (such as functions/business-rules, functions/validations, data/data-model, interfaces/operations, interfaces/errors, interfaces/dependencies, verification/acceptance) and its variants (kinds of the module that differ in a few items).
 - A module's Dependencies page lists contracts: what it asks of other modules and gives them. If the other module has a page on the project's path, fetch its side of the contract. If not, build against the contract text alone and don't invent that module's rules.
@@ -92,6 +95,13 @@ function toSections(tree: string): string {
   }
 
   optional.push(`- [All pages in one file](${siteUrl}/llms-full.txt): Every page. Too large to keep in context; use it for research only.`);
+  for (const p of modulePages()) {
+    optional.push(`- [OpenAPI: ${p.slugs.join('/')}](${siteUrl}/openapi/${p.slugs.join('/')}.json): Endpoints, success statuses and error codes generated from the spec. The spec page stays normative.`);
+  }
+  for (const rel of listSnapshots().sort()) {
+    const [path, version] = [rel.split('/').slice(0, -1).join('/'), rel.split('/').at(-1)!.replace(/\.md$/, '')];
+    optional.push(`- [${path} version ${version}](${siteUrl}/versions/${rel}): The merged spec as published at that version, for comparing with what your code cites.`);
+  }
   return [
     ['## Docs', ...docs].join('\n'),
     ...sections.map((g) => [`## ${g.title}`, ...g.lines].join('\n')),

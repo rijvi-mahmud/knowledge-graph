@@ -10,7 +10,8 @@
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "lint": "oxlint",
-    "check:specs": "tsx scripts/check-specs.ts"
+    "check:specs": "tsx scripts/check-specs.ts",
+    "snapshot:specs": "tsx scripts/snapshot-specs.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.37",

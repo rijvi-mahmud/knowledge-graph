@@ -80,6 +80,8 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `src/lib/spec-sections.ts` | Reference sections and their groups (one sub-page each), in reading order. Shared by both renderers and the source loader. |
 | `content/docs/agentic/` | Agentic development: the copy-paste `AGENTS.md` section, how agents navigate and read specs, prompts, and Claude Code, Cursor and Copilot notes. |
 | `src/app/llms.txt/route.ts` | Agent entry point, following llmstxt.org: H1, blockquote, the agent guide as plain paragraphs (no headings before the first H2), then one H2 file list per top-level group (Docs, Agentic development, Core, each industry) and `## Optional` (reference implementation pages, `llms-full.txt`). Generated from the page tree. |
+| `src/app/openapi/[...slug]/route.ts`, `src/lib/spec-openapi.ts` | `/openapi/<module>.json`: OpenAPI 3.1 generated from each module's merged operations and errors. Inputs and outputs stay prose. Validate with `npx @redocly/cli lint --extends=minimal`. |
+| `scripts/snapshot-specs.ts`, `src/app/versions/[...slug]/route.ts` | `pnpm snapshot:specs` saves each module's published merged markdown once per version to `content/versions/<module>/<version>.md`, served at `/versions/...` and listed in `/llms.txt` Optional. It only saves when production shows the source version. |
 | `src/app/sitemap.ts`, `src/app/robots.ts` | Every page (module, section and variant pages included) in `/sitemap.xml`, and `/robots.txt` allowing all crawlers and pointing to it, so agents' web searches can find pages. Both generated, so new modules need no change. |
 | `src/components/module-spec.tsx` | Renders frontmatter to HTML for humans. |
 | `src/lib/spec-markdown.ts` | Renders the same frontmatter to Markdown for AI. |
@@ -403,7 +405,9 @@ every module and layer, and for every "is there any gap?" request.
       without one rather than starting your own.
 11. **Ship.** Bump `version`, add a changelog entry (mark `breaking` honestly),
     update the versions in [Known TODO](#known-todo), commit, push to `main`
-    (the user's usual flow), check the pages on production, and tell the user
+    (the user's usual flow), check the pages on production, run
+    `pnpm snapshot:specs` and commit the new snapshot so the version stays
+    fetchable, and tell the user
     what changed, which judgment calls need their review, and which sources
     you used.
 
