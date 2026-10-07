@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.4.0
+version: 0.5.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -64,7 +64,7 @@ dataModel:
   type: enum
   required: true
   description: 'Where the patient is when the appointment happens: in for a visit, remote, or in a hospital stay.'
-  constraints: outpatient (HL7 AMB) | virtual (VR) | observation (OBSENC) | inpatient (IMP)
+  constraints: 'outpatient (HL7 AMB) | virtual (VR) | observation (OBSENC) | inpatient (IMP); codes: HL7 v3 ActCode encounter class AMB, VR, OBSENC, IMP'
 - name: department_id
   type: string
   required: true
@@ -99,7 +99,7 @@ dataModel:
   type: enum
   required: false
   description: Why needs_review was set.
-  constraints: stay_ended | previous_cancelled | authorization_denied; set only with needs_review
+  constraints: 'stay_ended | previous_cancelled | authorization_denied; set only with needs_review; codes: none standard, local to this specification'
 - name: equipment_ids
   type: string[]
   required: false
@@ -112,7 +112,7 @@ dataModel:
   type: enum
   required: false
   description: Prior authorization for the service, as the Authorization module last reported it. Unset means Authorization has not reported.
-  constraints: not_required | required | requested | approved | denied
+  constraints: 'not_required | required | requested | approved | denied; codes: none standard, local to this specification'
 - name: authorization_id
   type: string
   required: false
@@ -193,6 +193,9 @@ validations:
 - field: previous_appointment_id
   rule: an existing appointment for the same patient
   error: APPOINTMENT_INVALID_PREVIOUS
+- field: encounter_id, overbooked, needs_review, review_reason, authorization_status, authorization_id, walk_in
+  rule: set by the service, from Encounter, Authorization or its own rules, never sent by clients
+  error: APPOINTMENT_READ_ONLY_FIELD
 workflows:
 - name: Register a walk-in
   trigger: A patient arrives without an appointment
@@ -442,6 +445,10 @@ operations:
   - APPOINTMENT_EQUIPMENT_TAKEN
   - APPOINTMENT_INVALID_PREVIOUS
   - APPOINTMENT_SEQUENCE_CONFLICT
+  - APPOINTMENT_READ_ONLY_FIELD
+  - APPOINTMENT_INVALID_TEXT
+  - APPOINTMENT_INVALID_REFERENCE
+  - APPOINTMENT_INVALID_VIRTUAL_SERVICE
 - name: Reschedule an appointment
   actor: Requester
   description: Move the appointment to a new slot, keeping its id. Accepts a retry key.
@@ -470,6 +477,7 @@ operations:
   - APPOINTMENT_INVALID_EQUIPMENT
   - APPOINTMENT_EQUIPMENT_TAKEN
   - APPOINTMENT_SEQUENCE_CONFLICT
+  - APPOINTMENT_READ_ONLY_FIELD
 - name: Add a participant
   actor: Scheduler
   description: Add a participant, for example a guest joining a group appointment.
@@ -590,6 +598,7 @@ dependencies:
   contract:
   - 'Gives: appointment.checked_in'
   - 'Receives: the id of the encounter it opened'
+  - 'Gives: appointment.encounter_linked, confirming the link it recorded'
   - How encounters are documented is Encounter's concern
 - service: referral-service
   direction: upstream
@@ -621,6 +630,17 @@ dependencies:
   - 'Gives: appointment.cancelled and appointment.rescheduled, so a freed slot can be offered'
   - Books through Book an appointment, like any requester
   - Who waits, in what order, and who is offered a slot is Waitlist's concern
+- service: notification-service
+  direction: downstream
+  reason: delivers reminders and tells Schedulers what needs a decision
+  criticality: soft
+  contract:
+  - 'Gives: appointment.reminder_due, with each participant''s time zone and locale'
+  - 'Gives: appointment.ended, so the host is asked to close the appointment out'
+  - 'Gives: appointment.anonymised, so Notification erases its copy of the personal data'
+  - 'Gives: appointment.patient_review_needed, so a Scheduler checks which patient the appointment belongs to'
+  - 'Gives: appointment.review_needed, appointment.reviewed and appointment.authorization_updated, so the department worklist and its Schedulers see what needs a decision'
+  - Delivery, channels and message templates are Notification's concern
 accessMatrix:
 - action: Register a walk-in
   roles:
@@ -832,6 +852,36 @@ acceptanceCriteria:
   - BR-E2
   - FR-E12
   variant: outpatient
+- id: AC-E19
+  given: a booking for department D-999, which does not exist
+  when: it is sent
+  then: it fails with APPOINTMENT_INVALID_DEPARTMENT and HTTP 422
+  verifies:
+  - FR-E1
+- id: AC-E20
+  given: an outpatient appointment
+  when: it is changed to outpatient
+  then: the request fails with APPOINTMENT_NOT_INPATIENT and HTTP 409
+  verifies:
+  - FR-E7
+- id: AC-E21
+  given: equipment that belongs to radiology
+  when: a cardiology booking names it
+  then: the request fails with APPOINTMENT_INVALID_EQUIPMENT and HTTP 422
+  verifies:
+  - BR-E9
+- id: AC-E22
+  given: an appointment not flagged for review
+  when: Mark reviewed is sent
+  then: the request fails with APPOINTMENT_NOT_FLAGGED and HTTP 409
+  verifies:
+  - BR-E13
+- id: AC-E23
+  given: an outpatient checked in
+  when: Encounter reports the encounter it opened
+  then: encounter_id is recorded and appointment.encounter_linked is emitted; a client sending encounter_id fails with APPOINTMENT_READ_ONLY_FIELD
+  verifies:
+  - BR-E2
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit and no default, and it never applies to patients.
@@ -894,6 +944,13 @@ references:
   title: CMS Interoperability and Prior Authorization Final Rule (CMS-0057-F), fact sheet
   url: https://www.cms.gov/newsroom/fact-sheets/cms-interoperability-and-prior-authorization-final-rule-cms-0057-f
 changelog:
+- version: 0.5.0
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - care_setting names its HL7 encounter class codes; local code lists say so.
+  - Fields set from Encounter, Authorization or the service's own rules are read-only.
+  - Acceptance criteria for every EHR error and appointment.encounter_linked; the Notification contract names the review and authorization events.
 - version: 0.4.0
   date: '2026-10-06'
   breaking: false

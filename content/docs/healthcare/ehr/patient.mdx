@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.3.2
+version: 0.3.3
 status: draft
 industry: healthcare
 domain: ehr
@@ -127,6 +127,9 @@ validations:
 - field: downtime_id
   rule: from downtime_id_pool and not already entered
   error: PATIENT_INVALID_DOWNTIME_ID
+- field: unidentified, registration_status
+  rule: set by the service through registration, identification and completion, never sent by clients
+  error: PATIENT_READ_ONLY_FIELD
 workflows:
 - name: Register an unidentified patient
   trigger: A patient arrives who cannot say who they are and has no identification
@@ -676,6 +679,11 @@ references:
   title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
 changelog:
+- version: 0.3.3
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - unidentified and registration_status are read-only.
 - version: 0.3.2
   date: '2026-10-07'
   breaking: false

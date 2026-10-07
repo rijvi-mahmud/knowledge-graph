@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.3.1
+version: 0.4.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -62,10 +62,16 @@ concepts:
 - name: Medical record
   description: The appointment and its history are part of the patient's record, which is kept for a legal minimum period.
 dataModel:
+- name: status
+  type: enum
+  required: true
+  description: Current lifecycle state, with the healthcare states.
+  constraints: 'pending | booked | checked_in | completed | no_show | cancelled | entered_in_error; changed only through operations; codes: FHIR R5 AppointmentStatus: pending, booked, checked-in, fulfilled, noshow, cancelled, entered-in-error'
 - name: service_type
   type: code
   required: false
   description: The service to be performed, coded with service_code_system, such as a cardiology consultation (FHIR Appointment.serviceType).
+  constraints: 'codes: service_code_system, such as HCPCS with CPT-4 in the United States'
 - name: reason
   type: code or text
   required: false
@@ -186,6 +192,21 @@ validations:
 - field: patient_location
   rule: in the United States, the practitioner is licensed or permitted to practise there
   error: APPOINTMENT_PRACTITIONER_NOT_LICENSED
+- field: patient_instruction
+  rule: plain text, at most max_text_length characters
+  error: APPOINTMENT_INVALID_TEXT
+- field: virtual_service
+  rule: an https URL, with optional dial-in details
+  error: APPOINTMENT_INVALID_VIRTUAL_SERVICE
+- field: interpreter_language
+  rule: a well-formed BCP 47 tag
+  error: APPOINTMENT_INVALID_LOCALE
+- field: accommodation_needs
+  rule: each a non-empty text item, at most max_text_length characters
+  error: APPOINTMENT_INVALID_TEXT
+- field: acting_representative, checked_in_at
+  rule: set by the service from the caller and the check-in, never sent by clients
+  error: APPOINTMENT_READ_ONLY_FIELD
 stateMachine:
   initial: booked
   states:
@@ -630,6 +651,25 @@ acceptanceCriteria:
   verifies:
   - BR-H18
   - FR-H13
+- id: AC-H24
+  given: a booking with priority 12
+  when: it is sent
+  then: it fails with APPOINTMENT_INVALID_PRIORITY and HTTP 422
+  verifies:
+  - FR-H1
+- id: AC-H25
+  given: a booked appointment
+  when: a Scheduler marks it entered in error
+  then: appointment.entered_in_error is emitted with the reason, and the appointment leaves schedules
+  verifies:
+  - BR-H8
+- id: AC-H26
+  given: a virtual appointment
+  when: it is booked with virtual_service "zoom 123", or with interpreter_language "spanish"
+  then: they fail with APPOINTMENT_INVALID_VIRTUAL_SERVICE and APPOINTMENT_INVALID_LOCALE, both HTTP 422
+  verifies:
+  - BR-H9
+  - BR-H6
 operations:
 - name: Book an appointment
   actor: Requester
@@ -657,6 +697,10 @@ operations:
   - APPOINTMENT_INVALID_PRIORITY
   - APPOINTMENT_INVALID_CODE
   - APPOINTMENT_PRACTITIONER_NOT_LICENSED
+  - APPOINTMENT_INVALID_VIRTUAL_SERVICE
+  - APPOINTMENT_READ_ONLY_FIELD
+  - APPOINTMENT_INVALID_TEXT
+  - APPOINTMENT_INVALID_REFERENCE
 - name: Erase a participant's personal data
   actor: Scheduler
   description: Erase personal fields as BR-11 describes. Refused while record_retention applies.
@@ -801,6 +845,9 @@ errors:
 - code: APPOINTMENT_NOT_AUTHORISED_FOR_PATIENT
   http: 403
   message: Only the patient or their personal representative can request this.
+- code: APPOINTMENT_INVALID_VIRTUAL_SERVICE
+  http: 422
+  message: Connection details need an https URL.
 personalData:
 - field: reason
   category: health data
@@ -946,6 +993,13 @@ references:
   url: https://medicaid.ncdhhs.gov/providers-billing-beneficiaries/open
   note: 'For the Billing module: quotes the CMS policy that Medicaid beneficiaries may not be billed for missed appointments.'
 changelog:
+- version: 0.4.0
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - status names its FHIR AppointmentStatus codes, and service_type its code system.
+  - Validations for instructions, connection details, interpreter language and accommodations; acting_representative and checked_in_at are read-only.
+  - Acceptance criteria for APPOINTMENT_INVALID_PRIORITY and appointment.entered_in_error; Notification and Billing contracts name the events they receive.
 - version: 0.3.1
   date: '2026-10-06'
   breaking: false
@@ -1001,6 +1055,24 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: is this code valid in this code system on this date?'
+- service: notification-service
+  direction: downstream
+  reason: delivers reminders and tells Schedulers what needs a decision
+  criticality: soft
+  contract:
+  - 'Gives: appointment.reminder_due, with each participant''s time zone and locale'
+  - 'Gives: appointment.ended, so the host is asked to close the appointment out'
+  - 'Gives: appointment.anonymised, so Notification erases its copy of the personal data'
+  - 'Gives: appointment.patient_review_needed, so a Scheduler checks which patient the appointment belongs to'
+  - Delivery, channels and message templates are Notification's concern
+- service: billing-service
+  direction: downstream
+  reason: charges for visits where the jurisdiction and payer allow
+  criticality: soft
+  contract:
+  - 'Gives: appointment.completed, appointment.no_show and appointment.attendance_corrected, and the late cancellation flag on appointment.cancelled'
+  - 'Gives: appointment.entered_in_error, so nothing is charged for an appointment recorded by mistake'
+  - What to charge, and whether to charge at all, is Billing's concern
 ---
 
 A clinical appointment is still an appointment: everything in the

@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.9.1
+version: 0.10.0
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -139,7 +139,7 @@ dataModel:
   type: enum
   required: true
   description: Current lifecycle state.
-  constraints: pending | booked | cancelled | completed | no_show
+  constraints: 'pending | booked | cancelled | completed | no_show; changed only through operations; codes: iCalendar STATUS (RFC 5545): pending TENTATIVE, booked CONFIRMED, cancelled CANCELLED'
 - name: revision
   type: integer
   required: true
@@ -309,6 +309,9 @@ businessRules:
 - id: BR-24
   text: If an appointment has a participant with the role host, the last host cannot be removed.
   rationale: A host confirms, updates and changes participants (permission matrix). Without one, a group appointment has nobody to run it.
+- id: BR-25
+  text: Fields the service sets, such as status, start_at, end_at, history and the cancellation and completion fields, cannot be written by clients. Status changes only through its operations.
+  rationale: A client that writes status directly skips the state machine, its guards and its events. One that writes start_at bypasses the time zone rules.
 validations:
 - field: start_time
   rule: must be strictly before end_time
@@ -358,6 +361,18 @@ validations:
 - field: bulk change
   rule: 'exactly one of: a new time and weekday, or a shift'
   error: APPOINTMENT_INVALID_BULK_CHANGE
+- field: id, start_at, end_at, tz_version, status, confirm_by, late_cancellation, history, created_at, updated_at, cancelled_by, cancelled_at, completed_at, no_show_recorded_by, anonymised_at
+  rule: never sent by clients (BR-25)
+  error: APPOINTMENT_READ_ONLY_FIELD
+- field: location
+  rule: plain text or an https URL, at most max_text_length characters
+  error: APPOINTMENT_INVALID_TEXT
+- field: notes
+  rule: plain text, at most max_text_length characters
+  error: APPOINTMENT_INVALID_TEXT
+- field: series_id, appointment_type_id
+  rule: refer to an existing series or appointment type
+  error: APPOINTMENT_INVALID_REFERENCE
 stateMachine:
   initial: booked
   states:
@@ -978,6 +993,9 @@ settings:
   type: boolean
   default: 'true'
   description: Whether a pending appointment holds its slot (BR-17). Cal.com has the same switch, on by default.
+- name: max_text_length
+  type: integer
+  description: The longest location, notes or other free text the service accepts. Set by each deployment; text over it is rejected, never cut short. Required.
 acceptanceCriteria:
 - id: AC-1
   given: a requester with appointment.write and two valid participants
@@ -1301,6 +1319,96 @@ acceptanceCriteria:
   then: the other booking succeeds and the confirmation fails with APPOINTMENT_SLOT_TAKEN
   verifies:
   - BR-17
+- id: AC-51
+  given: no appointment with id A-404
+  when: it is read
+  then: the request fails with APPOINTMENT_NOT_FOUND and HTTP 404
+  verifies:
+  - FR-1
+- id: AC-52
+  given: a booking whose start_time is after its end_time, and one that starts in the past
+  when: each is sent
+  then: they fail with APPOINTMENT_INVALID_TIME_RANGE and APPOINTMENT_START_IN_PAST, both HTTP 422
+  verifies:
+  - FR-1
+- id: AC-53
+  given: a booking with time_zone "+02:00", and one with a participant locale "english"
+  when: each is sent
+  then: they fail with APPOINTMENT_INVALID_TIME_ZONE and APPOINTMENT_INVALID_LOCALE, both HTTP 422
+  verifies:
+  - CON-1
+- id: AC-54
+  given: a booking with a reminder offset of zero
+  when: it is sent
+  then: it fails with APPOINTMENT_INVALID_REMINDER_OFFSET and HTTP 422
+  verifies:
+  - FR-1
+- id: AC-55
+  given: a booked appointment
+  when: it is cancelled without a reason
+  then: the request fails with APPOINTMENT_CANCEL_REASON_REQUIRED and HTTP 422
+  verifies:
+  - BR-2
+- id: AC-56
+  given: a booking that succeeded with an Idempotency-Key
+  when: the same key is sent with a different start time
+  then: the request fails with APPOINTMENT_IDEMPOTENCY_KEY_REUSED and HTTP 422
+  verifies:
+  - FR-8
+- id: AC-57
+  given: a group appointment with 3 participants
+  when: its capacity is set to 2
+  then: the request fails with APPOINTMENT_INVALID_CAPACITY and HTTP 422
+  verifies:
+  - BR-15
+- id: AC-58
+  given: a booked appointment, and one recorded as completed
+  when: the first is confirmed, and the second is corrected as a no-show
+  then: they fail with APPOINTMENT_NOT_PENDING and APPOINTMENT_NOT_A_NO_SHOW, both HTTP 409
+  verifies:
+  - BR-17
+- id: AC-59
+  given: an appointment
+  when: a person who is not a participant is removed
+  then: the request fails with APPOINTMENT_PARTICIPANT_NOT_FOUND and HTTP 404
+  verifies:
+  - FR-1
+- id: AC-60
+  given: max_page_size 100
+  when: a list asks for 500
+  then: the request fails with APPOINTMENT_INVALID_PAGE_SIZE and HTTP 422
+  verifies:
+  - FR-1
+- id: AC-61
+  given: a bulk cancel with both a participant window and a series, and a bulk reschedule with both a new time and a shift
+  when: each is sent
+  then: they fail with APPOINTMENT_INVALID_BULK_FILTER and APPOINTMENT_INVALID_BULK_CHANGE, both HTTP 422
+  verifies:
+  - FR-1
+- id: AC-62
+  given: an appointment
+  when: an update sends status completed, or notes longer than max_text_length, or a booking names a series that does not exist
+  then: they fail with APPOINTMENT_READ_ONLY_FIELD, APPOINTMENT_INVALID_TEXT and APPOINTMENT_INVALID_REFERENCE, all HTTP 422
+  verifies:
+  - BR-25
+- id: AC-63
+  given: a pending appointment
+  when: a host confirms it
+  then: it becomes booked and appointment.confirmed is emitted
+  verifies:
+  - BR-17
+- id: AC-64
+  given: a booked appointment that has ended
+  when: the host records it as completed
+  then: appointment.completed is emitted with completed_at
+  verifies:
+  - FR-1
+- id: AC-65
+  given: a group appointment with room for one more
+  when: a guest is added, then removed
+  then: appointment.participant_added and appointment.participant_removed are emitted in turn
+  verifies:
+  - BR-15
 events:
 - name: appointment.booked
   description: A new appointment was created, as pending or booked.
@@ -1632,6 +1740,15 @@ errors:
 - code: APPOINTMENT_INVALID_BULK_CHANGE
   http: 422
   message: Give either a new time and weekday, or a shift. Not both, and not neither.
+- code: APPOINTMENT_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service and can't be written.
+- code: APPOINTMENT_INVALID_TEXT
+  http: 422
+  message: The text is too long, or the location is neither text nor an https URL.
+- code: APPOINTMENT_INVALID_REFERENCE
+  http: 422
+  message: The series or appointment type doesn't exist.
 dependencies:
 - service: calendar-service
   direction: upstream
@@ -1639,7 +1756,8 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: is this slot free for these participants?'
-  - 'Gives: appointment events with their status, so Calendar can keep free and busy time current'
+  - 'Gives: appointment.booked, appointment.confirmed, appointment.rescheduled, appointment.cancelled, appointment.updated, appointment.participant_added and appointment.participant_removed, so Calendar keeps free and busy time current'
+  - 'Gives: appointment.anonymised, so Calendar erases its copy of the personal data'
 - service: identity-service
   direction: upstream
   reason: resolve and authorise participant ids
@@ -1654,6 +1772,8 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: appointment.reminder_due, with each participant''s time zone and locale'
+  - 'Gives: appointment.ended, so the host is asked to close the appointment out'
+  - 'Gives: appointment.anonymised, so Notification erases its copy of the personal data'
   - Delivery, channels and message templates are Notification's concern
 - service: scheduler-service
   direction: upstream
@@ -1662,6 +1782,13 @@ dependencies:
   contract:
   - 'Asks: run this job at this instant, keyed by appointment, revision and offset'
   - 'Relies on: jobs that survive restarts'
+- service: billing-service
+  direction: downstream
+  reason: charges for appointments where the business charges
+  criticality: soft
+  contract:
+  - 'Gives: appointment.completed, appointment.no_show and appointment.attendance_corrected, and the late cancellation flag on appointment.cancelled'
+  - What to charge, and whether to charge at all, is Billing's concern
 decisions:
 - id: ADR-1
   decision: Cancellation is a status change, never a delete.
@@ -1869,6 +1996,13 @@ references:
   title: Acuity Scheduling, booking appointments for clients (bulk reschedule)
   url: https://help.acuityscheduling.com/hc/en-us/articles/16676870828685-Booking-appointments-for-clients
 changelog:
+- version: 0.10.0
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - Fields the service sets are read-only (BR-25); location and notes are validated, and series and appointment type references checked.
+  - status names its iCalendar STATUS mapping.
+  - Every error code and event has an acceptance criterion, and every event a consumer in the contracts, including a new Billing contract.
 - version: 0.9.1
   date: '2026-10-05'
   breaking: false
@@ -1972,6 +2106,9 @@ operations:
   - APPOINTMENT_SLOT_TAKEN
   - APPOINTMENT_AVAILABILITY_UNAVAILABLE
   - APPOINTMENT_IDEMPOTENCY_KEY_REUSED
+  - APPOINTMENT_READ_ONLY_FIELD
+  - APPOINTMENT_INVALID_TEXT
+  - APPOINTMENT_INVALID_REFERENCE
 - name: Get an appointment
   description: Read one appointment, including its status, attendance and revision.
   method: GET
@@ -2025,6 +2162,7 @@ operations:
   - APPOINTMENT_AMBIGUOUS_LOCAL_TIME
   - APPOINTMENT_INVALID_DURATION
   - APPOINTMENT_AVAILABILITY_UNAVAILABLE
+  - APPOINTMENT_READ_ONLY_FIELD
 - name: Update details
   actor: Requester
   description: Change the location, notes, reminder offsets or capacity.
@@ -2040,6 +2178,8 @@ operations:
   - APPOINTMENT_REVISION_CONFLICT
   - APPOINTMENT_INVALID_REMINDER_OFFSET
   - APPOINTMENT_INVALID_CAPACITY
+  - APPOINTMENT_READ_ONLY_FIELD
+  - APPOINTMENT_INVALID_TEXT
 - name: Add a participant
   actor: Scheduler
   description: Add a participant, for example a guest joining a group appointment.

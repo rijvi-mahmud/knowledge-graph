@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.5.0
+version: 0.5.1
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -445,7 +445,7 @@ businessRules:
   text: An address confidentiality program substitute address is recorded as the patient's address with its program and participant number, and is never used for matching. Whether the hospital must accept it is set by acp_acceptance. The real address is not required.
   rationale: States such as Washington and California give survivors of abuse a substitute address that state and local agencies must accept, while private businesses may choose to. Many participants share one substitute address, so matching on it would link strangers.
 - id: BR-H47
-  text: Fields the service sets, such as replaced_by, last_care_at, revision, similar_name_alert, import_batch and external_links, cannot be written by clients.
+  text: Fields the service sets, such as replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links, legal_hold, accuracy_contested and demographics_confirmed_at, cannot be written by clients. Each changes only through its own operation.
   rationale: A client writing replaced_by could hide a record behind another one, and a forged last_care_at would change retention.
 - id: BR-H48
   text: A patient, or their representative within their scope, can read their own record electronically as soon as it is saved. No policy holds data back for review first. A patient can ask for their own access to be delayed (patient_requested_delay). access_request_deadline applies only to copies in another form.
@@ -514,7 +514,7 @@ validations:
 - field: confidentiality
   rule: normal, restricted or very_restricted
   error: PATIENT_INVALID_CODE
-- field: deceased_at
+- field: deceased_at, death_source
   rule: not before birth_date and not in the future; death_source present
   error: PATIENT_INVALID_DEATH_DATE
 - field: representatives
@@ -556,7 +556,7 @@ validations:
 - field: representatives
   rule: kind estate representative only for a deceased patient; other kinds only for a living one
   error: PATIENT_INVALID_REPRESENTATIVE
-- field: replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links
+- field: replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links, legal_hold, accuracy_contested, demographics_confirmed_at
   rule: never sent by clients (BR-H47)
   error: PATIENT_READ_ONLY_FIELD
 stateMachine:
@@ -2949,6 +2949,11 @@ references:
   title: 'ONC FAQ: when a delay in fulfilling a request for EHI is an interference'
   url: https://healthit.gov/faq/when-would-delay-fulfilling-request-access-exchange-or-use-ehi-be-considered-interference-under/
 changelog:
+- version: 0.5.1
+  date: '2026-10-07'
+  breaking: false
+  changes:
+  - legal_hold, accuracy_contested and demographics_confirmed_at are read-only; they change only through their operations.
 - version: 0.5.0
   date: '2026-10-07'
   breaking: false
