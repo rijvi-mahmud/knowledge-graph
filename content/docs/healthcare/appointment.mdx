@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.7.1
+version: 0.8.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -115,6 +115,11 @@ dataModel:
   required: false
   description: 'Where the patient will be during a virtual appointment: a US state or an EU member state.'
   constraints: required for virtual appointments
+- name: cancelled_reason
+  type: code and optional text
+  required: false
+  description: 'Why the appointment was cancelled: a code, and text where the code is other or staff add detail.'
+  constraints: 'required when status = cancelled; erasure clears the text and keeps the code (BR-11); codes: HL7 appointment-cancellation-reason (FHIR Appointment.cancellationReason), such as pat patient, pat-dec deceased, pat-fb feeling better, prov provider, prov-hosp provider hospitalized, oth-err error, oth-int no interpreter available, oth-weath weather, other; reasons set by the service carry their own code mapped to one HL7 code (BR-H22)'
 businessRules:
 - id: BR-H1
   text: Every appointment has at least one participant with the role patient, and at least one with the role practitioner.
@@ -182,6 +187,9 @@ businessRules:
 - id: BR-H21
   text: In the United States, when an appointment is booked or rescheduled at least 3 business days ahead, Billing is told the booking time and the scheduled date, so a good faith estimate can be given to an uninsured or self-pay patient in time.
   rationale: The No Surprises Act requires a good faith estimate for uninsured or self-pay patients within 1 business day of scheduling when the service is 3 to 9 business days away, and within 3 business days when it is 10 or more (45 CFR 149.610). Scheduling starts the clock, so Billing must learn of it at once.
+- id: BR-H22
+  text: 'A cancellation records a code from the HL7 appointment cancellation reasons. Reasons the service sets itself keep their own code, mapped to one HL7 code for exchange: patient_deceased to pat-dec and patient_entered_in_error to oth-err.'
+  rationale: FHIR Appointment.cancellationReason uses the HL7 appointment-cancellation-reason code system, so other systems and reports can tell a patient cancelling from a provider or an error. A local free-text reason can't be counted or exchanged.
 validations:
 - field: participants
   rule: at least one participant with the role patient and one with the role practitioner
@@ -216,6 +224,9 @@ validations:
 - field: acting_representative, checked_in_at
   rule: set by the service from the caller and the check-in, never sent by clients
   error: APPOINTMENT_READ_ONLY_FIELD
+- field: cancelled_reason
+  rule: a code from HL7 appointment-cancellation-reason, with text when the code is other
+  error: APPOINTMENT_INVALID_CODE
 stateMachine:
   initial: booked
   states:
@@ -457,6 +468,12 @@ edgeCases:
   covers:
   - BR-H21
   - AC-H31
+- id: EC-H22
+  situation: A patient cancels because there was no interpreter at their last visit.
+  behaviour: The cancellation records oth-int, so the hospital can count cancellations caused by missing interpreters.
+  covers:
+  - BR-H22
+  - AC-H32
 functionalRequirements:
 - id: FR-H1
   text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
@@ -743,6 +760,13 @@ acceptanceCriteria:
   then: Billing receives appointment.booked with the booking time and scheduled date at once
   verifies:
   - BR-H21
+- id: AC-H32
+  given: a booked appointment, and a patient who dies with an upcoming appointment
+  when: staff cancel the first with pat-fb, then another with the code nonsense, and the Patients module records the death
+  then: the first records pat-fb; the second fails with APPOINTMENT_INVALID_CODE (422); the third is cancelled with patient_deceased and exchanged as pat-dec
+  verifies:
+  - BR-H22
+  - BR-H17
 operations:
 - name: Book an appointment
   actor: Requester
@@ -1102,7 +1126,16 @@ references:
 - id: REF-H28
   title: 45 CFR 164.524, access of individuals to protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.524
+- id: REF-H29
+  title: HL7 appointment-cancellation-reason code system
+  url: https://terminology.hl7.org/CodeSystem-appointment-cancellation-reason.html
 changelog:
+- version: 0.8.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Cancellation reasons are coded with HL7 appointment-cancellation-reason (BR-H22); service-set reasons map to it.
+  - Reference table for the access log.
 - version: 0.7.1
   date: '2026-10-08'
   breaking: false
@@ -1342,6 +1375,27 @@ compliance:
   how: The Release of information module.
   status: other module
   covered_by: []
+tables:
+- name: appointment_access_log
+  description: Every view of an appointment, with the reason given for restricted patients. Append-only; nobody it records can change it.
+  columns:
+  - name: id
+    type: bigint
+    note: generated identity
+  - name: appointment_id
+    type: uuid
+  - name: actor
+    type: text
+  - name: action
+    type: text
+  - name: reason
+    type: text
+    nullable: true
+  - name: at
+    type: timestamptz
+  indexes:
+  - name: by_appointment
+    definition: (appointment_id, at)
 ---
 
 A clinical appointment is still an appointment: everything in the

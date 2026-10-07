@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.7.1
+version: 0.8.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -214,6 +214,9 @@ businessRules:
 - id: BR-E23
   text: An appointment is pre-registered when the patient has confirmed their details with the Patients module and Coverage reports financial clearance, both after booking. Check-in for a pre-registered appointment only verifies identity.
   rationale: HFMA calls registration before the service the best way to speed up access. Asking again at the desk what the patient already gave wastes their time and the front desk's.
+- id: BR-E24
+  text: 'The cancellation reasons this layer sets map to HL7 appointment cancellation reasons for exchange: left_without_being_seen to pat, because the patient left, and encounter_cancelled to other.'
+  rationale: BR-H22 requires every service-set reason to map to one HL7 code. HL7 has no code for leaving before being seen, and an encounter cancelled before care has no single cause, so these are the closest codes that don't misstate who cancelled.
 validations:
 - field: department_id
   rule: Organization confirms the department exists
@@ -1097,6 +1100,13 @@ acceptanceCriteria:
   then: pre_registered_at is set and check-in asks only for identity verification
   verifies:
   - BR-E23
+- id: AC-E33
+  given: a checked-in appointment whose encounter is discontinued before care, and one whose encounter is cancelled
+  when: each appointment is exchanged as FHIR
+  then: the first carries cancellationReason pat and the second other, with the local reasons left_without_being_seen and encounter_cancelled kept
+  verifies:
+  - BR-E24
+  - BR-E15
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit and no default, and it never applies to patients.
@@ -1162,6 +1172,11 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.8.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - EHR cancellation reasons map to HL7 appointment-cancellation-reason (BR-E24).
 - version: 0.7.1
   date: '2026-10-08'
   breaking: false

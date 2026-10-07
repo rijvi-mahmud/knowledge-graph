@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.2.1
+version: 0.3.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -61,6 +61,8 @@ glossary:
   definition: A patient's time in a hospital bed as an inpatient or under observation, from admission to discharge.
 - term: Pending admission
   definition: A decision to admit that hasn't happened yet, such as an elective surgery next week or an emergency patient waiting for a bed (IHE pending admit, HL7 A14).
+- term: Pre-admission
+  definition: Registering a patient before an elective admission, so testing and paperwork can be done ahead (HL7 A05).
 - term: Boarding
   definition: An admitted patient still waiting in the emergency department, or elsewhere, for an inpatient bed.
 - term: Bed board
@@ -123,11 +125,17 @@ dataModel:
 - name: attending_practitioner_id
   type: string
   required: false
-  description: The practitioner responsible for the stay, owned by Organization.
+  description: The practitioner responsible for the stay now, owned by Organization. Earlier attendings are kept in history.
+  constraints: one at a time; changed only through the attending operation (BR-E28)
 - name: expected_admission_at
   type: instant
   required: false
   description: When a pending admission is expected.
+- name: pre_admission
+  type: boolean
+  required: false
+  description: Set when the patient is registered ahead of an elective admission, for testing and paperwork before the day. Otherwise a pending admission is an expected admission, such as an emergency patient waiting for a bed.
+  constraints: 'set at request; codes: HL7 v2 pre-admit A05 (cancel A38) when true, pending admit A14 (cancel A27) when false'
 - name: admitted_at
   type: instant
   required: false
@@ -217,6 +225,21 @@ dataModel:
   required: false
   description: Set when a newborn rooms in with their mother and has no bed of their own.
   constraints: set by the service when rooming_in is on
+- name: bed_history
+  type: bed movement[]
+  required: false
+  description: Every bed or waiting location the stay has occupied, each with an entry id and period, oldest first. The census at a past time is read from it.
+  constraints: set by the service; a past entry is changed only by a correction (BR-E29)
+- name: history
+  type: stay change[]
+  required: true
+  description: 'Every change to the stay, oldest first: what changed, who, when, the previous value, and the reason where one is required (BR-E32).'
+  constraints: append-only; set by the service
+- name: correction_requests
+  type: correction request[]
+  required: false
+  description: 'Requests to correct part of the stay record: what was asked and by whom, when, the deadline and any extension, the decision and its reason, any statement of disagreement and rebuttal, and who was told (BR-E34).'
+  constraints: set by the service through correction requests
 relationships:
 - type: belongs_to
   target: patient
@@ -314,6 +337,27 @@ businessRules:
 - id: BR-E27
   text: Stays of a patient under legal hold are never erased or anonymised, even after the Patients module's retention ends.
   rationale: The Patients module stops erasure during litigation, and the stay records are part of the record in question.
+- id: BR-E28
+  text: While a stay is pending or admitted, its attending practitioner can be changed from a given time to another practitioner with admitting privileges on that date. There is always exactly one attending. The change is reported to Encounters. A change recorded by mistake can be cancelled with a reason, which restores the previous attending.
+  rationale: Every Medicare patient must be under the care of a doctor (42 CFR 482.12(c)(1)), so the record must always say who that is. Care changes hands at shift and service changes; pages and orders going to the wrong doctor delay care. IHE defines change attending doctor (A54) and its cancel (A55).
+- id: BR-E29
+  text: Every bed or waiting location a stay occupies is kept in bed_history with its period and an entry id. The census at any past time is counted from it. A past movement recorded wrongly, such as the wrong bed or time, can be corrected by its entry id with a reason; the correction never makes two stays share a bed at the same time, and it is reported to Encounters.
+  rationale: The midnight census and bed-day counts must be reproducible after the fact (FR-E9). IHE PAM identifies each movement so a past one can be updated (Historic Movement Management option, Z99), and Encounters corrects its own locations from it.
+- id: BR-E30
+  text: A leave of absence recorded by mistake can be cancelled while it is in progress, which returns the patient to the reserved bed as if the leave never started. A return recorded by mistake can be cancelled, which puts the stay back on leave with the bed reserved. Each needs a reason and is reported to Encounters.
+  rationale: IHE defines cancel leave of absence (A52) and cancel return from leave (A53). Without them a mistaken leave keeps the encounter on hold, and its length wrong, with no way back.
+- id: BR-E31
+  text: Two admitted patients can swap beds in one step. Each bed must be able to take the other patient under BR-E5, apart from being occupied by them. Both stays change together or neither does, and each is reported to Encounters as a transfer.
+  rationale: HL7 defines swap patients (A17). Two separate transfers would fail, because each target bed is occupied by the other patient, or would briefly leave one patient with no bed.
+- id: BR-E32
+  text: Every change to a stay is kept in history with who, when and the previous value. Cancelling an admission, a discharge, a leave, a return or an attending change, changing class, and correcting a movement each need a reason, which is kept with the change.
+  rationale: Class changes are audited by Medicare reviewers (42 CFR 412.3), and cancels change what billing and the census already counted. Hospitals must protect the integrity of the record (42 CFR 482.24(b)), which needs who did what and why.
+- id: BR-E33
+  text: A patient's stays can be listed, newest first, by staff who may read them and by the patient or their representative. Other modules use it to ask whether a patient has a stay that is pending or admitted.
+  rationale: Patients needs this answer before merging records, Appointments before booking for an inpatient, and patients for their right of access. Each would otherwise have to know stay ids it never received.
+- id: BR-E34
+  text: Each correction request is kept and linked to the stay it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the stay record, and in the United States for at least 6 years from its decision.
+  rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). Later disclosures must include them (164.526(d)(5)).
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -336,12 +380,18 @@ validations:
 - field: expected_admission_at, expected_discharge_at, leave
   rule: RFC 3339 instants; expected discharge not before admission; leave return not before its start
   error: STAY_INVALID_PERIOD
-- field: id, encounter_id, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for, revision, accuracy_contested, shares_mother_location
+- field: id, encounter_id, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for, revision, accuracy_contested, shares_mother_location, bed_history, history, correction_requests
   rule: never sent by clients (BR-E20)
   error: STAY_READ_ONLY_FIELD
 - field: level_of_care
   rule: from levels_of_care; the assigned bed's unit provides it
   error: STAY_BED_UNAVAILABLE
+- field: reason
+  rule: required to cancel an admission, a discharge, a leave, a return or an attending change, to change class, and to correct a movement (BR-E32)
+  error: STAY_REASON_REQUIRED
+- field: bed_history
+  rule: a correction names an existing entry, keeps periods in order and within the stay, and never puts two stays in one bed at once (BR-E29)
+  error: STAY_MOVEMENT_NOT_FOUND
 stateMachine:
   initial: pending_admission
   states:
@@ -505,6 +555,30 @@ edgeCases:
   covers:
   - BR-E26
   - AC-E36
+- id: EC-E16
+  situation: The night hospitalist takes over at 19:00 and hands back to the day team at 07:00.
+  behaviour: The attending is changed at each handover, so pages and orders reach the doctor responsible at that moment.
+  covers:
+  - BR-E28
+  - AC-E38
+- id: EC-E17
+  situation: A transfer was recorded at 15:00, but the patient moved at 17:00, after another patient had taken the old bed.
+  behaviour: The correction is refused, because the two stays would share the bed; the registrar records the time that fits, and the census for 16:00 is right.
+  covers:
+  - BR-E29
+  - AC-E39
+- id: EC-E18
+  situation: Two patients need each other's beds, one for isolation and one to be nearer the nursing station.
+  behaviour: The beds are swapped in one step; if either bed doesn't suit the other patient, nothing moves.
+  covers:
+  - BR-E31
+  - AC-E41
+- id: EC-E19
+  situation: A leave of absence is recorded for the wrong patient.
+  behaviour: It is cancelled with a reason; the patient is back in their bed and Encounters takes the encounter off hold.
+  covers:
+  - BR-E30
+  - AC-E40
 functionalRequirements:
 - id: FR-E1
   text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
@@ -519,7 +593,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-E4
-  text: The service must request, perform and cancel transfers, and record leave of absence.
+  text: The service must request, perform and cancel transfers, swap beds, and record and cancel leave of absence and returns.
   priority: must
   verification: test
 - id: FR-E5
@@ -554,9 +628,21 @@ functionalRequirements:
   text: The service must fail fast with STAY_DEPENDENCY_UNAVAILABLE when Patients, Orders or Organization cannot be reached.
   priority: must
   verification: test
+- id: FR-E13
+  text: The service must record changes of attending practitioner and their cancels, and report each to Encounters.
+  priority: must
+  verification: test
+- id: FR-E14
+  text: The service must keep each stay's bed history and history of changes, and let a past movement be corrected.
+  priority: must
+  verification: test
+- id: FR-E15
+  text: The service must list a patient's stays for staff, other modules and the patient.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: compatibility
-  text: 'Events map to HL7 v2 ADT messages: pending admit A14 and its cancel A27, admit A01 and cancel A11, transfer A02 and cancel A12, pending transfer A15 and cancel A26, discharge A03 and cancel A13, pending discharge A16 and cancel A25, class changes A06 and A07, leave A21 and A22. This follows IHE PAM (ITI-31).'
+  text: 'Events map to HL7 v2 ADT messages: pre-admit A05 and its cancel A38, pending admit A14 and its cancel A27, admit A01 and cancel A11, transfer A02 and cancel A12, pending transfer A15 and cancel A26, swap patients A17, discharge A03 and cancel A13, pending discharge A16 and cancel A25, class changes A06 and A07, leave A21 and A22 and their cancels A52 and A53, change attending doctor A54 and its cancel A55, and corrected movements Z99. This follows IHE PAM (ITI-31).'
 - category: compatibility
   text: Bed status maps to FHIR Location.operationalStatus with HL7 v2 Table 0116.
 - category: security
@@ -857,6 +943,63 @@ acceptanceCriteria:
   then: their stays are kept unchanged
   verifies:
   - BR-E27
+- id: AC-E38
+  given: an admitted stay with attending A, practitioner B with admitting privileges, and practitioner C without
+  when: the attending is changed to B from 07:00, then to C, then the change to B is cancelled with a reason
+  then: B is attending from 07:00 and stay.attending_changed is emitted; the change to C fails with STAY_INVALID_PRACTITIONER (422); the cancel restores A and emits stay.attending_changed with cancelled true
+  verifies:
+  - BR-E28
+  - FR-E13
+- id: AC-E39
+  given: a stay that was in bed 4 until 15:00 and in bed 9 since, and another patient in bed 4 from 16:00
+  when: the census is read for 14:00, and the 15:00 move is corrected to 17:00 by its entry id, and an unknown entry id is corrected
+  then: the census counts the stay in bed 4; the correction to 17:00 fails with STAY_BED_UNAVAILABLE (409) because bed 4 was occupied from 16:00; a correction to 15:30 succeeds with stay.movement_corrected; the unknown entry fails with STAY_MOVEMENT_NOT_FOUND (404)
+  verifies:
+  - BR-E29
+  - FR-E9
+  - FR-E14
+- id: AC-E40
+  given: an admitted patient on leave recorded by mistake, and another whose return was recorded by mistake
+  when: each is cancelled with a reason, and once without one
+  then: the first is back in the reserved bed and the second back on leave with the bed reserved, each with stay.leave_cancelled; without a reason it fails with STAY_REASON_REQUIRED (422)
+  verifies:
+  - BR-E30
+  - BR-E32
+  - FR-E4
+- id: AC-E41
+  given: two admitted patients in beds 3 and 8 on the same unit, and a third whose bed is isolated for droplet
+  when: the first two swap beds, and one of them swaps with the third
+  then: both move in one step, stay.beds_swapped is emitted and both are reported as transfers; the second swap fails with STAY_BED_UNAVAILABLE (409) and neither stay changes
+  verifies:
+  - BR-E31
+  - FR-E4
+- id: AC-E42
+  given: an admitted stay
+  when: its class is changed, then its admission is cancelled, each with a reason
+  then: history records each change with who, when, the previous value and the reason
+  verifies:
+  - BR-E32
+  - FR-E14
+- id: AC-E43
+  given: a patient with one discharged and one admitted stay, the patient, and a clerk with no access to them
+  when: each lists the patient's stays, and once with no patient
+  then: staff and the patient get both stays, newest first; the clerk fails with STAY_NOT_AUTHORISED_FOR_PATIENT (403); no patient fails with STAY_INVALID_QUERY (422)
+  verifies:
+  - BR-E33
+  - FR-E15
+- id: AC-E44
+  given: jurisdiction us and a correction request denied with a statement of disagreement
+  when: the stay is read, and retention is applied 5 years after the decision
+  then: the request, denial and statement are linked to the stay; the request is still kept
+  verifies:
+  - BR-E34
+- id: AC-E45
+  given: an elective admission requested as a pre-admission
+  when: it is recorded
+  then: stay.admission_requested carries pre_admission true, so Encounters and HL7 consumers treat it as a pre-admit
+  verifies:
+  - BR-E3
+  - FR-E1
 operations:
 - name: Request an admission
   actor: Clinician
@@ -864,7 +1007,7 @@ operations:
   method: POST
   path: /stays
   success: 201
-  input: patient, class, admission type, admit source, expected time, order, attending practitioner
+  input: patient, class, admission type, admit source, expected time, order, attending practitioner, and whether it is a pre-admission
   output: the pending stay
   errors:
   - STAY_INVALID_PATIENT
@@ -902,6 +1045,7 @@ operations:
   errors:
   - STAY_NOT_FOUND
   - STAY_INVALID_TRANSITION
+  - STAY_REASON_REQUIRED
   - STAY_REVISION_CONFLICT
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Assign a bed
@@ -948,16 +1092,18 @@ operations:
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Start or end leave
   actor: Registrar
-  description: Start or end a leave of absence.
+  description: Start or end a leave of absence, or cancel one recorded by mistake.
   method: POST
   path: /stays/{id}/leave
   success: 200
-  input: stay id, revision, start with expected return, or end
+  input: 'stay id, revision, and one of: start with expected return, end, or cancel the last start or end with a reason'
   output: the stay
   errors:
   - STAY_NOT_FOUND
   - STAY_INVALID_TRANSITION
   - STAY_INVALID_PERIOD
+  - STAY_REASON_REQUIRED
+  - STAY_BED_UNAVAILABLE
   - STAY_REVISION_CONFLICT
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Change class
@@ -973,6 +1119,54 @@ operations:
   - STAY_ORDER_REQUIRED
   - STAY_INVALID_TRANSITION
   - STAY_INVALID_CODE
+  - STAY_REASON_REQUIRED
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Change the attending practitioner
+  actor: Registrar
+  description: Hand the stay to another attending practitioner from a given time, or cancel the last change.
+  method: POST
+  path: /stays/{id}/attending
+  success: 200
+  input: stay id, revision, and either the practitioner and effective time, or a cancel of the last change with a reason
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_INVALID_PRACTITIONER
+  - STAY_INVALID_PERIOD
+  - STAY_INVALID_TRANSITION
+  - STAY_REASON_REQUIRED
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Swap beds
+  actor: Bed manager
+  description: Move two admitted patients into each other's beds in one step.
+  method: POST
+  path: /bed-swaps
+  success: 200
+  input: two stay ids, each with its revision
+  output: both stays
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_BED_UNAVAILABLE
+  - STAY_INVALID_TRANSITION
+  - STAY_REVISION_CONFLICT
+  - STAY_IDEMPOTENCY_KEY_REUSED
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Correct a past movement
+  actor: Registrar
+  description: Correct the bed, location or period of an earlier movement.
+  method: PATCH
+  path: /stays/{id}/bed-history/{entryId}
+  success: 200
+  input: stay id, entry id, revision, the corrected bed or location and period, reason
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_MOVEMENT_NOT_FOUND
+  - STAY_INVALID_PERIOD
+  - STAY_BED_UNAVAILABLE
+  - STAY_REASON_REQUIRED
   - STAY_REVISION_CONFLICT
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Set expected discharge
@@ -1017,6 +1211,7 @@ operations:
   - STAY_NOT_FOUND
   - STAY_BED_UNAVAILABLE
   - STAY_INVALID_TRANSITION
+  - STAY_REASON_REQUIRED
   - STAY_REVISION_CONFLICT
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Record a notice
@@ -1042,6 +1237,18 @@ operations:
   output: the stay
   errors:
   - STAY_NOT_FOUND
+  - STAY_NOT_AUTHORISED_FOR_PATIENT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: List a patient's stays
+  actor: Clinician
+  description: List one patient's stays, newest first, such as to check for a stay that is pending or admitted.
+  method: GET
+  path: /stays
+  success: 200
+  input: patient id, optional status; limit and cursor
+  output: stays and next_cursor
+  errors:
+  - STAY_INVALID_QUERY
   - STAY_NOT_AUTHORISED_FOR_PATIENT
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Read the census
@@ -1139,6 +1346,7 @@ events:
   - stay_id
   - patient_id
   - expected_admission_at
+  - pre_admission
   - revision
 - name: stay.admitted
   description: The patient was admitted.
@@ -1173,6 +1381,18 @@ events:
   - from_bed_id
   - bed_id
   - revision
+- name: stay.beds_swapped
+  description: Two patients swapped beds.
+  payload:
+  - stay_ids
+  - bed_ids
+  - revisions
+- name: stay.movement_corrected
+  description: A past movement was corrected.
+  payload:
+  - stay_id
+  - entry_id
+  - revision
 - name: stay.transfer_cancelled
   description: A pending or recorded transfer was cancelled.
   payload:
@@ -1188,12 +1408,26 @@ events:
   payload:
   - stay_id
   - revision
+- name: stay.leave_cancelled
+  description: A leave of absence, or a return from one, was cancelled as recorded by mistake.
+  payload:
+  - stay_id
+  - cancelled
+  - revision
 - name: stay.class_changed
   description: The stay changed between observation and inpatient.
   payload:
   - stay_id
   - patient_class
   - effective_at
+  - revision
+- name: stay.attending_changed
+  description: The attending practitioner changed, or a change was cancelled and the previous one restored.
+  payload:
+  - stay_id
+  - attending_practitioner_id
+  - effective_at
+  - cancelled
   - revision
 - name: stay.discharge_expected
   description: An expected discharge time was set or changed.
@@ -1271,7 +1505,7 @@ accessMatrix:
     Patient: none
   permission: stay.write
   note: 'own: patients in their care.'
-- action: Admit, cancel, change class, start or end leave, discharge, cancel a discharge, record a notice
+- action: Admit, cancel, change class, change the attending, start, end or cancel leave, discharge, cancel a discharge, record a notice
   roles:
     Bed manager: any
     Registrar: any
@@ -1281,7 +1515,7 @@ accessMatrix:
     System: none
     Patient: none
   permission: stay.write
-- action: Assign a bed, or transfer
+- action: Assign a bed, transfer, or swap beds
   roles:
     Bed manager: any
     Registrar: none
@@ -1291,7 +1525,7 @@ accessMatrix:
     System: none
     Patient: none
   permission: stay.write
-- action: Get a stay, read the census or the bed board
+- action: Get a stay, list a patient's stays, read the census or the bed board
   roles:
     Bed manager: any
     Registrar: any
@@ -1301,7 +1535,7 @@ accessMatrix:
     System: any
     Patient: own
   permission: stay.read
-  note: Masked as BR-E18 requires. Patients read only their own stays, not the census or bed board.
+  note: Masked as BR-E18 requires. Patients read and list only their own stays, not the census or bed board.
 - action: Update bed status
   roles:
     Bed manager: any
@@ -1343,8 +1577,19 @@ accessMatrix:
     Patient: none
   permission: stay.write
   note: An HIM specialist in the Registrar role.
+- action: Correct a past movement
+  roles:
+    Bed manager: none
+    Registrar: any
+    Clinician: none
+    Environmental services: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: stay.write
+  note: An HIM specialist in the Registrar role.
 personalData:
-- field: patient_id, encounter_id, status, patient_class, admission_type, admit_source, admission_order_id, attending_practitioner_id, readmission, level_of_care, shares_mother_location
+- field: patient_id, encounter_id, status, patient_class, admission_type, admit_source, admission_order_id, attending_practitioner_id, readmission, level_of_care, shares_mother_location, pre_admission, history
   category: health data; shows the person was admitted, and how
   purpose: Managing the stay
   retention: record_retention of the Patients module
@@ -1352,7 +1597,7 @@ personalData:
   category: health data
   purpose: When the patient was in hospital
   retention: record_retention of the Patients module
-- field: bed_id, waiting_location_id, pending_transfer, bed_reserved_for, bed_status
+- field: bed_id, waiting_location_id, pending_transfer, bed_reserved_for, bed_status, bed_history
   category: personal; reveals where the patient is
   purpose: Placing and finding the patient
   retention: record_retention of the Patients module
@@ -1372,17 +1617,17 @@ personalData:
   category: record metadata
   purpose: Integrity and access review
   retention: record_retention, and access_log_retention for the log
-- field: accuracy_contested, correction requests
+- field: accuracy_contested, correction_requests
   category: health data
   purpose: Honouring the patient's rights over the stay record
-  retention: record_retention of the Patients module
+  retention: record_retention of the Patients module; correction requests, in the United States, at least 6 years from their decision (BR-E34)
 errors:
 - code: STAY_NOT_FOUND
   http: 404
   message: No stay exists with that id.
 - code: STAY_INVALID_QUERY
   http: 422
-  message: Give a unit or ask for all units, with a valid time.
+  message: Give a patient for a list, or a unit or all units with a valid time for the census.
 - code: STAY_INVALID_PATIENT
   http: 422
   message: The patient doesn't exist, isn't in use, or has died.
@@ -1431,6 +1676,12 @@ errors:
 - code: STAY_CORRECTION_CLOSED
   http: 409
   message: This correction request was already decided.
+- code: STAY_REASON_REQUIRED
+  http: 422
+  message: This change needs a reason.
+- code: STAY_MOVEMENT_NOT_FOUND
+  http: 404
+  message: No such movement on this stay.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -1440,7 +1691,7 @@ dependencies:
   - 'Asks: does this patient exist, is the record in use, and is the patient alive?'
   - 'Asks: is the patient restricted, or using a privacy alias?'
   - 'Asks: may this person act for this patient, and the correction_deadline for this jurisdiction'
-  - 'Gives: whether this patient has an active stay'
+  - 'Gives: whether this patient has a stay pending or admitted, through the patient''s stay list'
   - 'Gives: a death during a stay, with its time and the source hospital pronouncement'
   - 'Receives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error and patient.legal_hold_changed'
 - service: encounter-service
@@ -1448,7 +1699,7 @@ dependencies:
   reason: keeps the clinical record of each stay
   criticality: soft
   contract:
-  - 'Gives: stay.admission_requested, stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.class_changed, stay.discharge_expected, stay.discharged and stay.discharge_cancelled'
+  - 'Gives: stay.admission_requested (with pre_admission), stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.beds_swapped, stay.movement_corrected, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.leave_cancelled, stay.class_changed, stay.attending_changed, stay.discharge_expected, stay.discharged and stay.discharge_cancelled'
   - 'Gives: a re-admission flag and the facility directory answer'
   - 'Receives: the encounter id for each stay, encounter.observation_started, and whether clinical data is recorded'
   - The clinical record is Encounters' concern
@@ -1457,7 +1708,7 @@ dependencies:
   reason: books services for patients in a stay
   criticality: soft
   contract:
-  - 'Gives: whether a patient is in an active stay, its kind and its encounter id'
+  - 'Gives: whether a patient is in an active stay, its kind and its encounter id, through the patient''s stay list'
   - 'Gives: stay.discharged and stay.class_changed, so appointments for the stay are reviewed'
 - service: orders-service
   direction: upstream
@@ -1472,7 +1723,7 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: does this bed or location exist, and on which unit?'
-  - 'Asks: does this practitioner have admitting privileges on this date?'
+  - 'Asks: does this practitioner have admitting privileges on this date, for admission and for a new attending?'
 - service: coverage-service
   direction: upstream
   reason: says who is a Medicare beneficiary
@@ -1521,6 +1772,13 @@ dependencies:
   contract:
   - 'Gives: stay.correction_decided, with any statement of disagreement, for later disclosures'
   - Accounting of disclosures (45 CFR 164.528) is Release of information's concern
+- service: billing-service
+  direction: downstream
+  reason: bills the stay
+  criticality: soft
+  contract:
+  - 'Gives: stay.admitted, stay.class_changed, stay.transferred and stay.discharged, so charges follow the stay'
+  - Moving an account between stays (HL7 A44) is Billing's concern
 risks:
 - id: RISK-E1
   risk: Two patients are placed in one bed.
@@ -1574,16 +1832,29 @@ references:
 - id: REF-E10
   title: WHO, Ten steps to successful breastfeeding (Step 7, rooming-in)
   url: https://www.who.int/teams/nutrition-and-food-safety/food-and-nutrition-actions-in-health-systems/ten-steps-to-successful-breastfeeding
+- id: REF-E11
+  title: 42 CFR 482.12, governing body (care of patients)
+  url: https://www.ecfr.gov/current/title-42/section-482.12
+- id: REF-E12
+  title: 45 CFR 164.526, amendment of protected health information
+  url: https://www.ecfr.gov/current/title-45/section-164.526
+- id: REF-E13
+  title: 45 CFR 164.530(j), documentation and retention
+  url: https://www.ecfr.gov/current/title-45/section-164.530
+- id: REF-E14
+  title: HL7 v2 Table 0003, event types (A17, A52 to A55)
+  url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
   provision: 42 CFR 412.3
   obligation: Admit only under an order from a qualified practitioner with admitting privileges.
-  how: Admission needs an order and a privileged practitioner; class changes follow the order time.
+  how: Admission needs an order and a privileged practitioner; class changes follow the order time and keep their reason.
   status: met
   covered_by:
   - BR-E1
   - BR-E11
+  - BR-E32
 - id: CMP-E2
   regulation: Medicare beneficiary notices
   provision: 42 CFR 405.1205
@@ -1730,10 +2001,11 @@ compliance:
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.526
   obligation: Decide amendment requests within 60 days, with written denials.
-  how: Correction requests decided within the Patients module's deadlines.
+  how: Correction requests decided within the Patients module's deadlines, and kept linked to the stay with any denial, disagreement and rebuttal.
   status: met
   covered_by:
   - BR-E24
+  - BR-E34
 - id: CMP-E21
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.528
@@ -1764,7 +2036,38 @@ compliance:
   status: met
   covered_by:
   - BR-E24
+- id: CMP-E25
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.530(j)
+  obligation: Keep required documentation for 6 years from its creation or when it was last in effect, whichever is later.
+  how: Correction requests are kept with the stay, and at least 6 years from their decision in the US.
+  status: met
+  covered_by:
+  - BR-E34
+- id: CMP-E26
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.12(c)(1)
+  obligation: Every Medicare patient is under the care of a doctor.
+  how: Every stay has exactly one attending practitioner at a time, changed with a time and reported to Encounters.
+  status: met
+  covered_by:
+  - BR-E28
+- id: CMP-E27
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.24(b)
+  obligation: Protect the integrity of the medical record.
+  how: Every change is kept in history with who, when, the previous value and the reason.
+  status: met
+  covered_by:
+  - BR-E32
 changelog:
+- version: 0.3.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Change of attending practitioner and its cancel (BR-E28), bed history with a census at any past time and corrections of past movements (BR-E29), cancelled leave and returns (BR-E30), and bed swaps (BR-E31).
+  - Every change is kept with its reason (BR-E32); a patient's stays can be listed (BR-E33); correction requests are kept with the stay (BR-E34).
+  - Pre-admissions are marked (pre_admission), and HL7 mappings add A05, A38, A17, A52 to A55 and Z99.
 - version: 0.2.1
   date: '2026-10-08'
   breaking: false
@@ -1815,9 +2118,12 @@ tables:
   - name: waiting_location_id
     type: uuid
     nullable: true
+  - name: attending_practitioner_id
+    type: uuid
+    nullable: true
   - name: details
     type: jsonb
-    note: admission type, source, orders, practitioner, expected times, leave, pending transfer, discharge details, readmission, isolation
+    note: admission type, source, pre-admission, orders, expected times, leave, pending transfer, discharge details, readmission, isolation
   - name: admitted_at
     type: timestamptz
     nullable: true
@@ -1859,6 +2165,110 @@ tables:
   - name: one_occupant
     definition: UNIQUE (occupant_stay_id) WHERE occupant_stay_id IS NOT NULL
     note: one bed per stay
+- name: stay_bed_history
+  description: Every bed or waiting location a stay occupied (BR-E29).
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+    note: entry id
+  - name: stay_id
+    type: uuid
+  - name: bed_id
+    type: uuid
+    nullable: true
+  - name: location_id
+    type: uuid
+    nullable: true
+    note: where an admitted patient waits without a bed
+  - name: period
+    type: tstzrange
+  constraints:
+  - name: no_double_occupancy
+    definition: EXCLUDE USING gist (bed_id WITH =, period WITH &&) WHERE (bed_id IS NOT NULL)
+    note: two stays never share a bed at once, needs btree_gist; rooming-in newborns have no bed of their own (BR-E25)
+  indexes:
+  - name: census
+    definition: USING gist (period)
+    note: census at a point in time
+- name: stay_history
+  description: Every change to a stay (BR-E32). Append-only.
+  columns:
+  - name: stay_id
+    type: uuid
+  - name: revision
+    type: integer
+  - name: change
+    type: text
+  - name: previous
+    type: jsonb
+    nullable: true
+  - name: reason
+    type: text
+    nullable: true
+  - name: by
+    type: text
+  - name: at
+    type: timestamptz
+- name: stay_correction_requests
+  description: Correction requests and their outcome (BR-E34).
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: stay_id
+    type: uuid
+  - name: requested_by
+    type: text
+  - name: requested_at
+    type: timestamptz
+  - name: request
+    type: jsonb
+    note: what is wrong, the correct value, restriction asked for
+  - name: due_at
+    type: timestamptz
+  - name: extension_reason
+    type: text
+    nullable: true
+  - name: decision
+    type: text
+    nullable: true
+    note: accepted or denied
+  - name: decision_reason
+    type: text
+    nullable: true
+  - name: decided_at
+    type: timestamptz
+    nullable: true
+  - name: disagreement
+    type: text
+    nullable: true
+  - name: rebuttal
+    type: text
+    nullable: true
+  - name: recipients_told
+    type: jsonb
+    default: '''[]'''
+- name: stay_access_log
+  description: Every view and change of a stay (BR-E19). Append-only; nobody it records can change it.
+  columns:
+  - name: id
+    type: bigint
+    note: generated identity
+  - name: stay_id
+    type: uuid
+  - name: actor
+    type: text
+  - name: action
+    type: text
+  - name: reason
+    type: text
+    nullable: true
+  - name: at
+    type: timestamptz
+  indexes:
+  - name: by_stay
+    definition: (stay_id, at)
 technicalNotes:
 - id: TN-E1
   title: Lock the bed, not just the stay
@@ -1866,6 +2276,9 @@ technicalNotes:
 - id: TN-E2
   title: Count notice days in local time
   text: Compute calendar-day deadlines in hospital_time_zone, using the IANA database, so an admission at 23:30 counts that day as day 0.
+- id: TN-E3
+  title: Swap and correct in one transaction
+  text: Swap beds by updating both bed rows and both stays in one transaction, with the conditional update from TN-E1 on each bed, so a failure leaves both patients where they were. Check a movement correction against stay_bed_history in the same transaction, so a concurrent assignment cannot slip into the gap.
 ---
 This module moves patients into, around and out of the hospital's beds. Each
 step is reported to Encounters, which keeps the clinical record of the stay.
@@ -1889,3 +2302,10 @@ Medicare inpatients get their rights notice within 2 days of admission and a
 follow-up within 2 days before discharge (BR-E12). Patients in observation get
 the MOON within 36 hours (BR-E13). This module knows the dates, so it lists
 what's due until someone records it as given.
+
+## One doctor is responsible at every moment
+
+Care changes hands at shift changes and when a patient moves between services.
+Each handover changes the attending from a stated time (BR-E28), so pages and
+orders reach the doctor responsible now. A mistaken change is cancelled, not
+overwritten, and the history keeps who changed what and why (BR-E32).

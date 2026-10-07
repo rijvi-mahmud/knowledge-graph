@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.6.1
+version: 0.7.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -109,6 +109,11 @@ dataModel:
   required: true
   description: Where the encounter is in its lifecycle.
   constraints: 'planned | in_progress | on_hold | discharged | completed | cancelled | discontinued | entered_in_error; changed only through operations; codes: FHIR R5 EncounterStatus (in-progress, on-hold, entered-in-error)'
+- name: status_reason
+  type: reason
+  required: false
+  description: 'Why a planned encounter was cancelled, or an encounter marked entered in error: a code and optional text. Separate from reasons, which say why the encounter takes place.'
+  constraints: 'required with status cancelled or entered_in_error; patient_deceased, patient_entered_in_error, check_in_undone and admission_cancelled are set by the service; staff choose from cancel_reasons; codes: none standard, local to this specification (FHIR R5 Encounter has no status reason element)'
 - name: subject_status
   type: enum
   required: false
@@ -286,6 +291,11 @@ dataModel:
   required: false
   description: Set while the patient contests the accuracy of part of the encounter and asked for it to be restricted until the correction request is decided.
   constraints: set by the service through correction requests
+- name: correction_requests
+  type: correction request[]
+  required: false
+  description: 'Requests to correct part of the encounter: what was asked and by whom, when, the deadline and any extension, the decision and its reason, any statement of disagreement and rebuttal, and who was told (BR-E44).'
+  constraints: set by the service through correction requests
 relationships:
 - type: belongs_to
   target: patient
@@ -386,7 +396,7 @@ businessRules:
   rationale: US hospitals must give Medicare patients who receive observation services as outpatients for more than 24 hours a standardized written notice no later than 36 hours after observation starts, or sooner on transfer, discharge or admission (42 CFR 489.20(y)). The encounter knows when observation began.
   variant: inpatient
 - id: BR-E24
-  text: A pre-admission from Admission, discharge and transfer opens a planned inpatient encounter with planned_start and the pre-admission id. The admission starts that same encounter; a cancelled pre-admission cancels it.
+  text: A pre-admission from Admission, discharge and transfer opens a planned inpatient encounter with planned_start and the pre-admission id. The admission starts that same encounter; a cancelled pre-admission cancels it with the reason admission_cancelled.
   rationale: FHIR uses planned encounters for pre-admission, and HL7 v2 sends pre-admit (A05) and cancel pre-admit (A38). Testing and paperwork before an elective stay need an encounter to attach to.
   variant: inpatient
 - id: BR-E25
@@ -406,7 +416,7 @@ businessRules:
   text: After a patient merge, if the remaining patient has two inpatient or observation encounters in progress or on hold, both are kept and encounter.patient_review_needed is emitted for each, so an HIM specialist resolves them.
   rationale: Duplicate records can each hold an open stay for the same admission. Refusing the merge keeps the duplicate; keeping both silently breaks the one-stay rule (BR-E21).
 - id: BR-E30
-  text: When Appointments undoes a check-in, the planned encounter opened for it is cancelled.
+  text: When Appointments undoes a check-in, the planned encounter opened for it is cancelled with the reason check_in_undone.
   rationale: The check-in was a mistake, so the visit it opened never happened.
 - id: BR-E31
   text: When the Patients module marks a patient entered in error, the patient's planned encounters are cancelled with the reason patient_entered_in_error.
@@ -448,6 +458,13 @@ businessRules:
 - id: BR-E42
   text: When a patient who requests a correction asks for the data to be restricted meanwhile, accuracy_contested is set. Everyone reading the encounter sees the contested part marked, and it is cleared when the request is decided.
   rationale: GDPR gives a right to restriction while the accuracy of personal data is checked (Article 18(1)(a)). Marking it, rather than hiding it, keeps the data available for care while warning everyone it is disputed.
+- id: BR-E43
+  text: When Admission, discharge and transfer changes the attending practitioner, the previous attending participation ends and the new one starts at the effective time; a cancelled change ends the new participation and restores the previous one. A cancelled leave resumes the encounter and removes the time on hold; a cancelled return puts it back on hold. A bed swap is recorded as a transfer for each encounter.
+  rationale: IHE PAM sends change attending doctor (A54, cancelled by A55), cancel leave and cancel return (A52, A53) and swap patients (A17). BR-E11 needs exactly one attending at a time, and length (BR-E16) excludes leave, so both must follow the cancels.
+  variant: inpatient
+- id: BR-E44
+  text: Each correction request is kept and linked to the encounter it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the encounter, and in the United States for at least 6 years from its decision.
+  rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)).
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -485,7 +502,7 @@ validations:
 - field: virtual_service, patient_location
   rule: an https URL, and a US state or EU member state; required for class virtual
   error: ENCOUNTER_INVALID_VIRTUAL
-- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial, accuracy_contested
+- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial, accuracy_contested, correction_requests
   rule: never sent by clients (BR-E19)
   error: ENCOUNTER_READ_ONLY_FIELD
 - field: revision
@@ -518,6 +535,9 @@ validations:
 - field: directory_status
   rule: not_asked, listed or opted_out; listed only for inpatient and observation encounters
   error: ENCOUNTER_INVALID_CODE
+- field: status_reason
+  rule: required to cancel or mark entered in error; a code from cancel_reasons, or a service-set code
+  error: ENCOUNTER_REASON_REQUIRED
 stateMachine:
   initial: planned
   states:
@@ -847,6 +867,18 @@ edgeCases:
   covers:
   - BR-E42
   - AC-E56
+- id: EC-E36
+  situation: A planned admission is cancelled because the surgery was postponed.
+  behaviour: status_reason records admission_cancelled from ADT; the reason for the encounter, the planned surgery, is kept unchanged.
+  covers:
+  - BR-E24
+  - AC-E57
+- id: EC-E37
+  situation: ADT changes the attending at 07:00, then cancels the change because it was the wrong doctor.
+  behaviour: The wrong doctor's participation ends and the previous attending is restored, so there is never no attending or two.
+  covers:
+  - BR-E43
+  - AC-E58
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -898,6 +930,10 @@ functionalRequirements:
   verification: test
 - id: FR-E13
   text: The service must fail fast with ENCOUNTER_DEPENDENCY_UNAVAILABLE when Patients or Organization cannot be reached.
+  priority: must
+  verification: test
+- id: FR-E14
+  text: The service must record why an encounter was cancelled or entered in error, separately from why it took place.
   priority: must
   verification: test
 nonFunctionalRequirements:
@@ -956,6 +992,10 @@ settings:
 - name: visit_number_system
   type: identifier system
   description: The system visit numbers are assigned in, and their format. Required.
+- name: cancel_reasons
+  type: code list
+  default: patient_request, scheduled_in_error, duplicate, other
+  description: Reasons staff can give when cancelling an encounter or marking it entered in error. other needs text.
 performanceTargets:
 - id: PERF-E1
   indicator: Records completed on time
@@ -1339,6 +1379,26 @@ acceptanceCriteria:
   then: accuracy_contested is set and encounter.accuracy_contested is emitted; readers see the diagnosis marked as disputed; on the decision it is cleared and encounter.accuracy_contested is emitted again; a client sending accuracy_contested fails with ENCOUNTER_READ_ONLY_FIELD
   verifies:
   - BR-E42
+- id: AC-E57
+  given: a planned encounter, and a patient whose check-in is undone
+  when: a registrar cancels the first without a reason, then with scheduled_in_error, and Appointments undoes the check-in
+  then: the first attempt fails with ENCOUNTER_REASON_REQUIRED (422); the cancel records status_reason scheduled_in_error and leaves reasons unchanged; the second encounter is cancelled with check_in_undone; encounter.cancelled carries each status reason
+  verifies:
+  - BR-E30
+  - FR-E14
+- id: AC-E58
+  given: an inpatient encounter with attending A
+  when: ADT reports an attending change to B at 07:00 and then cancels it, a leave recorded by mistake is cancelled, and the patient swaps beds with another
+  then: A ends and B starts at 07:00, then B ends and A is restored; the hold is removed and length counts no leave; a new active location replaces the old one for each swapped encounter
+  verifies:
+  - BR-E43
+  - BR-E11
+- id: AC-E59
+  given: jurisdiction us and a correction request denied with a statement of disagreement
+  when: the encounter is read, and retention is applied 5 years after the decision
+  then: the request, denial and statement are linked to the encounter; the request is still kept
+  verifies:
+  - BR-E44
 operations:
 - name: Open an encounter
   actor: System
@@ -1553,11 +1613,13 @@ operations:
   method: POST
   path: /encounters/{id}/cancel
   success: 200
-  input: encounter id, revision, reason
+  input: encounter id, revision, status reason (a code and optional text)
   output: the encounter
   errors:
   - ENCOUNTER_NOT_FOUND
   - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_INVALID_CODE
   - ENCOUNTER_REVISION_CONFLICT
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Complete
@@ -1595,12 +1657,14 @@ operations:
   method: POST
   path: /encounters/{id}/entered-in-error
   success: 200
-  input: encounter id, revision, reason
+  input: encounter id, revision, status reason (a code and optional text)
   output: the encounter
   errors:
   - ENCOUNTER_NOT_FOUND
   - ENCOUNTER_HAS_CLINICAL_DATA
   - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_INVALID_CODE
   - ENCOUNTER_REVISION_CONFLICT
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Report clinical data
@@ -1834,6 +1898,7 @@ events:
   description: A planned encounter never happened.
   payload:
   - encounter_id
+  - status_reason
   - revision
 - name: encounter.completed
   description: The record is complete and locked.
@@ -2095,7 +2160,7 @@ personalData:
   category: personal
   purpose: Joining and licensing a virtual encounter
   retention: record_retention of the Patients module
-- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision
+- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, status_reason
   category: record metadata about the patient's care
   purpose: Record completion and integrity
   retention: record_retention of the Patients module
@@ -2107,10 +2172,10 @@ personalData:
   category: personal
   purpose: Honouring the patient's choice about the facility directory
   retention: record_retention of the Patients module
-- field: health_plan_restriction, access_denial, correction requests, accuracy_contested
+- field: health_plan_restriction, access_denial, correction_requests, accuracy_contested
   category: health data
   purpose: Honouring the patient's rights over the encounter
-  retention: record_retention of the Patients module
+  retention: record_retention of the Patients module; correction requests, in the United States, at least 6 years from their decision (BR-E44)
 errors:
 - code: ENCOUNTER_NOT_FOUND
   http: 404
@@ -2202,6 +2267,9 @@ errors:
 - code: ENCOUNTER_EXTENSION_USED
   http: 409
   message: The one allowed extension was already used.
+- code: ENCOUNTER_REASON_REQUIRED
+  http: 422
+  message: Give a reason for cancelling or marking entered in error.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -2241,7 +2309,7 @@ dependencies:
   reason: reports admissions, transfers, leave, class changes and discharges
   criticality: soft
   contract:
-  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return, class change, re-admission, discharge and cancelled discharge'
+  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, bed swaps, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return and their cancels, attending changes and their cancels, class change, re-admission, discharge and cancelled discharge'
   - 'Gives: the encounter id for each stay'
   - 'Gives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled and encounter.class_changed, confirming what was recorded'
   - 'Gives: encounter.observation_started with when the US observation notice is due; deciding who gets the notice, and giving it, is ADT''s concern'
@@ -2427,7 +2495,17 @@ references:
 - id: REF-E18
   title: 45 CFR 164.524 and 164.526, access and amendment
   url: https://www.ecfr.gov/current/title-45/section-164.524
+- id: REF-E19
+  title: 45 CFR 164.530(j), documentation and retention
+  url: https://www.ecfr.gov/current/title-45/section-164.530
 changelog:
+- version: 0.7.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - status_reason records why an encounter was cancelled or entered in error, separate from reasons (FR-E14), with the cancel_reasons setting.
+  - Attending changes, cancelled leave and returns, and bed swaps from Admission, discharge and transfer (BR-E43).
+  - Correction requests are kept with the encounter (BR-E44).
 - version: 0.6.1
   date: '2026-10-08'
   breaking: false
@@ -2502,6 +2580,10 @@ tables:
     type: uuid
   - name: status
     type: text
+  - name: status_reason
+    type: jsonb
+    nullable: true
+    note: code and text
   - name: subject_status
     type: text
     nullable: true
@@ -2638,6 +2720,65 @@ tables:
   - name: one_encounter_per_appointment
     definition: UNIQUE (appointment_id)
     note: FR-E12
+- name: encounter_correction_requests
+  description: Correction requests and their outcome (BR-E44).
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: encounter_id
+    type: uuid
+  - name: requested_by
+    type: text
+  - name: requested_at
+    type: timestamptz
+  - name: request
+    type: jsonb
+    note: what is wrong, the correct value, restriction asked for
+  - name: due_at
+    type: timestamptz
+  - name: extension_reason
+    type: text
+    nullable: true
+  - name: decision
+    type: text
+    nullable: true
+    note: accepted or denied
+  - name: decision_reason
+    type: text
+    nullable: true
+  - name: decided_at
+    type: timestamptz
+    nullable: true
+  - name: disagreement
+    type: text
+    nullable: true
+  - name: rebuttal
+    type: text
+    nullable: true
+  - name: recipients_told
+    type: jsonb
+    default: '''[]'''
+- name: encounter_access_log
+  description: Every view and change of an encounter, with the reason where one was required. Append-only; nobody it records can change it.
+  columns:
+  - name: id
+    type: bigint
+    note: generated identity
+  - name: encounter_id
+    type: uuid
+  - name: actor
+    type: text
+  - name: action
+    type: text
+  - name: reason
+    type: text
+    nullable: true
+  - name: at
+    type: timestamptz
+  indexes:
+  - name: by_encounter
+    definition: (encounter_id, at)
 technicalNotes:
 - id: TN-E1
   title: Pick the code release by date
@@ -2756,10 +2897,11 @@ compliance:
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.526
   obligation: Decide amendment requests within 60 days, with written denials and statements of disagreement.
-  how: Correction requests decided within the Patients module's deadlines; disagreements go with later disclosures.
+  how: Correction requests decided within the Patients module's deadlines; disagreements go with later disclosures. Requests are kept linked to the encounter with any denial, disagreement and rebuttal.
   status: met
   covered_by:
   - BR-E40
+  - BR-E44
 - id: CMP-E15
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.522(a)(1)(vi)
@@ -2815,6 +2957,14 @@ compliance:
   status: partly met
   covered_by:
   - BR-E39
+- id: CMP-E22
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.530(j)
+  obligation: Keep required documentation for 6 years from its creation or when it was last in effect, whichever is later.
+  how: Correction requests are kept with the encounter, and at least 6 years from their decision in the US.
+  status: met
+  covered_by:
+  - BR-E44
 ---
 Every note, order and result in the record belongs to an encounter. This
 module keeps that record of each visit and stay: when it happened, who was

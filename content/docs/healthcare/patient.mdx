@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.7.1
+version: 0.8.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -234,6 +234,11 @@ dataModel:
   type: boolean
   required: false
   description: Set while the patient contests the accuracy of their data and asked for restriction (BR-H17).
+- name: correction_requests
+  type: correction request[]
+  required: false
+  description: 'Requests to correct the record: what was asked and by whom, when, the deadline and any extension, the decision and its reason, any statement of disagreement and rebuttal, and the people the patient named to be told (BR-H51).'
+  constraints: set by the service through correction requests
 - name: replaced_by
   type: string
   required: false
@@ -445,7 +450,7 @@ businessRules:
   text: An address confidentiality program substitute address is recorded as the patient's address with its program and participant number, and is never used for matching. Whether the hospital must accept it is set by acp_acceptance. The real address is not required.
   rationale: States such as Washington and California give survivors of abuse a substitute address that state and local agencies must accept, while private businesses may choose to. Many participants share one substitute address, so matching on it would link strangers.
 - id: BR-H47
-  text: Fields the service sets, such as replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links, legal_hold, accuracy_contested and demographics_confirmed_at, cannot be written by clients. Each changes only through its own operation.
+  text: Fields the service sets, such as replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links, legal_hold, accuracy_contested, correction_requests and demographics_confirmed_at, cannot be written by clients. Each changes only through its own operation.
   rationale: A client writing replaced_by could hide a record behind another one, and a forged last_care_at would change retention.
 - id: BR-H48
   text: A patient, or their representative within their scope, can read their own record electronically as soon as it is saved. No policy holds data back for review first. A patient can ask for their own access to be delayed (patient_requested_delay). access_request_deadline applies only to copies in another form.
@@ -456,6 +461,9 @@ businessRules:
 - id: BR-H50
   text: A record is not inactivated automatically while the patient has an appointment that has not started or an encounter that is open.
   rationale: inactive_after looks back at care. A patient booked for next month, or in hospital now, is in active use whatever their history.
+- id: BR-H51
+  text: Each correction request is kept and linked to the record it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the record, and in the United States for at least 6 years from its decision. It moves with the record in a merge.
+  rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). A merge must not lose a disagreement that has to go with later disclosures (BR-H44).
 validations:
 - field: names
   rule: at least one usual, official or temp name; a name may have only a given name or only a family name
@@ -559,7 +567,7 @@ validations:
 - field: representatives
   rule: kind estate representative only for a deceased patient; other kinds only for a living one
   error: PATIENT_INVALID_REPRESENTATIVE
-- field: replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links, legal_hold, accuracy_contested, demographics_confirmed_at
+- field: replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links, legal_hold, accuracy_contested, demographics_confirmed_at, correction_requests
   rule: never sent by clients (BR-H47)
   error: PATIENT_READ_ONLY_FIELD
 stateMachine:
@@ -980,6 +988,12 @@ edgeCases:
   covers:
   - BR-H50
   - AC-H77
+- id: EC-H51
+  situation: A patient whose correction was denied is later found to be a duplicate and merged.
+  behaviour: The request and statement of disagreement move to the remaining record, so they still go with later disclosures.
+  covers:
+  - BR-H51
+  - AC-H78
 functionalRequirements:
 - id: FR-H1
   text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
@@ -1736,6 +1750,12 @@ acceptanceCriteria:
   verifies:
   - BR-H50
   - FR-H15
+- id: AC-H78
+  given: jurisdiction us, a correction request denied with a statement of disagreement, and a duplicate record
+  when: the record is read, the two records are merged, and retention is applied 5 years after the decision
+  then: the request, denial and statement are linked to the record, move to the remaining record in the merge, and are still kept
+  verifies:
+  - BR-H51
 operations:
 - name: Search patients
   actor: Registrar
@@ -2522,6 +2542,10 @@ personalData:
   category: personal; reveals the patient is in a protection program
   purpose: Using the substitute address lawfully
   retention: record_retention
+- field: correction_requests
+  category: personal, and health data where the request concerns it
+  purpose: Honouring the patient's right to correction, and showing it was honoured
+  retention: record_retention; in the United States, at least 6 years from the decision (BR-H51)
 errors:
 - code: PATIENT_NOT_FOUND
   http: 404
@@ -2968,7 +2992,16 @@ references:
 - id: REF-H44
   title: 'ONC FAQ: when a delay in fulfilling a request for EHI is an interference'
   url: https://healthit.gov/faq/when-would-delay-fulfilling-request-access-exchange-or-use-ehi-be-considered-interference-under/
+- id: REF-H45
+  title: 45 CFR 164.530(j), documentation and retention
+  url: https://www.ecfr.gov/current/title-45/section-164.530
 changelog:
+- version: 0.8.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Correction requests are kept with the record, move with it in a merge, and are kept at least 6 years in the US (BR-H51, 45 CFR 164.530(j)).
+  - Reference tables for correction requests and the access log.
 - version: 0.7.1
   date: '2026-10-08'
   breaking: false
@@ -3268,6 +3301,70 @@ tables:
   - name: search_log_by_user
     definition: (user_id, searched_at)
     note: counting searches per window
+- name: patient_correction_requests
+  description: Correction requests and their outcome (BR-H51).
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: requested_by
+    type: text
+  - name: requested_at
+    type: timestamptz
+  - name: request
+    type: jsonb
+    note: what is wrong, the correct value, restriction asked for, named recipients
+  - name: due_at
+    type: timestamptz
+  - name: extension_reason
+    type: text
+    nullable: true
+  - name: decision
+    type: text
+    nullable: true
+    note: accepted or denied
+  - name: decision_reason
+    type: text
+    nullable: true
+  - name: decided_at
+    type: timestamptz
+    nullable: true
+  - name: disagreement
+    type: text
+    nullable: true
+  - name: rebuttal
+    type: text
+    nullable: true
+  - name: recipients_told
+    type: jsonb
+    default: '''[]'''
+  indexes:
+  - name: by_patient
+    definition: (patient_id)
+  - name: open_requests
+    definition: (due_at) WHERE decision IS NULL
+- name: patient_access_log
+  description: Every view and change of a record, with the reason given for restricted records. Append-only; nobody it records can change it.
+  columns:
+  - name: id
+    type: bigint
+    note: generated identity
+  - name: patient_id
+    type: uuid
+  - name: actor
+    type: text
+  - name: action
+    type: text
+  - name: reason
+    type: text
+    nullable: true
+  - name: at
+    type: timestamptz
+  indexes:
+  - name: by_patient
+    definition: (patient_id, at)
 technicalNotes:
 - id: TN-H1
   title: Match in two steps
@@ -3344,12 +3441,13 @@ compliance:
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.526
   obligation: Decide amendment requests within 60 days, inform recipients, and keep statements of disagreement with later disclosures.
-  how: Correction requests, patient.corrected and patient.disagreement_filed.
+  how: Correction requests, patient.corrected and patient.disagreement_filed. Requests are kept linked to the record with any denial, disagreement and rebuttal.
   status: met
   covered_by:
   - BR-H17
   - BR-H43
   - BR-H44
+  - BR-H51
 - id: CMP-H8
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.528
@@ -3543,6 +3641,14 @@ compliance:
   status: deployment
   covered_by:
   - AS-H2
+- id: CMP-H31
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.530(j)
+  obligation: Keep required documentation for 6 years from its creation or when it was last in effect, whichever is later.
+  how: Correction requests are kept with the record, and at least 6 years from their decision in the US.
+  status: met
+  covered_by:
+  - BR-H51
 ---
 Every clinical module refers to a patient by id. This module keeps that id
 pointing at one person, and keeps who that person is accurate over the years.
