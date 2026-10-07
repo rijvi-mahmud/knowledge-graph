@@ -83,6 +83,7 @@ for (const file of mdxFiles(root)) {
 // --- per-module checks -------------------------------------------------------
 
 const ID_LISTS = [
+  'compliance',
   'businessRules',
   'functionalRequirements',
   'constraints',
@@ -138,6 +139,10 @@ for (const node of all) {
   for (const e of spec.edgeCases ?? [])
     for (const id of e.covers ?? [])
       if (!known.has(id)) errors.push(`${where}: ${e.id} covers ${id}, which doesn't exist`);
+  // A compliance item says which ids meet it; they must exist.
+  for (const c of spec.compliance ?? [])
+    for (const id of c.covered_by ?? [])
+      if (!known.has(id)) errors.push(`${where}: ${c.id} is covered by ${id}, which doesn't exist`);
 
   // Each endpoint is defined once: no two operations share a method and path.
   const endpoints = new Map<string, string>();

@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.3.3
+version: 0.3.4
 status: draft
 industry: healthcare
 domain: ehr
@@ -679,6 +679,11 @@ references:
   title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
 changelog:
+- version: 0.3.4
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - A Compliance section adds EMTALA and privacy aliases to the inherited entries.
 - version: 0.3.3
   date: '2026-10-07'
   breaking: false
@@ -764,6 +769,24 @@ tables:
   indexes:
   - name: one_downtime_id
     definition: UNIQUE (downtime_id) WHERE downtime_id IS NOT NULL
+compliance:
+- id: CMP-E1
+  regulation: EMTALA
+  provision: 42 CFR 489.24(d)(4)
+  obligation: Never delay screening or treatment to ask about payment or insurance.
+  how: Quick registration needs only what identification requires, and asks nothing about payment first.
+  status: met
+  covered_by:
+  - BR-E6
+- id: CMP-E2
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Use and disclose only the minimum necessary.
+  how: Privacy aliases are shown on lists, boards and bands; the official name only when opened with a reason.
+  status: met
+  covered_by:
+  - BR-E7
+  - FR-E6
 ---
 Patients build on the [patient record rules](/docs/healthcare/patient)
 every healthcare application shares. This layer adds what happens at a

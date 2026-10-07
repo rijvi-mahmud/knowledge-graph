@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.6.0
+version: 0.7.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -1099,7 +1099,15 @@ references:
 - id: REF-H27
   title: 45 CFR 149.610, good faith estimates for uninsured or self-pay individuals
   url: https://www.ecfr.gov/current/title-45/section-149.610
+- id: REF-H28
+  title: 45 CFR 164.524, access of individuals to protected health information
+  url: https://www.ecfr.gov/current/title-45/section-164.524
 changelog:
+- version: 0.7.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - A Compliance section maps HIPAA, GDPR, Section 1557 and No Surprises Act obligations to the rules that meet them.
 - version: 0.6.0
   date: '2026-10-08'
   breaking: false
@@ -1196,6 +1204,124 @@ dependencies:
   - 'Gives: appointment.entered_in_error, so nothing is charged for an appointment recorded by mistake'
   - 'Gives: appointment.booked and appointment.rescheduled with the booking time and scheduled date, for good faith estimates in the United States (45 CFR 149.610)'
   - What to charge, and whether to charge at all, is Billing's concern
+compliance:
+- id: CMP-H1
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Use and disclose only the minimum necessary.
+  how: Reminders carry only what is needed to attend; clinical fields are visible only to roles that need them.
+  status: met
+  covered_by:
+  - BR-H3
+- id: CMP-H2
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(g)
+  obligation: Treat a personal representative as the patient, within their authority.
+  how: Representatives act only when the Patients module confirms their authority, and every action records them.
+  status: met
+  covered_by:
+  - BR-H5
+  - FR-H5
+- id: CMP-H3
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.522(b)
+  obligation: Accommodate requests for confidential communications.
+  how: Every appointment message goes where the patient asked.
+  status: met
+  covered_by:
+  - BR-H4
+- id: CMP-H4
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.524
+  obligation: Give individuals access to their information within 30 days.
+  how: Copy requests are tracked against access_request_deadline.
+  status: met
+  covered_by:
+  - BR-H12
+  - FR-H9
+- id: CMP-H5
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(b)
+  obligation: Record and examine activity in systems with electronic health information.
+  how: Every view and change is logged, the log cannot be changed by those it records, and a privacy officer reads it.
+  status: met
+  covered_by:
+  - BR-H7
+  - FR-H3
+  - CON-H2
+- id: CMP-H6
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(2)(iv) and (e)
+  obligation: Protect health information at rest and in transit (addressable).
+  how: Appointment data is encrypted in transit and at rest.
+  status: met
+  covered_by:
+  - CON-H1
+- id: CMP-H7
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.530(j)
+  obligation: Keep required documentation for six years.
+  how: The access log is kept by the Patients module's access_log_retention; policies are the deployment's.
+  status: deployment
+  covered_by: []
+- id: CMP-H8
+  regulation: HIPAA Breach Notification Rule
+  provision: 45 CFR 164.404
+  obligation: Notify individuals of a breach within 60 calendar days of discovery.
+  how: Detecting and reporting breaches belongs to the Security module.
+  status: other module
+  covered_by: []
+- id: CMP-H9
+  regulation: Affordable Care Act Section 1557
+  provision: 45 CFR 92.201
+  obligation: Offer qualified interpreters free of charge.
+  how: The appointment records the language so an interpreter can be arranged at no cost.
+  status: met
+  covered_by:
+  - BR-H6
+- id: CMP-H10
+  regulation: No Surprises Act
+  provision: 45 CFR 149.610
+  obligation: Give uninsured or self-pay patients a good faith estimate soon after scheduling.
+  how: Billing learns of every US booking at once, with the booking time and scheduled date.
+  status: met
+  covered_by:
+  - BR-H21
+- id: CMP-H11
+  regulation: GDPR (EU) 2016/679
+  provision: Article 9(2)(h)
+  obligation: A lawful basis to process health data for care.
+  how: The deployment establishes it before go-live.
+  status: deployment
+  covered_by:
+  - AS-H2
+- id: CMP-H12
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 12(3) and 15
+  obligation: Give a copy of personal data within one month, extendable by two.
+  how: Copy requests are tracked against access_request_deadline.
+  status: met
+  covered_by:
+  - BR-H12
+  - FR-H9
+- id: CMP-H13
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17(3)(c)
+  obligation: Health data may be kept despite an erasure request while needed for care.
+  how: Erasure is refused while the Patients module's record retention applies.
+  status: met
+  covered_by:
+  - BR-11
+- id: CMP-H14
+  regulation: GDPR (EU) 2016/679
+  provision: Article 32
+  obligation: Security appropriate to the risk.
+  how: Encryption, access logging and role-based access.
+  status: met
+  covered_by:
+  - CON-H1
+  - CON-H2
+  - BR-H7
 ---
 
 A clinical appointment is still an appointment: everything in the

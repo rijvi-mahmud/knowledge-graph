@@ -173,6 +173,16 @@ interface PerformanceTarget extends Provenance {
   measurement: string;
 }
 
+interface Compliance extends Provenance {
+  id: string;
+  regulation: string;
+  provision: string;
+  obligation: string;
+  how: string;
+  status: 'met' | 'partly met' | 'deployment' | 'other module';
+  covered_by: string[];
+}
+
 interface Risk extends Provenance {
   id: string;
   risk: string;
@@ -313,6 +323,7 @@ export interface ModuleSpecData {
   references?: Reference[];
   acronyms?: GlossaryEntry[];
   risks?: Risk[];
+  compliance?: Compliance[];
 }
 
 const has = (v: unknown[] | undefined): boolean => Array.isArray(v) && v.length > 0;
@@ -344,6 +355,7 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     context: has(data.dependencies),
     'event-delivery': has(data.deliveryGuarantees),
     privacy: has(data.personalData),
+    compliance: has(data.compliance),
     performance: has(data.performanceTargets),
     acronyms: has(data.acronyms),
     risks: has(data.risks),
@@ -1381,6 +1393,43 @@ export function ModuleSpec({
         from: e,
       })),
       (items) => <AccordionList origin={origin} items={items} />,
+    ),
+
+    compliance: (
+      <AccordionList
+        origin={origin}
+        items={(data.compliance ?? []).map((c) => ({
+          key: c.id,
+          ref: c.id,
+          text: (
+            <>
+              <span className="font-medium">
+                {c.regulation}, {c.provision}:
+              </span>{' '}
+              {c.obligation}
+            </>
+          ),
+          detail: (
+            <div className="flex flex-col gap-0.5">
+              <span>
+                <Label>How it's met:</Label>
+                {c.how}
+              </span>
+              <span>
+                <Label>Status:</Label>
+                {c.status}
+              </span>
+              {has(c.covered_by) && (
+                <span>
+                  <Label>Covered by:</Label>
+                  <span className="font-code text-sm">{c.covered_by.join(', ')}</span>
+                </span>
+              )}
+            </div>
+          ),
+          from: c,
+        }))}
+      />
     ),
 
     'access-matrix': (() => {

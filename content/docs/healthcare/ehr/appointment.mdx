@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.7.0
+version: 0.7.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -1162,6 +1162,11 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.7.1
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - A Compliance section adds 42 CFR Part 2 and CMS-0057-F to the inherited HIPAA and GDPR entries.
 - version: 0.7.0
   date: '2026-10-08'
   breaking: false
@@ -1225,6 +1230,31 @@ glossary:
   definition: A patient's time in hospital as an inpatient or under observation, recorded as one encounter until it ends.
 - term: Prior authorization
   definition: A payer's approval, required by some plans before a service is given, for the payer to cover it.
+compliance:
+- id: CMP-E1
+  regulation: 42 CFR Part 2
+  provision: 42 CFR 2.13 and 2.31
+  obligation: Protect records that identify a patient of a federally assisted substance use disorder program, and disclose them only with the required consent.
+  how: Appointments in sensitive departments carry the sensitivity codes, are shown only to that department and the patient, and their messages name neither department nor service; disclosure is Consent's decision.
+  status: met
+  covered_by:
+  - BR-E17
+- id: CMP-E2
+  regulation: CMS Interoperability and Prior Authorization Final Rule
+  provision: CMS-0057-F
+  obligation: Payers decide prior authorization within 72 hours (expedited) or 7 days (standard).
+  how: Booking never waits for authorization; status and denials are shown and reviewed.
+  status: met
+  covered_by:
+  - BR-E12
+- id: CMP-E3
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Use and disclose only the minimum necessary.
+  how: Department worklists show only that department's appointments.
+  status: met
+  covered_by:
+  - BR-E17
 ---
 Appointments build on the
 [clinical appointment rules](/docs/healthcare/appointment), which build on the

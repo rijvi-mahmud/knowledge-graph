@@ -75,6 +75,11 @@ export const SPEC_SECTIONS = [
     summary: 'Personal data held, why, for how long, and how it is erased',
   },
   {
+    id: 'compliance',
+    title: 'Compliance',
+    summary: 'Which HIPAA, GDPR and other legal obligations apply, and how the spec meets each',
+  },
+  {
     id: 'requirements',
     title: 'Functional requirements',
     summary: 'What the service must do, and how each requirement is verified',
@@ -164,7 +169,7 @@ export const SPEC_GROUPS: SpecGroup[] = [
     id: 'security',
     title: 'Security',
     slug: 'security',
-    sections: ['access-matrix', 'permissions', 'privacy'],
+    sections: ['access-matrix', 'permissions', 'privacy', 'compliance'],
   },
   {
     id: 'requirements',

@@ -392,6 +392,23 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
       ),
     );
 
+  if (has(data.compliance))
+    section(
+      'compliance',
+      data
+        .compliance!.map((c) =>
+          [
+            `**${c.id}** ${c.regulation}, ${c.provision}: ${c.obligation}${mark(c)}`,
+            `  - How it's met: ${c.how}`,
+            `  - Status: ${c.status}`,
+            has(c.covered_by) ? `  - Covered by: ${c.covered_by.join(', ')}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        )
+        .join('\n'),
+    );
+
   if (has(data.performanceTargets))
     section(
       'performance',

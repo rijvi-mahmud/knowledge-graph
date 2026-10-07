@@ -204,7 +204,7 @@ are defined only in `spec-sections.ts`:
 | Functions | Business rules, state machine, workflows, validations, edge cases |
 | Data | Data model (logical), relationships |
 | External interfaces | API (each operation with its HTTP method, path and success status), API conventions, events, event delivery guarantees, errors (with HTTP status), dependencies |
-| Security | Permission matrix (actions × actors: any, own, none or a condition), permissions, privacy and retention |
+| Security | Permission matrix (actions × actors: any, own, none or a condition), permissions, privacy and retention, compliance (each HIPAA, GDPR or other legal obligation, how it's met, status and covering ids, `CMP-`) |
 | Requirements | Functional requirements (with verification method), performance requirements (SLIs and targets), quality attributes (ISO/IEC 25010), design constraints, configuration |
 | Reference implementation | Non-normative. Storage design (reference PostgreSQL tables, indexes, constraints) and implementation notes |
 | Verification | Acceptance criteria, traceability matrix (derived from each criterion's `verifies`) |
@@ -234,7 +234,7 @@ found those confusing.
 ### Every id is a link, and every reference is specific
 
 - Any id in a module page (BR-4, FR-E2, AC-3, EC-1, ADR-11, CON-2, AS-1, DG-1,
-  PERF-4, RISK-2, REF-5) links to its item, in the prose
+  PERF-4, RISK-2, REF-5, CMP-3) links to its item, in the prose
   (`remark-spec-ids.ts`) and in the spec pages (`linkIds` in
   `module-spec.tsx`). The prefix-to-section map lives only in
   `src/lib/spec-ids.ts`. A new id prefix must be added there.
@@ -298,6 +298,13 @@ is what surfaces the edge cases. Before calling a module done, check it has:
   **technical notes** (`TN-`)
 - **Privacy and retention** for every field holding personal data, and an
   erasure rule that respects GDPR Article 17(3)
+- **Compliance** (`CMP-`): every HIPAA (Privacy, Security and Breach
+  Notification Rules) and GDPR obligation that applies, plus other law such
+  as 42 CFR Part 2, EMTALA or the EHDS, with how it's met and the ids that
+  meet it. Status is met, partly met, deployment (an organisational duty,
+  such as a risk analysis or DPIA) or other module (named). The core page
+  lists only GDPR, which isn't industry-specific. Verify every provision in
+  eCFR or EUR-Lex before citing it.
 - **Delivery guarantees** (`DG-`, including what every event carries), **API
   conventions**, **performance requirements** (`PERF-`, measurable; targets
   that vary by deployment say so instead of inventing a number), **risks**
@@ -691,9 +698,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Encounters (`healthcare/ehr/encounter` 0.4.0, EHR-only), Patients (`healthcare/patient` 0.6.1, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.3.3) and Appointments
-  (`healthcare/appointment` 0.6.0, `healthcare/ehr/appointment` 0.7.0; `core/appointment` 0.10.0). All
+  drafts: Encounters (`healthcare/ehr/encounter` 0.5.0, EHR-only), Patients (`healthcare/patient` 0.7.0, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.3.4) and Appointments
+  (`healthcare/appointment` 0.7.0, `healthcare/ehr/appointment` 0.7.1; `core/appointment` 0.11.0). All
   support the US and EU through the `jurisdiction` setting. Next: Admission, discharge and transfer.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

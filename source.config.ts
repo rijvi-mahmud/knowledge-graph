@@ -192,6 +192,19 @@ const performanceSchema = z.object({
 });
 
 // Something that could go wrong, what it would cost, and how the spec limits it.
+// A legal obligation that applies to the module, such as a HIPAA or GDPR
+// provision, how the spec meets it, and the ids that do. Obligations the
+// deployment or another module must meet say so in status.
+const complianceSchema = z.object({
+  id: z.string(), // e.g. "CMP-H1"
+  regulation: z.string(), // e.g. "HIPAA Privacy Rule", "GDPR"
+  provision: z.string(), // e.g. "45 CFR 164.524", "Article 15"
+  obligation: z.string(),
+  how: z.string(),
+  status: z.enum(['met', 'partly met', 'deployment', 'other module']).default('met'),
+  covered_by: z.array(z.string()).default([]),
+});
+
 const riskSchema = z.object({
   id: z.string(), // e.g. "RISK-1"
   risk: z.string(),
@@ -399,6 +412,7 @@ const graphSchema = pageSchema.extend({
   technicalNotes: z.array(technicalNoteSchema).default([]),
   acronyms: z.array(glossarySchema).default([]),
   risks: z.array(riskSchema).default([]),
+  compliance: z.array(complianceSchema).default([]),
 });
 
 // A domain always lives inside an industry; a domain page without one would

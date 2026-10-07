@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.10.0
+version: 0.11.0
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -1996,6 +1996,11 @@ references:
   title: Acuity Scheduling, booking appointments for clients (bulk reschedule)
   url: https://help.acuityscheduling.com/hc/en-us/articles/16676870828685-Booking-appointments-for-clients
 changelog:
+- version: 0.11.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - A Compliance section maps GDPR obligations to the rules that meet them.
 - version: 0.10.0
   date: '2026-10-07'
   breaking: false
@@ -2605,6 +2610,71 @@ technicalNotes:
       INSERT INTO outbox (id, type, subject, payload)
         VALUES (gen_random_uuid(), 'appointment.cancelled', $1, $2);
     COMMIT;
+compliance:
+- id: CMP-1
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(c)
+  obligation: Personal data is limited to what the purpose needs.
+  how: Events carry ids and the revision, not participants' details; free text is limited by max_text_length.
+  status: met
+  covered_by:
+  - DG-5
+  - BR-25
+- id: CMP-2
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(e)
+  obligation: Personal data is kept no longer than needed.
+  how: personal_data_retention decides how long; when it ends, personal fields are erased and the appointment kept.
+  status: met
+  covered_by:
+  - BR-11
+- id: CMP-3
+  regulation: GDPR (EU) 2016/679
+  provision: Article 16
+  obligation: A person can have inaccurate data corrected.
+  how: Participants' details are changed through the update operations, under revision control.
+  status: met
+  covered_by:
+  - BR-14
+- id: CMP-4
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17 and 17(3)
+  obligation: A person can have their data erased, except where it is needed for a legal obligation or legal claims.
+  how: Erasure clears personal fields and keeps what a legal obligation or claim needs.
+  status: met
+  covered_by:
+  - BR-11
+  - FR-14
+- id: CMP-5
+  regulation: GDPR (EU) 2016/679
+  provision: Article 19
+  obligation: Recipients are told of an erasure.
+  how: appointment.anonymised tells Calendar and Notification to erase their copies.
+  status: met
+  covered_by:
+  - FR-14
+- id: CMP-6
+  regulation: GDPR (EU) 2016/679
+  provision: Article 25
+  obligation: Data protection by design and by default.
+  how: Participants see only their own appointments; fields the service sets are read-only.
+  status: met
+  covered_by:
+  - BR-25
+- id: CMP-7
+  regulation: GDPR (EU) 2016/679
+  provision: Article 32
+  obligation: Security appropriate to the risk.
+  how: Rate limits and access checks are specified here; encryption and other measures are set by the industry layer or the deployment.
+  status: partly met
+  covered_by: []
+- id: CMP-8
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 30, 33 to 35
+  obligation: Records of processing, breach notification within 72 hours, and impact assessments.
+  how: Organisational duties of the deployment, not of this module.
+  status: deployment
+  covered_by: []
 ---
 
 An appointment reserves a time slot between two or more participants. Booking,

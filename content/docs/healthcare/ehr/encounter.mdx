@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.4.0
+version: 0.5.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -261,6 +261,12 @@ dataModel:
   required: false
   description: Billing accounts for the encounter, owned by Billing (FHIR Encounter.account).
   constraints: set by the service from Billing
+- name: directory_status
+  type: enum
+  required: false
+  description: Whether the patient is listed in the facility directory during the stay.
+  constraints: 'not_asked | listed | opted_out; codes: none standard, local to this specification'
+  variant: inpatient
 relationships:
 - type: belongs_to
   target: patient
@@ -407,6 +413,10 @@ businessRules:
   text: A transfer recorded by mistake can be cancelled, which completes nothing and makes the previous location active again. An earlier movement is corrected by its entry id; on a locked encounter the correction is an amendment.
   rationale: IHE defines cancel transfer (A12) and identifies each movement so a past one can be corrected (Historic Movement option). Location-based billing and the record of where the patient was depend on it.
   variant: inpatient
+- id: BR-E38
+  variant: inpatient
+  text: A patient in a stay is listed in the facility directory (name and location, for people who ask by name) only after being told and not objecting, which sets directory_status listed. In an emergency or incapacity they can be listed if it fits their known wishes and best interest, and are asked as soon as they can be. An objection removes the listing at once, and restricted or very restricted patients are never listed.
+  rationale: HIPAA lets a hospital keep a directory of name and location for people who ask by name, but only after telling the patient and giving them the chance to object, with an exception for incapacity or emergency until they can be asked (45 CFR 164.510(a)). Telling a caller someone is in hospital, against their wishes, can put them at risk.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -474,6 +484,9 @@ validations:
 - field: account_ids
   rule: set by the service from Billing, never sent by clients
   error: ENCOUNTER_READ_ONLY_FIELD
+- field: directory_status
+  rule: not_asked, listed or opted_out; listed only for inpatient and observation encounters
+  error: ENCOUNTER_INVALID_CODE
 stateMachine:
   initial: planned
   states:
@@ -779,6 +792,12 @@ edgeCases:
   covers:
   - BR-E36
   - AC-E48
+- id: EC-E32
+  situation: An unconscious patient is admitted after an accident and their family calls.
+  behaviour: They can be listed if it fits their known wishes and best interest, and are asked as soon as they wake.
+  covers:
+  - BR-E38
+  - AC-E52
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -1241,6 +1260,12 @@ acceptanceCriteria:
   then: no encounter exists at check-in; it opens in progress when care starts
   verifies:
   - BR-E2
+- id: AC-E52
+  given: two admitted patients named Sam Lee, one listed and one opted out, and a restricted patient
+  when: a caller asks for each by name, and the restricted patient is set to listed
+  then: only the listed patient's location is returned, encounter.directory_changed is emitted on each change, and listing the restricted patient fails with ENCOUNTER_INVALID_CODE
+  verifies:
+  - BR-E38
 operations:
 - name: Open an encounter
   actor: System
@@ -1568,6 +1593,32 @@ operations:
   - ENCOUNTER_REVISION_CONFLICT
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
   variant: inpatient
+- name: Set directory status
+  actor: Registrar
+  description: Record whether the patient is listed in the facility directory, or has objected.
+  method: POST
+  path: /encounters/{id}/directory
+  success: 200
+  input: encounter id, revision, listed or opted_out
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+  variant: inpatient
+- name: Look up the directory
+  actor: Registrar
+  description: 'For someone asking for a patient by name: the location of listed patients only.'
+  method: GET
+  path: /encounters/directory
+  success: 200
+  input: the patient's full name
+  output: locations of listed patients with that name; nothing for anyone else
+  errors:
+  - ENCOUNTER_INVALID_QUERY
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+  variant: inpatient
 apiConventions:
 - topic: Authentication
   text: Every request carries the caller's identity from Identity. Permissions are checked against it (Permission matrix).
@@ -1707,6 +1758,12 @@ events:
   - encounter_id
   - appointment_id
   - revision
+- name: encounter.directory_changed
+  description: The patient was listed in, or removed from, the facility directory.
+  payload:
+  - encounter_id
+  - directory_status
+  - revision
 deliveryGuarantees:
 - id: DG-E1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -1810,6 +1867,14 @@ accessMatrix:
     Privacy officer: none
     System: any
   permission: encounter.write
+- action: Set directory status, or look up the directory
+  roles:
+    Clinician: none
+    Registrar: any
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+  permission: encounter.write
 personalData:
 - field: patient_id, class, class_history, type, priority, department_id, department_history, appointment_ids, part_of, episode_of_care_ids, identifiers, based_on, account_ids, planned_end
   category: health data; shows the person received care, where and of what kind
@@ -1847,6 +1912,10 @@ personalData:
   category: personal
   purpose: Access review
   retention: access_log_retention of the Patients module
+- field: directory_status
+  category: personal
+  purpose: Honouring the patient's choice about the facility directory
+  retention: record_retention of the Patients module
 errors:
 - code: ENCOUNTER_NOT_FOUND
   http: 404
@@ -1968,6 +2037,7 @@ dependencies:
   - 'Gives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled and encounter.class_changed, confirming what was recorded'
   - 'Gives: encounter.observation_started with when the US observation notice is due; deciding who gets the notice, and giving it, is ADT''s concern'
   - 'Receives: discharge with disposition expired when a patient dies; recording the death is the Patients module''s concern'
+  - 'Gives: encounter.directory_changed, so wards and the switchboard know whether to confirm the patient is here'
   - Beds, orders and transfers are ADT's concern
 - service: organization-service
   direction: upstream
@@ -2129,7 +2199,16 @@ references:
 - id: REF-E15
   title: HL7 FHIR R5, Appointment (appointment statuses and encounters)
   url: https://hl7.org/fhir/R5/appointment.html
+- id: REF-E16
+  title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object (facility directories)
+  url: https://www.ecfr.gov/current/title-45/section-164.510
 changelog:
+- version: 0.5.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Facility directory with the patient's right to object (BR-E38, 45 CFR 164.510(a)).
+  - A Compliance section maps HIPAA, Part 2, Medicare and GDPR obligations to the rules that meet them.
 - version: 0.4.0
   date: '2026-10-08'
   breaking: true
@@ -2330,6 +2409,97 @@ technicalNotes:
 - id: TN-E2
   title: Make event consumers idempotent
   text: Key encounter creation on the source event (appointment id, emergency arrival id or admission id) as well as the Idempotency-Key, so a replayed event from Appointments or ADT returns the existing encounter.
+compliance:
+- id: CMP-E1
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.510(a)
+  obligation: Facility directory only after the patient is told and can object.
+  how: directory_status, with the emergency exception and no listing for restricted patients.
+  status: met
+  covered_by:
+  - BR-E38
+- id: CMP-E2
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Use and disclose only the minimum necessary.
+  how: Events carry ids, codes and changed field names only.
+  status: met
+  covered_by:
+  - DG-E3
+- id: CMP-E3
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(b)
+  obligation: Audit controls.
+  how: Every view and change is logged and readable by a privacy officer.
+  status: met
+  covered_by:
+  - BR-E18
+  - FR-E10
+- id: CMP-E4
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(2)(iv) and (e)
+  obligation: Encryption at rest and in transit.
+  how: Encounter data is encrypted in transit and at rest.
+  status: met
+  covered_by:
+  - CON-E1
+- id: CMP-E5
+  regulation: 42 CFR Part 2
+  provision: 42 CFR 2.13 and 2.31
+  obligation: Protect substance use disorder program records and disclose them only with the required consent.
+  how: Sensitivity codes from Organization travel with every attached entry; Consent decides disclosure.
+  status: met
+  covered_by:
+  - BR-E14
+- id: CMP-E6
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.24(b) and (c)
+  obligation: Keep records complete and protect their integrity; final diagnosis and completion within 30 days of discharge.
+  how: Record completion, locking and amendments.
+  status: met
+  covered_by:
+  - BR-E7
+  - BR-E8
+- id: CMP-E7
+  regulation: Medicare Outpatient Observation Notice
+  provision: 42 CFR 489.20(y)
+  obligation: Give the observation notice within 36 hours of observation starting.
+  how: encounter.observation_started carries the deadline; ADT gives the notice.
+  status: other module
+  covered_by:
+  - BR-E23
+- id: CMP-E8
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(c)
+  obligation: Data minimisation.
+  how: Events carry no diagnoses text, notes or patient details.
+  status: met
+  covered_by:
+  - DG-E3
+- id: CMP-E9
+  regulation: GDPR (EU) 2016/679
+  provision: Article 9(2)(h) and 17(3)(c)
+  obligation: Process and keep health data for care.
+  how: Retention and legal holds follow the Patients module.
+  status: met
+  covered_by:
+  - BR-E26
+- id: CMP-E10
+  regulation: GDPR (EU) 2016/679
+  provision: Article 32
+  obligation: Security appropriate to the risk.
+  how: Encryption, access logging and reasons for restricted patients.
+  status: met
+  covered_by:
+  - CON-E1
+  - BR-E18
+- id: CMP-E11
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 30, 33 to 35 and 37
+  obligation: Records of processing, breach notification, impact assessment and a data protection officer.
+  how: Organisational duties of the deployment.
+  status: deployment
+  covered_by: []
 ---
 Every note, order and result in the record belongs to an encounter. This
 module keeps that record of each visit and stay: when it happened, who was

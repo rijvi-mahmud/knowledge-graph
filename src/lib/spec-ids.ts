@@ -18,10 +18,11 @@ const PREFIX_SECTION: Record<string, SpecSectionId> = {
   PERF: 'performance',
   RISK: 'risks',
   REF: 'references',
+  CMP: 'compliance',
 };
 
 /** Matches an id: a known prefix, an optional layer letter (H, E, ...) and a number. */
-export const SPEC_ID = /\b(BR|FR|AC|EC|ADR|CON|AS|DG|PERF|RISK|REF)-([A-Z]{0,3}\d+)\b/g;
+export const SPEC_ID = /\b(BR|FR|AC|EC|ADR|CON|AS|DG|PERF|RISK|REF|CMP)-([A-Z]{0,3}\d+)\b/g;
 
 /** The URL of an id's item, given the module page it belongs to (e.g. "/docs/core/appointment"). */
 export function specIdHref(baseUrl: string, id: string): string | undefined {

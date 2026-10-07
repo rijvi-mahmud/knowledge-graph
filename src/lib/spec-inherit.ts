@@ -62,6 +62,7 @@ const KEYS = {
   performanceTargets: (i: Item) => str(i.id),
   acronyms: (i: Item) => str(i.term),
   risks: (i: Item) => str(i.id),
+  compliance: (i: Item) => str(i.id),
 } satisfies Partial<Record<keyof ModuleSpecData, (i: Item) => string>>;
 
 /** Frontmatter list fields that inherit down the chain. */

@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.6.1
+version: 0.7.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -2969,6 +2969,11 @@ references:
   title: 'ONC FAQ: when a delay in fulfilling a request for EHI is an interference'
   url: https://healthit.gov/faq/when-would-delay-fulfilling-request-access-exchange-or-use-ehi-be-considered-interference-under/
 changelog:
+- version: 0.7.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - A Compliance section maps every HIPAA, GDPR, information blocking and EHDS obligation to the rules that meet it, or names who meets it.
 - version: 0.6.1
   date: '2026-10-08'
   breaking: false
@@ -3277,6 +3282,254 @@ technicalNotes:
 - id: TN-H6
   title: Standardise US addresses before matching
   text: Apply Project US@ (uppercase, standard suffix and state abbreviations, no punctuation except the ZIP+4 hyphen) to a comparison copy, and keep the address as entered for display.
+compliance:
+- id: CMP-H1
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Use and disclose only the minimum necessary.
+  how: Events carry ids only; national identifiers are masked for roles that don't need them.
+  status: met
+  covered_by:
+  - BR-H23
+  - DG-H3
+- id: CMP-H2
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(f)
+  obligation: Protect a deceased person's information for 50 years after death.
+  how: The record keeps the same protection after death.
+  status: met
+  covered_by:
+  - BR-H13
+- id: CMP-H3
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(g)
+  obligation: Treat personal representatives as the patient, within their authority, with the exceptions for minors and danger.
+  how: Representatives have a kind, scope, exclusions and period; authority ends at majority, emancipation or death, and estate representatives act after death.
+  status: met
+  covered_by:
+  - BR-H14
+  - BR-H15
+  - BR-H25
+  - BR-H45
+- id: CMP-H4
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.520
+  obligation: Give the Notice of Privacy Practices and seek acknowledgment at first service.
+  how: The Consent module, which receives patient.registered.
+  status: other module
+  covered_by: []
+- id: CMP-H5
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.522(b)
+  obligation: Accommodate confidential communications without asking why.
+  how: Every module asks this one where to contact the patient.
+  status: met
+  covered_by:
+  - BR-H16
+- id: CMP-H6
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.524
+  obligation: Give individuals access to their information.
+  how: Patients read their own record electronically at once, and copies in other forms are tracked against access_request_deadline.
+  status: met
+  covered_by:
+  - BR-H37
+  - BR-H48
+- id: CMP-H7
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.526
+  obligation: Decide amendment requests within 60 days, inform recipients, and keep statements of disagreement with later disclosures.
+  how: Correction requests, patient.corrected and patient.disagreement_filed.
+  status: met
+  covered_by:
+  - BR-H17
+  - BR-H43
+  - BR-H44
+- id: CMP-H8
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.528
+  obligation: Give an accounting of disclosures for six years.
+  how: The Release of information module.
+  status: other module
+  covered_by: []
+- id: CMP-H9
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.308(a)(1)(ii)(D)
+  obligation: Regularly review information system activity, such as audit logs and access reports.
+  how: Searches are logged and unusual volume is reported; very restricted openings are reported.
+  status: met
+  covered_by:
+  - BR-H40
+  - BR-H20
+- id: CMP-H10
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(1)
+  obligation: Access control, including an emergency access procedure.
+  how: Role-based access, and break-the-glass access with a coded reason that is logged.
+  status: met
+  covered_by:
+  - BR-H20
+- id: CMP-H11
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(b)
+  obligation: Audit controls.
+  how: Every view and change is logged with who, when, what and why.
+  status: met
+  covered_by:
+  - BR-H19
+  - FR-H10
+  - CON-H2
+- id: CMP-H12
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(2)(iv) and (e)
+  obligation: Encryption at rest and in transit (addressable; the 2025 proposed rule would make it required).
+  how: Patient data is encrypted in transit and at rest.
+  status: met
+  covered_by:
+  - CON-H1
+- id: CMP-H13
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.308(a)(1)(ii)(A)
+  obligation: Risk analysis.
+  how: An organisational duty of the deployment.
+  status: deployment
+  covered_by: []
+- id: CMP-H14
+  regulation: HIPAA Breach Notification Rule
+  provision: 45 CFR 164.404
+  obligation: Notify individuals of a breach within 60 calendar days of discovery.
+  how: The Security module.
+  status: other module
+  covered_by: []
+- id: CMP-H15
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.103
+  obligation: Don't interfere with access to electronic health information.
+  how: No review delay on patients' own access; delays only at the patient's request.
+  status: met
+  covered_by:
+  - BR-H48
+- id: CMP-H16
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(c)
+  obligation: Data minimisation.
+  how: Optional demographics are off by default and events carry no details.
+  status: met
+  covered_by:
+  - BR-H6
+  - DG-H3
+- id: CMP-H17
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(d)
+  obligation: Accuracy.
+  how: Returning patients confirm their details; corrections and placeholders are handled.
+  status: met
+  covered_by:
+  - BR-H28
+  - BR-H17
+  - BR-H32
+- id: CMP-H18
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 5(1)(e), 17 and 17(3)
+  obligation: Storage limitation and erasure, except for care and legal claims.
+  how: Erasure is refused during retention and legal holds, then identifying fields are removed.
+  status: met
+  covered_by:
+  - BR-H18
+  - BR-H24
+  - FR-H16
+- id: CMP-H19
+  regulation: GDPR (EU) 2016/679
+  provision: Article 9
+  obligation: Special category data needs a basis, and racial or ethnic origin is special category.
+  how: Basis set by the deployment; race, ethnicity and gender identity collected only where configured, self-reported.
+  status: met
+  covered_by:
+  - AS-H2
+  - BR-H6
+- id: CMP-H20
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 12(3) and 15
+  obligation: Give access and a copy within one month, extendable by two.
+  how: Immediate electronic access and tracked copy requests.
+  status: met
+  covered_by:
+  - BR-H37
+  - BR-H48
+- id: CMP-H21
+  regulation: GDPR (EU) 2016/679
+  provision: Article 13
+  obligation: Inform the patient about the processing when data is collected.
+  how: The Consent module gives the privacy notice at registration.
+  status: other module
+  covered_by: []
+- id: CMP-H22
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 16 and 18
+  obligation: Rectification, and restriction while accuracy is contested.
+  how: Correction requests and accuracy_contested.
+  status: met
+  covered_by:
+  - BR-H17
+- id: CMP-H23
+  regulation: GDPR (EU) 2016/679
+  provision: Article 19
+  obligation: Tell recipients of rectification, erasure or restriction.
+  how: patient.corrected, passed on by Release of information and Exchange.
+  status: met
+  covered_by:
+  - BR-H43
+- id: CMP-H24
+  regulation: GDPR (EU) 2016/679
+  provision: Article 20
+  obligation: Data portability, where processing is based on consent or contract.
+  how: Care is usually based on Article 9(2)(h), so Article 20 rarely applies; EU patients get portability of health data through the EHDS (Article 7), handled by Exchange.
+  status: other module
+  covered_by: []
+- id: CMP-H25
+  regulation: GDPR (EU) 2016/679
+  provision: Article 25
+  obligation: Data protection by design and by default.
+  how: Read-only service fields, optional fields off by default, very restricted records hidden from broad search.
+  status: met
+  covered_by:
+  - BR-H47
+  - BR-H39
+- id: CMP-H26
+  regulation: GDPR (EU) 2016/679
+  provision: Article 32
+  obligation: Security appropriate to the risk.
+  how: Encryption, access logging, reasons for restricted records and search monitoring.
+  status: met
+  covered_by:
+  - CON-H1
+  - BR-H19
+  - BR-H20
+  - BR-H40
+- id: CMP-H27
+  regulation: GDPR (EU) 2016/679
+  provision: Article 87
+  obligation: Conditions for national identification numbers.
+  how: Shown in full only to roles that need them.
+  status: met
+  covered_by:
+  - BR-H23
+- id: CMP-H28
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 30, 33 to 35 and 37
+  obligation: Records of processing, breach notification within 72 hours, impact assessment for large-scale health data, and a data protection officer.
+  how: Organisational duties of the deployment.
+  status: deployment
+  covered_by: []
+- id: CMP-H29
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Articles 3, 4 and 9
+  obligation: Immediate access through national access services, and information on who accessed the data.
+  how: Personal details go to the national access service on change from 2029; access reports.
+  status: met
+  covered_by:
+  - BR-H49
+  - BR-H19
 ---
 Every clinical module refers to a patient by id. This module keeps that id
 pointing at one person, and keeps who that person is accurate over the years.
