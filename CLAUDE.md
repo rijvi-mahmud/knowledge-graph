@@ -339,6 +339,15 @@ every module and layer, and for every "is there any gap?" request.
      module's own rules. Check that linked records (an appointment and its
      encounter) can't drift apart, that one fact has one owner (retention,
      sensitivity, charges), and that every mistake can be undone.
+   - **Relations and standard workflows**: search the web for the standard
+     workflow and check every relation and step against it. Compare
+     relations with FHIR R5 reference cardinalities (such as
+     Encounter.appointment 0..*, basedOn, account, identifier), encounter
+     workflows with IHE PAM ITI-31 (pending events, cancels, temporary
+     transfers, historic movements), imaging with IHE Scheduled Workflow,
+     and pre-visit steps with HFMA patient access practice and US law
+     (No Surprises Act good faith estimates, 45 CFR 149.610). Where two
+     standards disagree, make it a setting.
    - **Domain**: compare against the SRS checklist above and the sources.
      For healthcare, the ONC SAFER Guides are the best checklist of what
      hospitals get wrong.
@@ -682,9 +691,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Encounters (`healthcare/ehr/encounter` 0.3.1, EHR-only), Patients (`healthcare/patient` 0.6.0, which has no core page by the
+  drafts: Encounters (`healthcare/ehr/encounter` 0.4.0, EHR-only), Patients (`healthcare/patient` 0.6.1, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.3.3) and Appointments
-  (`healthcare/appointment` 0.5.0, `healthcare/ehr/appointment` 0.6.1; `core/appointment` 0.10.0). All
+  (`healthcare/appointment` 0.6.0, `healthcare/ehr/appointment` 0.7.0; `core/appointment` 0.10.0). All
   support the US and EU through the `jurisdiction` setting. Next: Admission, discharge and transfer.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

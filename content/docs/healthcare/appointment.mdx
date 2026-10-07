@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.5.0
+version: 0.6.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -179,6 +179,9 @@ businessRules:
 - id: BR-H20
   text: A checked-in appointment can return to booked, by undoing the check-in, until care has started. Undoing it emits appointment.check_in_undone.
   rationale: Checking a patient in to the wrong appointment is a common front-desk mistake. Without a way back, the right appointment can't be checked in and the wrong visit stays on record.
+- id: BR-H21
+  text: In the United States, when an appointment is booked or rescheduled at least 3 business days ahead, Billing is told the booking time and the scheduled date, so a good faith estimate can be given to an uninsured or self-pay patient in time.
+  rationale: The No Surprises Act requires a good faith estimate for uninsured or self-pay patients within 1 business day of scheduling when the service is 3 to 9 business days away, and within 3 business days when it is 10 or more (45 CFR 149.610). Scheduling starts the clock, so Billing must learn of it at once.
 validations:
 - field: participants
   rule: at least one participant with the role patient and one with the role practitioner
@@ -448,6 +451,12 @@ edgeCases:
   covers:
   - BR-H19
   - AC-H29
+- id: EC-H21
+  situation: A self-pay patient books an MRI 12 business days ahead.
+  behaviour: Billing receives the booking at once and has 3 business days to give the estimate.
+  covers:
+  - BR-H21
+  - AC-H31
 functionalRequirements:
 - id: FR-H1
   text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
@@ -728,6 +737,12 @@ acceptanceCriteria:
   then: the confirmation is recorded in the Patients module before appointment.checked_in is emitted
   verifies:
   - BR-H2
+- id: AC-H31
+  given: jurisdiction us and an appointment booked 5 business days ahead
+  when: it is booked
+  then: Billing receives appointment.booked with the booking time and scheduled date at once
+  verifies:
+  - BR-H21
 operations:
 - name: Book an appointment
   actor: Requester
@@ -1081,7 +1096,15 @@ references:
   title: NC Medicaid, provider billing of Medicaid beneficiaries
   url: https://medicaid.ncdhhs.gov/providers-billing-beneficiaries/open
   note: 'For the Billing module: quotes the CMS policy that Medicaid beneficiaries may not be billed for missed appointments.'
+- id: REF-H27
+  title: 45 CFR 149.610, good faith estimates for uninsured or self-pay individuals
+  url: https://www.ecfr.gov/current/title-45/section-149.610
 changelog:
+- version: 0.6.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Billing learns of every US booking at once for good faith estimates (BR-H21).
 - version: 0.5.0
   date: '2026-10-08'
   breaking: false
@@ -1171,6 +1194,7 @@ dependencies:
   contract:
   - 'Gives: appointment.completed, appointment.no_show and appointment.attendance_corrected, and the late cancellation flag on appointment.cancelled'
   - 'Gives: appointment.entered_in_error, so nothing is charged for an appointment recorded by mistake'
+  - 'Gives: appointment.booked and appointment.rescheduled with the booking time and scheduled date, for good faith estimates in the United States (45 CFR 149.610)'
   - What to charge, and whether to charge at all, is Billing's concern
 ---
 

@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.6.1
+version: 0.7.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -122,6 +122,20 @@ dataModel:
   required: false
   description: Kinds of information needing extra protection, from the department, such as SUD for a substance use disorder program.
   constraints: 'set by the service from Organization; codes: HL7 v3 ActCode SUD, PSY, HIV, SDV'
+- name: order_ids
+  type: string[]
+  required: false
+  description: Orders this appointment is booked to carry out, such as an MRI order, owned by Orders (FHIR Appointment.basedOn ServiceRequest).
+- name: financial_clearance
+  type: enum
+  required: false
+  description: Whether coverage and the patient's expected cost are settled, as the Coverage module last reported.
+  constraints: 'not_required | pending | cleared | not_cleared; set by the service from Coverage; codes: none standard, local to this specification'
+- name: pre_registered_at
+  type: instant
+  required: false
+  description: 'When the patient completed pre-registration for this appointment: details confirmed and financial clearance reached.'
+  constraints: set by the service
 businessRules:
 - id: BR-4
   text: A patient cannot have two active appointments whose slots overlap. A practitioner can, only when their department has allow_overbooking on, and with no more than max_overbooked_per_slot appointments overlapping one slot. Slots are half-open.
@@ -191,6 +205,15 @@ businessRules:
 - id: BR-E20
   text: When the encounter opened at check-in is marked entered in error, a checked-in appointment that has not ended returns to booked, as an undone check-in, so it can be checked in correctly. One that has ended is flagged needs_review with review_reason encounter_entered_in_error.
   rationale: The encounter was opened by mistake, often for the wrong patient. Leaving the appointment checked in would keep it out of every worklist, and only a person can tell what happened at a visit that has already ended.
+- id: BR-E21
+  text: An appointment booked to carry out an order records it, and Orders learns when the appointment is booked, rescheduled, cancelled or completed.
+  rationale: IHE Scheduled Workflow books imaging and procedures against the order that asked for them, and FHIR records it as Appointment.basedOn. Without the link an order can sit unscheduled with nobody noticing.
+- id: BR-E22
+  text: Booking never waits for financial clearance. The appointment records the status Coverage reports, and the department worklist shows it, so staff can verify insurance and explain costs before the day.
+  rationale: HFMA patient access practice verifies insurance and estimates the patient's cost before scheduled services. Holding the slot for it would lose it; showing it lets staff act in time.
+- id: BR-E23
+  text: An appointment is pre-registered when the patient has confirmed their details with the Patients module and Coverage reports financial clearance, both after booking. Check-in for a pre-registered appointment only verifies identity.
+  rationale: HFMA calls registration before the service the best way to speed up access. Asking again at the desk what the patient already gave wastes their time and the front desk's.
 validations:
 - field: department_id
   rule: Organization confirms the department exists
@@ -216,9 +239,12 @@ validations:
 - field: previous_appointment_id
   rule: an existing appointment for the same patient
   error: APPOINTMENT_INVALID_PREVIOUS
-- field: encounter_id, overbooked, needs_review, review_reason, authorization_status, authorization_id, walk_in, sensitivity
+- field: encounter_id, overbooked, needs_review, review_reason, authorization_status, authorization_id, walk_in, sensitivity, financial_clearance, pre_registered_at
   rule: set by the service, from Encounter, Authorization or its own rules, never sent by clients
   error: APPOINTMENT_READ_ONLY_FIELD
+- field: order_ids
+  rule: Orders confirms each order, open and for the same patient
+  error: APPOINTMENT_INVALID_ORDER
 workflows:
 - name: Register a walk-in
   trigger: A patient arrives without an appointment
@@ -412,6 +438,18 @@ edgeCases:
   covers:
   - BR-E20
   - AC-E29
+- id: EC-E23
+  situation: An MRI order is booked, then the appointment is cancelled.
+  behaviour: Orders receives appointment.cancelled with the order id and shows the order as unscheduled again.
+  covers:
+  - BR-E21
+  - AC-E30
+- id: EC-E24
+  situation: Coverage reports the patient's plan ended last month.
+  behaviour: financial_clearance is not_cleared on the worklist; the appointment stays booked.
+  covers:
+  - BR-E22
+  - AC-E31
 functionalRequirements:
 - id: FR-E1
   text: The service must book appointments into a department and, optionally, a room and equipment, all of which belong to the department.
@@ -472,7 +510,7 @@ operations:
   method: POST
   path: /appointments
   success: 201
-  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient, virtual, observation or inpatient), department, and optional room, equipment, referral and previous appointment
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient, virtual, observation or inpatient), department, and optional room, equipment, referral, orders and previous appointment
   output: the appointment, pending or booked
   errors:
   - APPOINTMENT_INVALID_TIME_RANGE
@@ -507,6 +545,7 @@ operations:
   - APPOINTMENT_READ_ONLY_FIELD
   - APPOINTMENT_INVALID_TEXT
   - APPOINTMENT_INVALID_REFERENCE
+  - APPOINTMENT_INVALID_ORDER
   - APPOINTMENT_INVALID_VIRTUAL_SERVICE
 - name: Reschedule an appointment
   actor: Requester
@@ -725,6 +764,38 @@ dependencies:
   - 'Gives: appointment.no_show and the late cancellation flag on appointment.cancelled, for missed-appointment fees where the jurisdiction allows'
   - Charges for care come from encounters (encounter.completed), never from appointment.completed
   - What to charge, and whether to charge at all, is Billing's concern
+- service: orders-service
+  direction: upstream
+  reason: owns the orders appointments carry out
+  criticality: soft
+  contract:
+  - 'Asks: is this order open and for this patient?'
+  - 'Gives: appointment.booked, appointment.rescheduled, appointment.cancelled and appointment.completed with their order ids'
+  - Order status and scheduling rules for an order are Orders' concern
+- service: coverage-service
+  direction: upstream
+  reason: verifies insurance and expected cost
+  criticality: soft
+  contract:
+  - 'Gives: appointment.booked and appointment.rescheduled, so coverage can be verified before the day'
+  - 'Receives: the financial clearance status for the appointment'
+  - Eligibility checks, estimates and financial counselling are Coverage's concern
+- service: patient-service
+  direction: upstream
+  reason: owns patient records
+  criticality: hard
+  contract:
+  - 'Asks: does this patient exist and is the record in use? A merged record answers with the record that replaced it'
+  - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
+  - 'Asks: where to contact the patient, honouring confidential communications'
+  - 'Asks: the patient''s preferred language and whether they need an interpreter'
+  - 'Asks: may this person act for this patient on this appointment? (Covers minors, guardians, proxies and confidential care.)'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted and patient.entered_in_error'
+  - 'Gives: care reported at check-in'
+  - 'Asks: does record retention or a legal hold still apply to this patient?'
+  - 'Gives: details confirmed at check-in, recorded with the Patients module''s Confirm details'
+  - 'Asks: has the patient confirmed their details since booking? (for pre-registration)'
+  - Registering patients and deciding who may act for them is the Patients module's concern
 accessMatrix:
 - action: Register a walk-in
   roles:
@@ -795,6 +866,9 @@ errors:
 - code: APPOINTMENT_ENCOUNTER_STARTED
   http: 409
   message: The encounter for this check-in has started, so the check-in can't be undone.
+- code: APPOINTMENT_INVALID_ORDER
+  http: 422
+  message: The order doesn't exist, is closed, or is for another patient.
 settings:
 - name: allow_overbooking
   type: boolean per department
@@ -1005,6 +1079,24 @@ acceptanceCriteria:
   then: the first returns to booked and appointment.check_in_undone is emitted; the second is flagged needs_review with review_reason encounter_entered_in_error
   verifies:
   - BR-E20
+- id: AC-E30
+  given: an open MRI order for the patient, and one for another patient
+  when: an appointment is booked for each
+  then: the first records the order and Orders receives appointment.booked with it; the second fails with APPOINTMENT_INVALID_ORDER (422)
+  verifies:
+  - BR-E21
+- id: AC-E31
+  given: Coverage is slow to answer
+  when: an appointment is booked, and Coverage later reports not_cleared
+  then: the booking succeeds at once; the worklist then shows not_cleared
+  verifies:
+  - BR-E22
+- id: AC-E32
+  given: a patient who confirmed their details by phone and whose coverage cleared
+  when: they arrive
+  then: pre_registered_at is set and check-in asks only for identity verification
+  verifies:
+  - BR-E23
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit and no default, and it never applies to patients.
@@ -1066,7 +1158,15 @@ references:
 - id: REF-E9
   title: CMS Interoperability and Prior Authorization Final Rule (CMS-0057-F), fact sheet
   url: https://www.cms.gov/newsroom/fact-sheets/cms-interoperability-and-prior-authorization-final-rule-cms-0057-f
+- id: REF-E10
+  title: HFMA, best practices for communications in advance of service
+  url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.7.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Appointments record the orders they carry out (BR-E21), show financial clearance from Coverage (BR-E22) and track pre-registration (BR-E23).
 - version: 0.6.1
   date: '2026-10-08'
   breaking: false

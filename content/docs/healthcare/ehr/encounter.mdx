@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.3.1
+version: 0.4.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -90,6 +90,11 @@ dataModel:
   required: true
   description: The encounter id. Never changes or is reused.
   constraints: set by the service
+- name: identifiers
+  type: identifier[]
+  required: true
+  description: Numbers other systems use for the encounter, such as the visit number (HL7 v2 PV1-19, FHIR Encounter.identifier).
+  constraints: 'a visit number from visit_number_system assigned when opened, never reused; codes: identifier type from HL7 v2 Table 0203 (VN visit number, AN account number)'
 - name: patient_id
   type: string
   required: true
@@ -134,11 +139,11 @@ dataModel:
   required: false
   description: Every department responsible for the encounter, with the time each took over.
   constraints: append-only; set by the service (BR-E25)
-- name: appointment_id
-  type: string
+- name: appointment_ids
+  type: string[]
   required: false
-  description: The appointment that scheduled it, if any.
-  constraints: set from appointment.checked_in
+  description: The appointments this encounter fulfils, owned by Appointments (FHIR Encounter.appointment). One visit can cover several same-day appointments.
+  constraints: set from appointment.checked_in; each for the same patient
 - name: part_of
   type: string
   required: false
@@ -148,6 +153,10 @@ dataModel:
   type: instant
   required: false
   description: When the encounter is expected to start.
+- name: planned_end
+  type: instant
+  required: false
+  description: The expected discharge or end (FHIR plannedEndDate), such as from a pending discharge.
 - name: actual_start
   type: instant
   required: false
@@ -171,8 +180,8 @@ dataModel:
 - name: locations
   type: location stay[]
   required: false
-  description: Locations the patient has been in, each with period and status, owned by the Organization module.
-  constraints: status planned | active | reserved | completed (FHIR); at most one active
+  description: Locations the patient has been in, each with an entry id, period and status, owned by the Organization module. The id lets a past movement be corrected.
+  constraints: 'status planned | active | reserved | completed (FHIR): planned for a pending transfer, reserved for a bed held while the patient is elsewhere; at most one active'
 - name: reasons
   type: reason[]
   required: false
@@ -243,6 +252,15 @@ dataModel:
   type: string[]
   required: false
   description: Episodes of care this encounter belongs to, owned by the Episodes module (FHIR episodeOfCare).
+- name: based_on
+  type: string[]
+  required: false
+  description: Orders this encounter carries out, owned by Orders (FHIR Encounter.basedOn ServiceRequest).
+- name: account_ids
+  type: string[]
+  required: false
+  description: Billing accounts for the encounter, owned by Billing (FHIR Encounter.account).
+  constraints: set by the service from Billing
 relationships:
 - type: belongs_to
   target: patient
@@ -258,13 +276,19 @@ relationships:
   note: notes and results attach by encounter id
 - type: can_trigger
   target: event:encounter.completed
+- type: belongs_to
+  target: order
+  note: optional; the orders it carries out
+- type: belongs_to
+  target: account
+  note: billing accounts, owned by Billing
 businessRules:
 - id: BR-E1
   text: Every encounter has one patient in use, one class and one responsible department.
   rationale: Every clinical entry is found through its encounter. An encounter without a patient or department is care nobody can find or bill.
 - id: BR-E2
-  text: An ambulatory or virtual encounter is opened, as planned with subject status arrived, when Appointments reports a check-in or a walk-in. It records the appointment id and reports its own id back. It becomes in progress when a practitioner starts care.
-  rationale: FHIR fulfils the appointment and links it to the encounter opened at check-in, and notes that arrival is not the start of care. Waiting time and care time stay separate.
+  text: 'An ambulatory or virtual encounter is opened when Appointments reports a check-in or a walk-in, at the moment encounter_opens_at sets: at check-in, as planned with subject status arrived, or when a practitioner starts care, in progress. It records the appointment and reports its own id back.'
+  rationale: 'FHIR is not consistent on this: the Appointment page says the encounter "is typically created when the service starts, not when the patient arrives", and the Encounter page lets it start as arrived. Practice varies, so it is a setting; either way waiting time and care time stay separate.'
   variant: ambulatory
 - id: BR-E3
   text: An emergency encounter is opened, in progress with subject status arrived, when the Emergency department module registers an arrival. Its subject status follows triage, care and departure as that module reports them.
@@ -298,8 +322,8 @@ businessRules:
   rationale: Someone must be responsible for an admitted patient at every moment. A practitioner without a role there cannot be accountable for care in it.
   variant: inpatient
 - id: BR-E12
-  text: An encounter has at most one active location at a time, and each location's period is within the encounter's.
-  rationale: The patient is in one place. Two active locations would send staff and results to the wrong ward.
+  text: An encounter has at most one active location at a time, and each location's period is within the encounter's. When the patient goes somewhere temporarily, such as the scanner or dialysis, their bed becomes reserved and the temporary location active; on return the temporary location completes and the bed is active again.
+  rationale: The patient is in one place, but their bed is still theirs. FHIR marks a held location reserved, and IHE tracks temporary transfers to radiotherapy, scanners and dialysis as their own movements.
 - id: BR-E13
   text: 'Each diagnosis has a role and a rank, and a code valid in diagnosis_code_system on the right date: the discharge date for inpatient encounters, the encounter date otherwise. A completed encounter has at least one discharge or billing diagnosis.'
   rationale: CMS applies each fiscal year's ICD-10-CM codes to discharges and encounters from October 1 (the FY 2027 files to those from October 1, 2026). A code valid at admission may be retired by discharge.
@@ -365,6 +389,24 @@ businessRules:
 - id: BR-E32
   text: When the Patients module retracts a death, the encounters cancelled for it (BR-E28) are listed, and encounter.patient_review_needed is emitted for each so they can be planned again.
   rationale: A death recorded for the wrong patient must not silently cost them a planned admission. A person decides whether each one still stands.
+- id: BR-E33
+  text: A check-in for a patient who already has an open ambulatory encounter in the same visit_grouping scope adds the appointment to that encounter instead of opening another.
+  rationale: FHIR lets one encounter fulfil several appointments. A morning of blood draw, X-ray and consultation is one visit to document and bill, not three.
+  variant: ambulatory
+- id: BR-E34
+  text: Every encounter gets a visit number from visit_number_system when it is opened. It is never reused, and stays with the encounter through merges and amendments.
+  rationale: Laboratory, radiology and billing systems match their data to a visit by its number (HL7 v2 PV1-19). A reused number would attach results to the wrong visit.
+- id: BR-E35
+  text: An encounter records the orders it carries out, and Orders confirms each one is for the same patient.
+  rationale: FHIR links an encounter to the request that initiated it (basedOn). Without the link nobody can tell whether an order was carried out.
+- id: BR-E36
+  text: 'Pending events from Admission, discharge and transfer are recorded as plans: a pending transfer adds a planned location, a pending discharge sets planned_end, and each is removed when cancelled or replaced by the real event.'
+  rationale: IHE Patient Administration Management defines pending admit, transfer and discharge (A14, A15, A16, cancelled by A27, A26, A25). Bed management and discharge planning work from who is expected to move.
+  variant: inpatient
+- id: BR-E37
+  text: A transfer recorded by mistake can be cancelled, which completes nothing and makes the previous location active again. An earlier movement is corrected by its entry id; on a locked encounter the correction is an amendment.
+  rationale: IHE defines cancel transfer (A12) and identifies each movement so a past one can be corrected (Historic Movement option). Location-based billing and the record of where the patient was depend on it.
+  variant: inpatient
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -378,7 +420,7 @@ validations:
 - field: department_id
   rule: Organization confirms the department exists
   error: ENCOUNTER_INVALID_DEPARTMENT
-- field: appointment_id
+- field: appointment_ids
   rule: Appointments confirms the appointment, for the same patient
   error: ENCOUNTER_INVALID_REFERENCE
 - field: part_of
@@ -419,6 +461,18 @@ validations:
   error: ENCOUNTER_INVALID_REFERENCE
 - field: department_history
   rule: never sent by clients (BR-E25)
+  error: ENCOUNTER_READ_ONLY_FIELD
+- field: identifiers
+  rule: a visit number in visit_number_system, unique and never reused
+  error: ENCOUNTER_READ_ONLY_FIELD
+- field: based_on
+  rule: Orders confirms each order, for the same patient
+  error: ENCOUNTER_INVALID_REFERENCE
+- field: planned_end
+  rule: an RFC 3339 instant not before actual_start or planned_start
+  error: ENCOUNTER_INVALID_PERIOD
+- field: account_ids
+  rule: set by the service from Billing, never sent by clients
   error: ENCOUNTER_READ_ONLY_FIELD
 stateMachine:
   initial: planned
@@ -695,6 +749,36 @@ edgeCases:
   covers:
   - BR-E32
   - AC-E44
+- id: EC-E27
+  situation: A patient has a 09:00 blood draw and a 10:30 consultation in the same department.
+  behaviour: With visit_grouping per_department_day, the consultation check-in joins the morning's encounter and encounter.appointment_added is emitted.
+  covers:
+  - BR-E33
+  - AC-E45
+- id: EC-E28
+  situation: An MRI order is carried out in an outpatient encounter.
+  behaviour: The encounter records the order, and Orders learns it was done from encounter.completed.
+  covers:
+  - BR-E35
+  - AC-E47
+- id: EC-E29
+  situation: A patient is taken to the scanner for an hour.
+  behaviour: The ward bed becomes reserved and the scanner active; on return the bed is active again.
+  covers:
+  - BR-E12
+  - AC-E50
+- id: EC-E30
+  situation: A transfer to ward 5 is entered for the wrong patient.
+  behaviour: 'ADT cancels it: ward 5 is removed and the previous ward is active again.'
+  covers:
+  - BR-E37
+  - AC-E49
+- id: EC-E31
+  situation: Discharge is expected tomorrow at 11:00.
+  behaviour: planned_end is 11:00 tomorrow; a cancelled pending discharge clears it.
+  covers:
+  - BR-E36
+  - AC-E48
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -752,7 +836,7 @@ nonFunctionalRequirements:
 - category: compatibility
   text: 'Encounters map onto HL7 FHIR R5 Encounter: status to status, subject_status to subjectStatus, class to class, admission to admission, and class_history to EncounterHistory.'
 - category: compatibility
-  text: 'Events map to HL7 v2 ADT messages for systems that use them: an ambulatory or emergency encounter.created to A04, a pre-admission to A05 and its cancellation to A38, admission to A01, a location change to A02, discharge to A03, class changes to A06 and A07, leave to A21 and A22, a cancelled discharge to A13.'
+  text: 'Events map to HL7 v2 ADT messages for systems that use them: an ambulatory or emergency encounter.created to A04, a pre-admission to A05 and its cancellation to A38, admission to A01, a location change to A02, discharge to A03, class changes to A06 and A07, leave to A21 and A22, a cancelled discharge to A13. Pending admit, transfer and discharge map to A14, A15 and A16, and their cancels to A27, A26 and A25.'
 - category: security
   text: Only people involved in the patient's care, or with a role that needs it, can read an encounter, and every read is logged.
 - category: reliability
@@ -793,6 +877,17 @@ settings:
 - name: observation_notice_deadline
   type: duration
   description: 'How long after observation starts the US notice must be given: 36 hours (42 CFR 489.20(y)). Unset outside the United States.'
+- name: encounter_opens_at
+  type: check_in | care_start
+  default: check_in
+  description: When an ambulatory or virtual encounter is opened (BR-E2). FHIR sources differ, so each hospital chooses.
+- name: visit_grouping
+  type: per_appointment | per_department_day | per_facility_day
+  default: per_department_day
+  description: Which same-day appointments share one encounter.
+- name: visit_number_system
+  type: identifier system
+  description: The system visit numbers are assigned in, and their format. Required.
 performanceTargets:
 - id: PERF-E1
   indicator: Records completed on time
@@ -1104,6 +1199,48 @@ acceptanceCriteria:
   then: encounter.patient_review_needed is emitted for it
   verifies:
   - BR-E32
+- id: AC-E45
+  given: visit_grouping per_department_day and an open encounter from a 09:00 check-in
+  when: the same patient checks in at 10:30 in that department
+  then: no new encounter opens; the appointment is added and encounter.appointment_added is emitted
+  verifies:
+  - BR-E33
+- id: AC-E46
+  given: any new encounter
+  when: it is opened
+  then: it has a visit number in visit_number_system that no other encounter has had; a client sending identifiers fails with ENCOUNTER_READ_ONLY_FIELD
+  verifies:
+  - BR-E34
+- id: AC-E47
+  given: an order for another patient
+  when: it is linked to an encounter
+  then: it fails with ENCOUNTER_INVALID_REFERENCE (422)
+  verifies:
+  - BR-E35
+- id: AC-E48
+  given: a pending transfer to ward 6 and a pending discharge
+  when: both are recorded, then the transfer is cancelled
+  then: ward 6 is planned then removed; planned_end is set
+  verifies:
+  - BR-E36
+- id: AC-E49
+  given: the latest transfer recorded in error, and a correction for an unknown entry id
+  when: the transfer is cancelled, and the correction is sent
+  then: the previous location is active again; the correction fails with ENCOUNTER_LOCATION_NOT_FOUND (404)
+  verifies:
+  - BR-E37
+- id: AC-E50
+  given: a patient on ward 4
+  when: they go to the scanner and come back
+  then: ward 4 is reserved while the scanner is active, then active again
+  verifies:
+  - BR-E12
+- id: AC-E51
+  given: encounter_opens_at care_start
+  when: an outpatient checks in, then is seen
+  then: no encounter exists at check-in; it opens in progress when care starts
+  verifies:
+  - BR-E2
 operations:
 - name: Open an encounter
   actor: System
@@ -1111,7 +1248,7 @@ operations:
   method: POST
   path: /encounters
   success: 201
-  input: patient, class, department, and optional appointment, pre-admission id, episodes, part_of, planned start, type, priority, reasons, admission details, location, virtual service and patient location
+  input: patient, class, department, and optional appointments, orders, pre-admission id, episodes, part_of, planned start, type, priority, reasons, admission details, location, virtual service and patient location
   output: the encounter
   errors:
   - ENCOUNTER_INVALID_PATIENT
@@ -1400,6 +1537,37 @@ operations:
   errors:
   - ENCOUNTER_NOT_FOUND
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Correct a location
+  actor: System
+  description: Cancel the latest transfer, or correct a past movement by its entry id.
+  method: PATCH
+  path: /encounters/{id}/locations/{entryId}
+  success: 200
+  input: encounter id, entry id, revision, cancel or the corrected location and period, reason
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_LOCATION_NOT_FOUND
+  - ENCOUNTER_INVALID_LOCATION
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+  variant: inpatient
+- name: Record a pending event
+  actor: System
+  description: Record or cancel a pending transfer or discharge.
+  method: POST
+  path: /encounters/{id}/pending
+  success: 200
+  input: encounter id, revision, pending transfer with location or pending discharge with time, or a cancel
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_LOCATION
+  - ENCOUNTER_INVALID_PERIOD
+  - ENCOUNTER_LOCKED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+  variant: inpatient
 apiConventions:
 - topic: Authentication
   text: Every request carries the caller's identity from Identity. Permissions are checked against it (Permission matrix).
@@ -1428,7 +1596,7 @@ events:
   - encounter_id
   - patient_id
   - class
-  - appointment_id
+  - appointment_ids
   - revision
 - name: encounter.started
   description: Care began.
@@ -1533,6 +1701,12 @@ events:
   - department_id
   - effective_at
   - revision
+- name: encounter.appointment_added
+  description: Another same-day appointment was added to the encounter.
+  payload:
+  - encounter_id
+  - appointment_id
+  - revision
 deliveryGuarantees:
 - id: DG-E1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -1628,8 +1802,16 @@ accessMatrix:
     Privacy officer: any
     System: none
   permission: encounter.audit
+- action: Correct a location, or record a pending event
+  roles:
+    Clinician: none
+    Registrar: any
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: any
+  permission: encounter.write
 personalData:
-- field: patient_id, class, class_history, type, priority, department_id, department_history, appointment_id, part_of, episode_of_care_ids
+- field: patient_id, class, class_history, type, priority, department_id, department_history, appointment_ids, part_of, episode_of_care_ids, identifiers, based_on, account_ids, planned_end
   category: health data; shows the person received care, where and of what kind
   purpose: The record of care
   retention: record_retention of the Patients module
@@ -1741,6 +1923,9 @@ errors:
 - code: ENCOUNTER_PATIENT_DECEASED
   http: 409
   message: The encounter can't start after the patient's recorded death.
+- code: ENCOUNTER_LOCATION_NOT_FOUND
+  http: 404
+  message: No such location entry on this encounter.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -1760,6 +1945,7 @@ dependencies:
   contract:
   - 'Receives: appointment.checked_in'
   - 'Receives: appointment.check_in_undone'
+  - 'Gives: encounter.appointment_added, when a check-in joins an open encounter'
   - 'Gives: encounter.started, encounter.discontinued, encounter.cancelled and encounter.entered_in_error, so the appointment follows its encounter'
   - 'Gives: the id of the encounter it opened'
   - 'Gives: encounter.created, so Appointments links the encounter'
@@ -1777,7 +1963,7 @@ dependencies:
   reason: reports admissions, transfers, leave, class changes and discharges
   criticality: soft
   contract:
-  - 'Receives: pre-admission, cancelled pre-admission, admission, transfer, leave, return, class change, re-admission, discharge and cancelled discharge'
+  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return, class change, re-admission, discharge and cancelled discharge'
   - 'Gives: the encounter id for each stay'
   - 'Gives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled and encounter.class_changed, confirming what was recorded'
   - 'Gives: encounter.observation_started with when the US observation notice is due; deciding who gets the notice, and giving it, is ADT''s concern'
@@ -1820,6 +2006,7 @@ dependencies:
   reason: codes and charges encounters
   criticality: soft
   contract:
+  - 'Asks: which account does this encounter belong to? (account_ids)'
   - 'Gives: encounter.completed with diagnoses, class history and length'
   - 'Gives: encounter.amended, encounter.cancelled, encounter.discontinued, encounter.class_changed and encounter.department_changed'
   - Coding for claims and diagnosis-related groups is Billing's concern
@@ -1843,6 +2030,14 @@ dependencies:
   contract:
   - 'Asks: does this episode exist for this patient?'
   - Managing episodes is the Episodes module's concern
+- service: orders-service
+  direction: upstream
+  reason: owns orders an encounter carries out
+  criticality: soft
+  contract:
+  - 'Asks: does this order exist for this patient?'
+  - 'Gives: encounter.started, encounter.completed and encounter.cancelled with the orders they carry out'
+  - Order status is Orders' concern
 risks:
 - id: RISK-E1
   risk: Records stay incomplete past the deadline.
@@ -1878,6 +2073,10 @@ decisions:
   decision: Admission and discharge happen in ADT; this module records them.
   rationale: Bed management and orders are a different job. The encounter is the clinical record of the stay.
   date: '2026-10-07'
+- id: ADR-E5
+  decision: When an ambulatory encounter opens is a setting (encounter_opens_at).
+  rationale: FHIR's Appointment and Encounter pages describe different moments, and hospitals differ. A setting keeps both correct.
+  date: '2026-10-08'
 openQuestions: []
 references:
 - id: REF-E1
@@ -1920,7 +2119,24 @@ references:
 - id: REF-E12
   title: HL7 FHIR R5, Patient (mother and newborn relationships)
   url: https://hl7.org/fhir/R5/patient.html
+- id: REF-E13
+  title: IHE ITI Technical Framework, Patient Administration Management (PAM) profile
+  url: https://profiles.ihe.net/ITI/TF/Volume1/ch-14.html
+- id: REF-E14
+  title: IHE ITI-31 Patient Encounter Management
+  url: https://profiles.ihe.net/ITI/TF/Volume2/ITI-31.html
+  note: Pending events, cancel transfer, temporary transfers and historic movements.
+- id: REF-E15
+  title: HL7 FHIR R5, Appointment (appointment statuses and encounters)
+  url: https://hl7.org/fhir/R5/appointment.html
 changelog:
+- version: 0.4.0
+  date: '2026-10-08'
+  breaking: true
+  changes:
+  - 'appointment_id becomes appointment_ids: one encounter can fulfil several same-day appointments (BR-E33). Breaking for clients reading appointment_id.'
+  - Visit numbers (BR-E34), orders carried out (BR-E35), billing accounts, and when an encounter opens as a setting (BR-E2).
+  - Pending transfer and discharge (BR-E36), cancelled and corrected movements (BR-E37), and temporary transfers with reserved beds (BR-E12), from IHE PAM.
 - version: 0.3.1
   date: '2026-10-08'
   breaking: false
@@ -1978,9 +2194,6 @@ tables:
     type: text
   - name: department_id
     type: uuid
-  - name: appointment_id
-    type: uuid
-    nullable: true
   - name: part_of
     type: uuid
     nullable: true
@@ -2005,15 +2218,26 @@ tables:
   - name: revision
     type: integer
     default: '0'
+  - name: visit_number
+    type: text
+  - name: planned_end
+    type: timestamptz
+    nullable: true
+  - name: based_on
+    type: uuid[]
+    default: '''{}'''
+  - name: account_ids
+    type: uuid[]
+    default: '''{}'''
   indexes:
   - name: encounters_by_patient
     definition: (patient_id, lower(actual_period))
   - name: records_due
     definition: (record_due_at) WHERE status = 'discharged'
   constraints:
-  - name: one_encounter_per_appointment
-    definition: UNIQUE (appointment_id) WHERE appointment_id IS NOT NULL
-    note: FR-E12
+  - name: unique_visit_number
+    definition: UNIQUE (visit_number)
+    note: BR-E34
 - name: encounter_class_history
   description: Every class, with when it began (BR-E5).
   columns:
@@ -2041,6 +2265,9 @@ tables:
 - name: encounter_locations
   description: Locations with period and status.
   columns:
+  - name: id
+    type: uuid
+    note: entry id, so a movement can be corrected
   - name: encounter_id
     type: uuid
   - name: location_id
@@ -2085,6 +2312,17 @@ tables:
     type: text
   - name: at
     type: timestamptz
+- name: encounter_appointments
+  description: Appointments each encounter fulfils.
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: appointment_id
+    type: uuid
+  constraints:
+  - name: one_encounter_per_appointment
+    definition: UNIQUE (appointment_id)
+    note: FR-E12
 technicalNotes:
 - id: TN-E1
   title: Pick the code release by date

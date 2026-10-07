@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.6.0
+version: 0.6.1
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -2670,6 +2670,7 @@ dependencies:
   - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted and patient.entered_in_error'
   - 'Asks: does this patient have an appointment that has not started?'
   - 'Receives: details confirmed at check-in'
+  - 'Gives: whether and when the patient confirmed their details, for pre-registration'
   - 'Receives: care reported at check-in'
 - service: encounter-service
   direction: downstream
@@ -2968,6 +2969,11 @@ references:
   title: 'ONC FAQ: when a delay in fulfilling a request for EHI is an interference'
   url: https://healthit.gov/faq/when-would-delay-fulfilling-request-access-exchange-or-use-ehi-be-considered-interference-under/
 changelog:
+- version: 0.6.1
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Appointments can ask whether the patient confirmed their details since booking, for pre-registration.
 - version: 0.6.0
   date: '2026-10-08'
   breaking: false
