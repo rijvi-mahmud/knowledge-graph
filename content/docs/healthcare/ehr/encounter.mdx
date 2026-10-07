@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.5.0
+version: 0.6.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -34,6 +34,8 @@ scope:
 - 'Pre-admission: planned stays before the patient arrives'
 - The start of observation, for the US notice deadline
 - Links to episodes of care
+- Patients' own access to their encounters, and their correction requests
+- Restricting disclosure to a health plan for care paid in full
 nonGoals:
 - Booking. The Appointments module schedules visits; an encounter records what actually happened.
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
@@ -54,6 +56,8 @@ actors:
   description: Reviews who accessed encounters.
 - name: System
   description: Another module, such as Appointments or Admission, discharge and transfer, reporting an event.
+- name: Patient
+  description: The person the encounter is about, or their personal representative within the authority the Patients module records.
 assumptions:
 - id: AS-E1
   text: Appointments, the Emergency department module and Admission, discharge and transfer report check-ins, arrivals, admissions, transfers and discharges as they happen.
@@ -267,6 +271,16 @@ dataModel:
   description: Whether the patient is listed in the facility directory during the stay.
   constraints: 'not_asked | listed | opted_out; codes: none standard, local to this specification'
   variant: inpatient
+- name: health_plan_restriction
+  type: boolean
+  required: false
+  description: Set when the patient paid in full for this encounter's services and asked that it not be disclosed to their health plan.
+  constraints: set by the service through its operation
+- name: access_denial
+  type: access denial
+  required: false
+  description: 'Where a licensed professional decided the patient''s access to part of this encounter is reasonably likely to endanger life or physical safety: what is withheld, who decided, why, and the review.'
+  constraints: set by the service through its operation
 relationships:
 - type: belongs_to
   target: patient
@@ -417,6 +431,15 @@ businessRules:
   variant: inpatient
   text: A patient in a stay is listed in the facility directory (name and location, for people who ask by name) only after being told and not objecting, which sets directory_status listed. In an emergency or incapacity they can be listed if it fits their known wishes and best interest, and are asked as soon as they can be. An objection removes the listing at once, and restricted or very restricted patients are never listed.
   rationale: HIPAA lets a hospital keep a directory of name and location for people who ask by name, but only after telling the patient and giving them the chance to object, with an exception for incapacity or emergency until they can be asked (45 CFR 164.510(a)). Telling a caller someone is in hospital, against their wishes, can put them at risk.
+- id: BR-E39
+  text: A patient, or their representative within the authority the Patients module records, can read their own encounters electronically as soon as they are recorded. No policy holds them back for review. A patient can ask for their own access to be delayed. Part of an encounter can be withheld only where a licensed professional decides access is reasonably likely to endanger life or physical safety; the decision is recorded and the patient can have it reviewed.
+  rationale: HIPAA gives a right of access and allows denial on narrow reviewable grounds (45 CFR 164.524(a)(3)); a delay is likely information blocking (45 CFR 171.103); GDPR gives a right of access (Article 15), and the EHDS gives EU patients immediate access (Article 3).
+- id: BR-E40
+  text: A patient, or their representative, can ask for an encounter to be corrected. An HIM specialist decides within the Patients module's correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made as an amendment linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which goes with later disclosures.
+  rationale: HIPAA requires a decision within 60 days, with one 30-day extension, a written denial and a right to disagree (45 CFR 164.526). GDPR gives rights to rectification and to restriction while accuracy is checked (Articles 16 and 18).
+- id: BR-E41
+  text: When the patient, or someone other than the health plan, has paid in full for the encounter's services and asks that they not be disclosed to the health plan, health_plan_restriction is set. Billing must not disclose the encounter to that plan for payment or operations unless the law requires it. The restriction is never refused.
+  rationale: HIPAA requires a covered entity to agree to this restriction when the care was paid in full out of pocket and the disclosure is for payment or operations and not otherwise required by law (45 CFR 164.522(a)(1)(vi)).
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -454,7 +477,7 @@ validations:
 - field: virtual_service, patient_location
   rule: an https URL, and a US state or EU member state; required for class virtual
   error: ENCOUNTER_INVALID_VIRTUAL
-- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision
+- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial
   rule: never sent by clients (BR-E19)
   error: ENCOUNTER_READ_ONLY_FIELD
 - field: revision
@@ -798,6 +821,18 @@ edgeCases:
   covers:
   - BR-E38
   - AC-E52
+- id: EC-E33
+  situation: A patient reads their encounter notes in the portal the evening after a clinic visit.
+  behaviour: They see them at once; nothing waits for clinician review.
+  covers:
+  - BR-E39
+  - AC-E53
+- id: EC-E34
+  situation: A patient pays cash for a sensitive test so their employer-sponsored plan won't learn of it.
+  behaviour: The restriction is set and Billing never sends that encounter to the plan.
+  covers:
+  - BR-E41
+  - AC-E55
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -1266,6 +1301,24 @@ acceptanceCriteria:
   then: only the listed patient's location is returned, encounter.directory_changed is emitted on each change, and listing the restricted patient fails with ENCOUNTER_INVALID_CODE
   verifies:
   - BR-E38
+- id: AC-E53
+  given: a patient, their representative, and another patient
+  when: each reads the patient's discharged encounter
+  then: the patient and representative see it at once; the other patient fails with ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT (403); a withheld part is not shown and the patient sees that it was withheld and how to have it reviewed
+  verifies:
+  - BR-E39
+- id: AC-E54
+  given: a correction request for a wrong discharge diagnosis
+  when: it is denied with a reason and the patient files a statement of disagreement; another is extended twice; an unknown request id is decided
+  then: the first is decided before its due date and encounter.correction_decided is emitted; the second extension fails with ENCOUNTER_EXTENSION_USED (409); deciding the first again fails with ENCOUNTER_CORRECTION_CLOSED (409); the unknown id fails with ENCOUNTER_CORRECTION_NOT_FOUND (404)
+  verifies:
+  - BR-E40
+- id: AC-E55
+  given: a patient who paid in full for a visit
+  when: they ask that it not go to their health plan
+  then: health_plan_restriction is set, encounter.restriction_changed is emitted, and Billing does not send the encounter to that plan
+  verifies:
+  - BR-E41
 operations:
 - name: Open an encounter
   actor: System
@@ -1299,6 +1352,7 @@ operations:
   output: the encounter, as JSON or a FHIR Encounter
   errors:
   - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT
   - ENCOUNTER_REASON_REQUIRED
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: List encounters
@@ -1619,6 +1673,55 @@ operations:
   - ENCOUNTER_INVALID_QUERY
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
   variant: inpatient
+- name: Request a correction
+  actor: Patient
+  description: Ask for an encounter to be corrected.
+  method: POST
+  path: /encounters/{id}/correction-requests
+  success: 201
+  input: encounter id, what is wrong, the correct value, whether to restrict meanwhile
+  output: the request with its due date
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Decide a correction
+  actor: Health information management (HIM) specialist
+  description: Accept, deny or extend a correction request, or add a statement of disagreement.
+  method: POST
+  path: /encounters/{id}/correction-requests/{requestId}/decision
+  success: 200
+  input: request id, decision (accept, deny or extend), reason, statement of disagreement
+  output: the request
+  errors:
+  - ENCOUNTER_CORRECTION_NOT_FOUND
+  - ENCOUNTER_CORRECTION_CLOSED
+  - ENCOUNTER_EXTENSION_USED
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Restrict disclosure to the health plan
+  actor: Registrar
+  description: Record that care was paid in full and the patient asked that it not be disclosed to their health plan.
+  method: POST
+  path: /encounters/{id}/health-plan-restriction
+  success: 200
+  input: encounter id, revision, who paid, confirmation of payment in full
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Withhold part of an encounter
+  actor: Clinician
+  description: Record a licensed professional's decision that access to part of the encounter is reasonably likely to endanger life or physical safety.
+  method: POST
+  path: /encounters/{id}/access-denial
+  success: 200
+  input: encounter id, revision, what is withheld, reason
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 apiConventions:
 - topic: Authentication
   text: Every request carries the caller's identity from Identity. Permissions are checked against it (Permission matrix).
@@ -1764,6 +1867,19 @@ events:
   - encounter_id
   - directory_status
   - revision
+- name: encounter.correction_decided
+  description: A correction request was accepted or denied, with any statement of disagreement.
+  payload:
+  - encounter_id
+  - request_id
+  - decision
+  - revision
+- name: encounter.restriction_changed
+  description: The paid-in-full health plan restriction was set.
+  payload:
+  - encounter_id
+  - health_plan_restriction
+  - revision
 deliveryGuarantees:
 - id: DG-E1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -1791,8 +1907,9 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Privacy officer: none
     System: any
+    Patient: own
   permission: encounter.read
-  note: 'own: encounters of patients in their care. Restricted patients need a reason (BR-E18).'
+  note: 'own: encounters of patients in their care. Restricted patients need a reason (BR-E18). Patients and their representatives read their own encounters, except parts withheld under BR-E39.'
 - action: Open an encounter
   roles:
     Clinician: any
@@ -1800,6 +1917,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Privacy officer: none
     System: any
+    Patient: none
   permission: encounter.write
 - action: Start, update, change participants, record diagnoses
   roles:
@@ -1808,6 +1926,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Privacy officer: none
     System: none
+    Patient: none
   permission: encounter.write
 - action: Record subject status, a location, a class change, hold, discharge or discontinue
   roles:
@@ -1816,6 +1935,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Privacy officer: none
     System: any
+    Patient: none
   permission: encounter.write
   note: Usually reported by Appointments, the Emergency department module or ADT.
 - action: Cancel, or cancel a discharge
@@ -1825,6 +1945,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Privacy officer: none
     System: any
+    Patient: none
   permission: encounter.write
 - action: Complete, amend or mark entered in error
   roles:
@@ -1833,6 +1954,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Privacy officer: none
     System: none
+    Patient: none
   permission: encounter.complete
 - action: Report clinical data
   roles:
@@ -1841,6 +1963,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Privacy officer: none
     System: any
+    Patient: none
   permission: encounter.write
   note: Only modules that record clinical data.
 - action: List records due
@@ -1850,6 +1973,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Privacy officer: none
     System: none
+    Patient: none
   permission: encounter.read
 - action: Read the access log
   roles:
@@ -1858,6 +1982,7 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Privacy officer: any
     System: none
+    Patient: none
   permission: encounter.audit
 - action: Correct a location, or record a pending event
   roles:
@@ -1866,6 +1991,7 @@ accessMatrix:
     Health information management (HIM) specialist: any
     Privacy officer: none
     System: any
+    Patient: none
   permission: encounter.write
 - action: Set directory status, or look up the directory
   roles:
@@ -1874,7 +2000,46 @@ accessMatrix:
     Health information management (HIM) specialist: none
     Privacy officer: none
     System: none
+    Patient: none
   permission: encounter.write
+- action: Request a correction
+  roles:
+    Clinician: none
+    Registrar: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: own
+  permission: encounter.read
+- action: Decide a correction
+  roles:
+    Clinician: none
+    Registrar: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.complete
+- action: Restrict disclosure to the health plan
+  roles:
+    Clinician: none
+    Registrar: any
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.write
+  note: Recorded at the patient's request.
+- action: Withhold part of an encounter
+  roles:
+    Clinician: own
+    Registrar: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.write
+  note: Only a licensed professional caring for the patient.
 personalData:
 - field: patient_id, class, class_history, type, priority, department_id, department_history, appointment_ids, part_of, episode_of_care_ids, identifiers, based_on, account_ids, planned_end
   category: health data; shows the person received care, where and of what kind
@@ -1915,6 +2080,10 @@ personalData:
 - field: directory_status
   category: personal
   purpose: Honouring the patient's choice about the facility directory
+  retention: record_retention of the Patients module
+- field: health_plan_restriction, access_denial, correction requests
+  category: health data
+  purpose: Honouring the patient's rights over the encounter
   retention: record_retention of the Patients module
 errors:
 - code: ENCOUNTER_NOT_FOUND
@@ -1995,6 +2164,18 @@ errors:
 - code: ENCOUNTER_LOCATION_NOT_FOUND
   http: 404
   message: No such location entry on this encounter.
+- code: ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT
+  http: 403
+  message: Only the patient or their personal representative can request this.
+- code: ENCOUNTER_CORRECTION_NOT_FOUND
+  http: 404
+  message: No such correction request.
+- code: ENCOUNTER_CORRECTION_CLOSED
+  http: 409
+  message: This correction request was already decided.
+- code: ENCOUNTER_EXTENSION_USED
+  http: 409
+  message: The one allowed extension was already used.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -2002,6 +2183,8 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: does this patient exist and is the record in use, following replaced_by?'
+  - 'Asks: may this person act for this patient, and is the patient''s own access delayed at their request?'
+  - 'Asks: correction_deadline and correction_extension for this jurisdiction'
   - 'Asks: is the patient deceased, and since when?'
   - 'Asks: is this newborn''s mother this patient? (for part_of)'
   - 'Asks: is the patient restricted, so opening needs a reason?'
@@ -2079,6 +2262,7 @@ dependencies:
   - 'Asks: which account does this encounter belong to? (account_ids)'
   - 'Gives: encounter.completed with diagnoses, class history and length'
   - 'Gives: encounter.amended, encounter.cancelled, encounter.discontinued, encounter.class_changed and encounter.department_changed'
+  - 'Gives: encounter.restriction_changed; a restricted encounter is never disclosed to that health plan for payment or operations (45 CFR 164.522(a)(1)(vi))'
   - Coding for claims and diagnosis-related groups is Billing's concern
 - service: consent-service
   direction: downstream
@@ -2086,6 +2270,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: the sensitivity codes of each encounter'
+  - 'Gives: encounter.restriction_changed, so other disclosures honour it'
   - Disclosure decisions, including under 42 CFR Part 2, are Consent's concern
 - service: identity-service
   direction: upstream
@@ -2108,6 +2293,13 @@ dependencies:
   - 'Asks: does this order exist for this patient?'
   - 'Gives: encounter.started, encounter.completed and encounter.cancelled with the orders they carry out'
   - Order status is Orders' concern
+- service: release-of-information-service
+  direction: downstream
+  reason: handles disclosures, copies and accounting of disclosures
+  criticality: soft
+  contract:
+  - 'Gives: encounter.correction_decided, with any statement of disagreement, to include with later disclosures (45 CFR 164.526(d)(5))'
+  - Accounting of disclosures (45 CFR 164.528) and copies in other forms are Release of information's concern
 risks:
 - id: RISK-E1
   risk: Records stay incomplete past the deadline.
@@ -2202,7 +2394,19 @@ references:
 - id: REF-E16
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object (facility directories)
   url: https://www.ecfr.gov/current/title-45/section-164.510
+- id: REF-E17
+  title: 45 CFR 164.522, rights to request privacy protection
+  url: https://www.ecfr.gov/current/title-45/section-164.522
+- id: REF-E18
+  title: 45 CFR 164.524 and 164.526, access and amendment
+  url: https://www.ecfr.gov/current/title-45/section-164.524
 changelog:
+- version: 0.6.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Patients read their own encounters at once (BR-E39), can request corrections (BR-E40), and can restrict disclosure of self-paid care to their health plan (BR-E41).
+  - The Compliance section adds access, amendment, accounting, breach, erasure and the EHDS.
 - version: 0.5.0
   date: '2026-10-08'
   breaking: false
@@ -2500,6 +2704,84 @@ compliance:
   how: Organisational duties of the deployment.
   status: deployment
   covered_by: []
+- id: CMP-E12
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.524
+  obligation: Give patients access to their information, denying only on narrow reviewable grounds.
+  how: Immediate electronic access for the patient and representatives; withheld parts recorded and reviewable.
+  status: met
+  covered_by:
+  - BR-E39
+- id: CMP-E13
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.103
+  obligation: Don't interfere with access to electronic health information.
+  how: No review delay; delays only at the patient's request.
+  status: met
+  covered_by:
+  - BR-E39
+- id: CMP-E14
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.526
+  obligation: Decide amendment requests within 60 days, with written denials and statements of disagreement.
+  how: Correction requests decided within the Patients module's deadlines; disagreements go with later disclosures.
+  status: met
+  covered_by:
+  - BR-E40
+- id: CMP-E15
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.522(a)(1)(vi)
+  obligation: Agree to restrict disclosure to a health plan for care paid in full out of pocket.
+  how: health_plan_restriction, honoured by Billing.
+  status: met
+  covered_by:
+  - BR-E41
+- id: CMP-E16
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.528
+  obligation: Give an accounting of disclosures for six years.
+  how: The Release of information module.
+  status: other module
+  covered_by: []
+- id: CMP-E17
+  regulation: HIPAA Breach Notification Rule
+  provision: 45 CFR 164.404
+  obligation: Notify individuals of a breach within 60 calendar days.
+  how: The Security module.
+  status: other module
+  covered_by: []
+- id: CMP-E18
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 12(3) and 15
+  obligation: Give access within one month.
+  how: Immediate electronic access.
+  status: met
+  covered_by:
+  - BR-E39
+- id: CMP-E19
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 16 and 18
+  obligation: Rectification, and restriction while accuracy is checked.
+  how: Correction requests.
+  status: met
+  covered_by:
+  - BR-E40
+- id: CMP-E20
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17
+  obligation: Erasure, except where data is needed for care (Article 17(3)(c)).
+  how: Erasure follows the Patients module's retention and legal holds.
+  status: met
+  covered_by:
+  - BR-E26
+- id: CMP-E21
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 3
+  obligation: Immediate access to health data through national access services.
+  how: Immediate access here; delivery to the national service is the Exchange module's.
+  status: partly met
+  covered_by:
+  - BR-E39
 ---
 Every note, order and result in the record belongs to an encounter. This
 module keeps that record of each visit and stay: when it happened, who was

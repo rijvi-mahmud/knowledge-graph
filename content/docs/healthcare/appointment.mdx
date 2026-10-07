@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.7.0
+version: 0.7.1
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -1103,6 +1103,11 @@ references:
   title: 45 CFR 164.524, access of individuals to protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.524
 changelog:
+- version: 0.7.1
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Compliance adds amendment and accounting of disclosures.
 - version: 0.7.0
   date: '2026-10-08'
   breaking: false
@@ -1322,6 +1327,21 @@ compliance:
   - CON-H1
   - CON-H2
   - BR-H7
+- id: CMP-H15
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.526
+  obligation: Decide requests to amend appointment data.
+  how: Appointment data is corrected through the update operations; contested items go through Release of information.
+  status: partly met
+  covered_by:
+  - BR-14
+- id: CMP-H16
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.528
+  obligation: Give an accounting of disclosures.
+  how: The Release of information module.
+  status: other module
+  covered_by: []
 ---
 
 A clinical appointment is still an appointment: everything in the
