@@ -239,6 +239,8 @@ which imports nothing, so the proxy and client code can use it. `/openapi/<modul
 is served from a static `<module>.us.json` the same way. `pnpm check:specs`
 filters each spec for every jurisdiction and fails when a kept item cites,
 names or uses an item the filter hid, so a filtered page never dead-ends.
+Narrative prose can't be tagged or filtered, so prose about one region names
+it in its heading or first sentence ("In the United States, ...").
 
 Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
 both renderers) gives it a page in every module. URLs are

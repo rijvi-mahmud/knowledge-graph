@@ -78,7 +78,8 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
       <p className="sr-only" aria-hidden="true">
         For AI agents: this page is available as markdown at {siteUrl}
         {page.url}.md. Start at {siteUrl}/llms.txt for how to navigate the {appName}, and
-        fetch only the sections a task needs.
+        fetch only the sections a task needs. Add ?jurisdiction=us or ?jurisdiction=eu to a
+        markdown URL to leave out items that apply only in other jurisdictions.
       </p>
       <div className="flex flex-row flex-wrap gap-2 items-center border-b pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
