@@ -119,6 +119,7 @@ The same conventions apply to every module:
 | Variant | A kind of the module, such as inpatient, with its own page listing the items that apply only to it. |
 | Compliance (`CMP-`) | Each legal obligation that applies, such as a HIPAA or GDPR provision, how the spec meets it, and whether it falls to this module, the deployment or another module. |
 | Settings | What varies by deployment, such as `jurisdiction` (us or eu), retention or the age of majority. |
+| `US only:`, `EU only:` | The item applies only in that jurisdiction, such as a HIPAA or GDPR duty. Unmarked items apply everywhere. |
 | Reference implementation | Storage design and implementation notes. Non-normative: one way to build it. |
 
 ## What each instruction prevents
@@ -135,7 +136,7 @@ The same conventions apply to every module:
 | Respect `Considered:` | Reintroduce an approach a decision already rejected |
 | Report conflicts | Silently rewrite working code, or silently ignore the spec |
 | Use contracts | Rebuild another module's rules inside this one, so the two drift apart |
-| Apply the jurisdiction | Follow US rules for an EU deployment, or the other way round |
+| Apply the jurisdiction, skip other jurisdictions' items | Follow US rules for an EU deployment, or the other way round |
 
 ## Project context and project rules
 

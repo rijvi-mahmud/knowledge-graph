@@ -20,6 +20,10 @@ import { remarkSpecIds } from './src/lib/remark-spec-ids';
 // --- graph edges -----------------------------------------------------------
 
 // Domain-graph edge: how this module relates to another concept.
+// Applies only where this jurisdiction's law applies; untagged items apply everywhere.
+// Kept in step with the jurisdiction setting of healthcare modules (us | eu).
+const jurisdiction = z.enum(['us', 'eu']).optional();
+
 const relationSchema = z.object({
   type: z.enum([
     'has_many',
@@ -66,6 +70,7 @@ const conceptSchema = z.object({
 });
 
 const fieldSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   name: z.string(),
   type: z.string(), // free-form so domains can use their own vocabulary
   required: z.boolean().default(false),
@@ -79,6 +84,7 @@ const fieldSchema = z.object({
 // Business rule: WHY the system behaves a certain way. `rationale` matters most
 // for AI - it prevents an assistant from "fixing" a rule it does not understand.
 const businessRuleSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "BR-1"
   text: z.string(),
   rationale: z.string().optional(),
@@ -88,6 +94,7 @@ const businessRuleSchema = z.object({
 // Field-level validation, kept separate from business rules: these are
 // mechanical input checks, not domain policy.
 const validationSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   field: z.string(),
   rule: z.string(),
   error: z.string(), // error code/message raised when the rule fails
@@ -109,6 +116,7 @@ const stateMachineSchema = z.object({
 // End-to-end flow across actors/services. This is the "common workflows"
 // layer - the part teams most often reinvent per company.
 const workflowSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   name: z.string(),
   trigger: z.string().optional(),
   actor: z.string().optional(),
@@ -123,6 +131,7 @@ const workflowSchema = z.object({
 const verificationMethod = z.enum(['test', 'demonstration', 'inspection', 'analysis']);
 
 const requirementSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "FR-1"
   text: z.string(),
   priority: z.enum(['must', 'should', 'could']).default('must'),
@@ -133,6 +142,7 @@ const requirementSchema = z.object({
 // Something the spec takes as true but does not enforce. If it stops being
 // true, the requirements that depend on it need another look.
 const assumptionSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "AS-1"
   text: z.string(),
   rationale: z.string().optional(),
@@ -142,6 +152,7 @@ const assumptionSchema = z.object({
 // it must comply with (ISO/IEC/IEEE 29148 "design constraints" and
 // "standards compliance").
 const constraintSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "CON-1"
   text: z.string(),
   rationale: z.string().optional(),
@@ -160,6 +171,7 @@ const accessSchema = z.object({
 // A situation that is easy to get wrong, the behaviour the spec requires, and
 // the ids that cover it.
 const edgeCaseSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "EC-1"
   situation: z.string(),
   behaviour: z.string(),
@@ -169,6 +181,7 @@ const edgeCaseSchema = z.object({
 
 // A setting a deployment can change, with its default.
 const settingSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   name: z.string(),
   type: z.string(),
   default: z.string().optional(),
@@ -177,6 +190,7 @@ const settingSchema = z.object({
 
 // Personal data a field holds, why it's kept, and for how long.
 const personalDataSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   field: z.string(),
   category: z.string(), // e.g. "personal", "pseudonymous", "free text"
   purpose: z.string(),
@@ -196,6 +210,7 @@ const performanceSchema = z.object({
 // provision, how the spec meets it, and the ids that do. Obligations the
 // deployment or another module must meet say so in status.
 const complianceSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "CMP-H1"
   regulation: z.string(), // e.g. "HIPAA Privacy Rule", "GDPR"
   provision: z.string(), // e.g. "45 CFR 164.524", "Article 15"
@@ -206,6 +221,7 @@ const complianceSchema = z.object({
 });
 
 const riskSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "RISK-1"
   risk: z.string(),
   impact: z.string(),
@@ -221,6 +237,7 @@ const referenceSchema = z.object({
 });
 
 const nfrSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   category: z.enum([
     'performance',
     'security',
@@ -242,6 +259,7 @@ const nfrSchema = z.object({
 // Testable acceptance criteria in Given/When/Then form - the bridge between
 // this spec and generated tests.
 const acceptanceSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "AC-1"
   given: z.string(),
   when: z.string(),
@@ -256,6 +274,7 @@ const acceptanceSchema = z.object({
 // exposes it. HTTP is a standard interface, so the endpoint is part of the
 // external interface requirements (ISO/IEC/IEEE 29148), stated once, here.
 const operationSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   name: z.string(), // e.g. "Book an appointment"
   actor: z.string().optional(), // who may call it, by actor name
   description: z.string(),
@@ -276,6 +295,7 @@ const apiConventionSchema = z.object({
 });
 
 const eventSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   name: z.string(), // e.g. "appointment.booked"
   description: z.string().optional(),
   payload: z.array(z.string()).default([]),
@@ -287,6 +307,7 @@ const permissionSchema = z.object({
 });
 
 const errorSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   code: z.string(), // e.g. "APPOINTMENT_SLOT_TAKEN"
   http: z.number().optional(), // HTTP status, e.g. 409
   message: z.string(),
@@ -297,6 +318,7 @@ const errorSchema = z.object({
 // Architecture/business decision record. The company-specific 20% mostly lands
 // here: not documentation, but decisions AI must respect on later changes.
 const decisionSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "ADR-1"
   decision: z.string(),
   rationale: z.string(),
@@ -335,6 +357,7 @@ const tableSchema = z.object({
 
 // Implementation guidance: how to build something the spec requires.
 const technicalNoteSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
   id: z.string(), // e.g. "TN-1"
   title: z.string(),
   text: z.string(),

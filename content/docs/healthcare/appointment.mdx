@@ -163,6 +163,7 @@ businessRules:
 - id: BR-H13
   text: In the United States, automated reminder texts and calls go only to the number the patient provided, name the provider and how to contact them, are limited to one a day and three a week per patient, keep texts to 160 characters and calls to one minute, and offer an opt-out in every message, honoured immediately.
   rationale: These are the conditions under which healthcare messages to mobile phones are exempt from prior consent (47 CFR 64.1200(a)(9)(iv)). Breaking any of them turns a reminder into an unlawful call or text.
+  jurisdiction: us
 - id: BR-H14
   text: A virtual appointment records where the patient will be. In the United States, the practitioner must be licensed or legally permitted to practise in the state where the patient is located.
   rationale: 'HHS: providers "must ... be licensed or legally permitted to practice in the state where the patient is located". In the EU, telemedicine is considered provided in the member state where the provider is established (Directive 2011/24/EU, Article 3(d)), so the patient''s location is recorded but not checked against a licence.'
@@ -187,6 +188,7 @@ businessRules:
 - id: BR-H21
   text: In the United States, when an appointment is booked or rescheduled at least 3 business days ahead, Billing is told the booking time and the scheduled date, so a good faith estimate can be given to an uninsured or self-pay patient in time.
   rationale: The No Surprises Act requires a good faith estimate for uninsured or self-pay patients within 1 business day of scheduling when the service is 3 to 9 business days away, and within 3 business days when it is 10 or more (45 CFR 149.610). Scheduling starts the clock, so Billing must learn of it at once.
+  jurisdiction: us
 - id: BR-H22
   text: 'A cancellation records a code from the HL7 appointment cancellation reasons. Reasons the service sets itself keep their own code, mapped to one HL7 code for exchange: patient_deceased to pat-dec and patient_entered_in_error to oth-err.'
   rationale: FHIR Appointment.cancellationReason uses the HL7 appointment-cancellation-reason code system, so other systems and reports can tell a patient cancelling from a provider or an error. A local free-text reason can't be counted or exchanged.
@@ -218,6 +220,7 @@ validations:
 - field: patient_location
   rule: in the United States, the practitioner is licensed or permitted to practise there
   error: APPOINTMENT_PRACTITIONER_NOT_LICENSED
+  jurisdiction: us
 - field: patient_instruction
   rule: plain text, at most max_text_length characters
   error: APPOINTMENT_INVALID_TEXT
@@ -379,6 +382,7 @@ edgeCases:
   covers:
   - BR-11
   - AC-H5
+  jurisdiction: us
 - id: EC-H5
   situation: An appointment was booked for the wrong patient.
   behaviour: It is marked entered in error, not deleted, and disappears from schedules and statistics.
@@ -414,6 +418,7 @@ edgeCases:
   covers:
   - BR-H13
   - AC-H16
+  jurisdiction: us
 - id: EC-H11
   situation: A patient replies STOP to a reminder text.
   behaviour: No further automated texts are sent to that number.
@@ -426,6 +431,7 @@ edgeCases:
   covers:
   - BR-H14
   - AC-H18
+  jurisdiction: us
 - id: EC-H13
   situation: A booking uses a diagnosis code that was retired before the appointment date.
   behaviour: Rejected with APPOINTMENT_INVALID_CODE.
@@ -480,6 +486,7 @@ edgeCases:
   covers:
   - BR-H21
   - AC-H31
+  jurisdiction: us
 - id: EC-H22
   situation: A patient cancels because there was no interpreter at their last visit.
   behaviour: The cancellation records oth-int, so the hospital can count cancellations caused by missing interpreters.
@@ -539,6 +546,7 @@ functionalRequirements:
   text: In the United States, the service must apply the automated message conditions of BR-H13 to every reminder text and call.
   priority: must
   verification: test
+  jurisdiction: us
 - id: FR-H11
   text: The service must check a virtual appointment's practitioner against the patient's location where the jurisdiction requires it.
   priority: must
@@ -621,6 +629,7 @@ acceptanceCriteria:
   then: the request fails with APPOINTMENT_RETENTION_REQUIRED and nothing changes
   verifies:
   - BR-11
+  jurisdiction: us
 - id: AC-H6
   given: a booked appointment created for the wrong patient
   when: a Scheduler marks it entered in error
@@ -688,6 +697,7 @@ acceptanceCriteria:
   verifies:
   - BR-H12
   - FR-H9
+  jurisdiction: us
 - id: AC-H16
   given: jurisdiction us and a patient who already received one automated reminder today
   when: another reminder becomes due today
@@ -695,6 +705,7 @@ acceptanceCriteria:
   verifies:
   - BR-H13
   - FR-H10
+  jurisdiction: us
 - id: AC-H17
   given: a patient who opted out of automated texts
   when: their next reminder becomes due
@@ -708,6 +719,7 @@ acceptanceCriteria:
   verifies:
   - BR-H14
   - FR-H11
+  jurisdiction: us
 - id: AC-H19
   given: a diagnosis code not valid on the appointment date
   when: it is used as reason
@@ -791,6 +803,7 @@ acceptanceCriteria:
   then: Billing receives appointment.booked with the booking time and scheduled date at once
   verifies:
   - BR-H21
+  jurisdiction: us
 - id: AC-H32
   given: a booked appointment, and a patient who dies with an upcoming appointment
   when: staff cancel the first with pat-fb, then another with the code nonsense, and the Patients module records the death
@@ -1329,6 +1342,7 @@ compliance:
   status: met
   covered_by:
   - BR-H3
+  jurisdiction: us
 - id: CMP-H2
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.502(g)
@@ -1338,6 +1352,7 @@ compliance:
   covered_by:
   - BR-H5
   - FR-H5
+  jurisdiction: us
 - id: CMP-H3
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.522(b)
@@ -1346,6 +1361,7 @@ compliance:
   status: met
   covered_by:
   - BR-H4
+  jurisdiction: us
 - id: CMP-H4
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.524
@@ -1355,6 +1371,7 @@ compliance:
   covered_by:
   - BR-H12
   - FR-H9
+  jurisdiction: us
 - id: CMP-H5
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(b)
@@ -1365,6 +1382,7 @@ compliance:
   - BR-H7
   - FR-H3
   - CON-H2
+  jurisdiction: us
 - id: CMP-H6
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(a)(2)(iv) and (e)
@@ -1373,6 +1391,7 @@ compliance:
   status: met
   covered_by:
   - CON-H1
+  jurisdiction: us
 - id: CMP-H7
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.530(j)
@@ -1380,6 +1399,7 @@ compliance:
   how: The access log is kept by the Patients module's access_log_retention; policies are the deployment's.
   status: deployment
   covered_by: []
+  jurisdiction: us
 - id: CMP-H8
   regulation: HIPAA Breach Notification Rule
   provision: 45 CFR 164.404
@@ -1387,6 +1407,7 @@ compliance:
   how: Detecting and reporting breaches belongs to the Security module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-H9
   regulation: Affordable Care Act Section 1557
   provision: 45 CFR 92.201
@@ -1395,6 +1416,7 @@ compliance:
   status: met
   covered_by:
   - BR-H6
+  jurisdiction: us
 - id: CMP-H10
   regulation: No Surprises Act
   provision: 45 CFR 149.610
@@ -1403,6 +1425,7 @@ compliance:
   status: met
   covered_by:
   - BR-H21
+  jurisdiction: us
 - id: CMP-H11
   regulation: GDPR (EU) 2016/679
   provision: Article 9(2)(h)
@@ -1411,6 +1434,7 @@ compliance:
   status: deployment
   covered_by:
   - AS-H2
+  jurisdiction: eu
 - id: CMP-H12
   regulation: GDPR (EU) 2016/679
   provision: Articles 12(3) and 15
@@ -1420,6 +1444,7 @@ compliance:
   covered_by:
   - BR-H12
   - FR-H9
+  jurisdiction: eu
 - id: CMP-H13
   regulation: GDPR (EU) 2016/679
   provision: Article 17(3)(c)
@@ -1428,6 +1453,7 @@ compliance:
   status: met
   covered_by:
   - BR-11
+  jurisdiction: eu
 - id: CMP-H14
   regulation: GDPR (EU) 2016/679
   provision: Article 32
@@ -1438,6 +1464,7 @@ compliance:
   - CON-H1
   - CON-H2
   - BR-H7
+  jurisdiction: eu
 - id: CMP-H15
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.526
@@ -1446,6 +1473,7 @@ compliance:
   status: partly met
   covered_by:
   - BR-14
+  jurisdiction: us
 - id: CMP-H16
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.528
@@ -1453,6 +1481,7 @@ compliance:
   how: The Release of information module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-H17
   regulation: ONC Health IT Certification
   provision: 45 CFR 170.315(b)(10)
@@ -1460,6 +1489,7 @@ compliance:
   how: This module gives its data for the export; Release of information produces it.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-H18
   regulation: GDPR (EU) 2016/679
   provision: Article 6(1)
@@ -1467,6 +1497,7 @@ compliance:
   how: 'The deployment states its basis with Article 9(2)(h): usually a legal obligation (6(1)(c)) or a public task (6(1)(e)) for public hospitals, or a contract (6(1)(b)) for private care.'
   status: deployment
   covered_by: []
+  jurisdiction: eu
 tables:
 - name: appointment_access_log
   description: Every view of an appointment, with the reason given for restricted patients. Append-only; nobody it records can change it.

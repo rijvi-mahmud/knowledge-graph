@@ -112,7 +112,8 @@ Examples (the second is illustrative; /llms.txt lists what exists):
 
 1. Use the industry, domain and jurisdiction under "Project context" below. If
    they're empty, work them out from the README and code, confirm them with
-   the user, and fill them in. Use the industry and domain names exactly as
+   the user, and fill them in. A project can operate in more than one
+   jurisdiction, such as "us, eu". Use the industry and domain names exactly as
    /llms.txt lists them.
 2. Start at %SITE_URL%/llms.txt with your web fetch tool. It explains how to
    navigate and lists every page, including modules added since your last
@@ -152,6 +153,8 @@ Examples (the second is illustrative; /llms.txt lists what exists):
   their HTTP status. These are part of the API contract.
 - Acceptance criteria are Given / When / Then and map one to one onto tests.
 - Settings decide what varies by deployment, such as the jurisdiction.
+- A jurisdiction label at the start of an item, such as "US only:", limits it
+  to that jurisdiction. Unmarked items apply everywhere.
 - The Reference implementation folder (storage design, implementation notes)
   is non-normative: one way to build it, not a requirement.
 - "Why:" gives the reason for a rule or decision. "Considered:" lists
@@ -173,8 +176,10 @@ Examples (the second is illustrative; /llms.txt lists what exists):
    the decision you're going against.
 6. If existing code contradicts the spec, report the conflict with the id.
    Don't silently change either side.
-7. Apply the rules and settings for the jurisdiction under "Project context",
-   where a spec has a jurisdiction setting.
+7. Apply the jurisdiction under "Project context". Items that start with a
+   jurisdiction label, such as "US only:" or "EU only:", apply only there:
+   skip the ones for jurisdictions this project doesn't operate in. Unmarked
+   items apply everywhere. Set the spec's jurisdiction setting to match.
 8. If the spec's status is draft, mention any code that depends on it in your
    summary.
 

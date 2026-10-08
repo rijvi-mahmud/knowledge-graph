@@ -802,6 +802,7 @@ edgeCases:
   covers:
   - BR-E23
   - AC-E34
+  jurisdiction: us
 - id: EC-E19
   situation: An elective hip replacement is pre-admitted a week ahead.
   behaviour: A planned encounter holds the pre-admission tests, and admission starts it.
@@ -1040,6 +1041,7 @@ settings:
 - name: observation_notice_deadline
   type: duration
   description: 'How long after observation starts the US notice must be given: 36 hours (42 CFR 489.20(y)). Unset outside the United States.'
+  jurisdiction: us
 - name: encounter_opens_at
   type: check_in | care_start
   default: check_in
@@ -1458,6 +1460,7 @@ acceptanceCriteria:
   then: the request, denial and statement are linked to the encounter; the request is still kept
   verifies:
   - BR-E44
+  jurisdiction: us
 - id: AC-E60
   given: an inpatient encounter on hold for leave from 18:00
   when: ADT discharges the patient at 21:00 with disposition expired
@@ -2978,6 +2981,7 @@ compliance:
   status: met
   covered_by:
   - BR-E38
+  jurisdiction: us
 - id: CMP-E2
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.502(b)
@@ -2986,6 +2990,7 @@ compliance:
   status: met
   covered_by:
   - DG-E3
+  jurisdiction: us
 - id: CMP-E3
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(b)
@@ -2995,6 +3000,7 @@ compliance:
   covered_by:
   - BR-E18
   - FR-E10
+  jurisdiction: us
 - id: CMP-E4
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(a)(2)(iv) and (e)
@@ -3003,6 +3009,7 @@ compliance:
   status: met
   covered_by:
   - CON-E1
+  jurisdiction: us
 - id: CMP-E5
   regulation: 42 CFR Part 2
   provision: 42 CFR 2.13 and 2.31
@@ -3011,6 +3018,7 @@ compliance:
   status: met
   covered_by:
   - BR-E14
+  jurisdiction: us
 - id: CMP-E6
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.24(b) and (c)
@@ -3020,6 +3028,7 @@ compliance:
   covered_by:
   - BR-E7
   - BR-E8
+  jurisdiction: us
 - id: CMP-E7
   regulation: Medicare Outpatient Observation Notice
   provision: 42 CFR 489.20(y)
@@ -3028,6 +3037,7 @@ compliance:
   status: other module
   covered_by:
   - BR-E23
+  jurisdiction: us
 - id: CMP-E8
   regulation: GDPR (EU) 2016/679
   provision: Article 5(1)(c)
@@ -3036,6 +3046,7 @@ compliance:
   status: met
   covered_by:
   - DG-E3
+  jurisdiction: eu
 - id: CMP-E9
   regulation: GDPR (EU) 2016/679
   provision: Article 9(2)(h) and 17(3)(c)
@@ -3044,6 +3055,7 @@ compliance:
   status: met
   covered_by:
   - BR-E26
+  jurisdiction: eu
 - id: CMP-E10
   regulation: GDPR (EU) 2016/679
   provision: Article 32
@@ -3053,6 +3065,7 @@ compliance:
   covered_by:
   - CON-E1
   - BR-E18
+  jurisdiction: eu
 - id: CMP-E11
   regulation: GDPR (EU) 2016/679
   provision: Articles 30, 33 to 35 and 37
@@ -3060,6 +3073,7 @@ compliance:
   how: Organisational duties of the deployment.
   status: deployment
   covered_by: []
+  jurisdiction: eu
 - id: CMP-E12
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.524
@@ -3068,6 +3082,7 @@ compliance:
   status: met
   covered_by:
   - BR-E39
+  jurisdiction: us
 - id: CMP-E13
   regulation: 21st Century Cures Act information blocking
   provision: 45 CFR 171.103
@@ -3076,6 +3091,7 @@ compliance:
   status: met
   covered_by:
   - BR-E39
+  jurisdiction: us
 - id: CMP-E14
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.526
@@ -3085,6 +3101,7 @@ compliance:
   covered_by:
   - BR-E40
   - BR-E44
+  jurisdiction: us
 - id: CMP-E15
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.522(a)(1)(vi)
@@ -3093,6 +3110,7 @@ compliance:
   status: met
   covered_by:
   - BR-E41
+  jurisdiction: us
 - id: CMP-E16
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.528
@@ -3100,6 +3118,7 @@ compliance:
   how: The Release of information module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E17
   regulation: HIPAA Breach Notification Rule
   provision: 45 CFR 164.404
@@ -3107,6 +3126,7 @@ compliance:
   how: The Security module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E18
   regulation: GDPR (EU) 2016/679
   provision: Articles 12(3) and 15
@@ -3115,6 +3135,7 @@ compliance:
   status: met
   covered_by:
   - BR-E39
+  jurisdiction: eu
 - id: CMP-E19
   regulation: GDPR (EU) 2016/679
   provision: Articles 16 and 18
@@ -3124,6 +3145,7 @@ compliance:
   covered_by:
   - BR-E40
   - BR-E42
+  jurisdiction: eu
 - id: CMP-E20
   regulation: GDPR (EU) 2016/679
   provision: Article 17
@@ -3132,6 +3154,7 @@ compliance:
   status: met
   covered_by:
   - BR-E26
+  jurisdiction: eu
 - id: CMP-E21
   regulation: European Health Data Space (EU) 2025/327
   provision: Article 3
@@ -3140,6 +3163,7 @@ compliance:
   status: partly met
   covered_by:
   - BR-E39
+  jurisdiction: eu
 - id: CMP-E22
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.530(j)
@@ -3148,6 +3172,7 @@ compliance:
   status: met
   covered_by:
   - BR-E44
+  jurisdiction: us
 - id: CMP-E23
   regulation: ONC Health IT Certification
   provision: 45 CFR 170.315(b)(10)
@@ -3155,6 +3180,7 @@ compliance:
   how: This module gives its data for the export; Release of information produces it.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E24
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(c)(1)
@@ -3165,6 +3191,7 @@ compliance:
   - BR-E8
   - BR-E47
   - BR-E48
+  jurisdiction: us
 - id: CMP-E25
   regulation: GDPR (EU) 2016/679
   provision: Article 6(1)
@@ -3172,6 +3199,7 @@ compliance:
   how: 'The deployment states its basis with Article 9(2)(h): usually a legal obligation (6(1)(c)) or a public task (6(1)(e)) for public hospitals, or a contract (6(1)(b)) for private care.'
   status: deployment
   covered_by: []
+  jurisdiction: eu
 - id: CMP-E26
   regulation: GDPR (EU) 2016/679
   provision: Articles 44 to 49
@@ -3179,6 +3207,7 @@ compliance:
   how: Where data is stored and who processes it is a deployment choice.
   status: deployment
   covered_by: []
+  jurisdiction: eu
 ---
 Every note, order and result in the record belongs to an encounter. This
 module keeps that record of each visit and stay: when it happened, who was

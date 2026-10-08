@@ -225,6 +225,7 @@ dataModel:
   required: false
   description: Tribes or bands the patient associates with, enrolled or not (USCDI). Collected only when listed in collected_fields.
   constraints: 'codes: as the US Core Tribal Affiliation extension'
+  jurisdiction: us
 - name: confidentiality
   type: enum
   required: true
@@ -355,6 +356,7 @@ businessRules:
 - id: BR-H13
   text: 'A deceased patient''s record keeps the same protection as a living patient''s for as long as the law requires: 50 years after death in the United States.'
   rationale: HIPAA protects a deceased person's health information for 50 years after death (45 CFR 164.502(f)). GDPR does not apply to the dead, but member states may set rules (Recital 27), and medical confidentiality continues.
+  jurisdiction: us
 - id: BR-H14
   text: A representative is recorded with their kind (parent, guardian, other legal representative, or a proxy the patient chose), the scope of their authority, any exclusions, a period, and the evidence seen. They may act for the patient only within that scope and period, and not for an excluded service.
   rationale: HIPAA treats a personal representative as the patient (45 CFR 164.502(g)), and the EHDS lets patients authorise proxies for a limited period and purpose (Article 4(2)). Recording the scope makes every module's question "may this person act?" answerable the same way.
@@ -463,6 +465,7 @@ businessRules:
 - id: BR-H49
   text: In the European Union, from 26 March 2029, the Exchange module gives the patient's personal details to the national electronic health data access service whenever they change, so the patient can see them at once.
   rationale: The EHDS gives patients access to their patient summary, which includes personal details and contact information, immediately after it is registered, through the access services (Articles 3 and 4, Annex I), applying to patient summaries from 26 March 2029 (Article 105).
+  jurisdiction: eu
 - id: BR-H50
   text: A record is not inactivated automatically while the patient has an appointment that has not started or an encounter that is open.
   rationale: inactive_after looks back at care. A patient booked for next month, or in hospital now, is in active use whatever their history.
@@ -472,6 +475,7 @@ businessRules:
 - id: BR-H52
   text: The record notes who gave the registration details. When they came from someone other than the patient, such as a relative, emergency staff or the mother of a newborn, the Consent module is told, so the patient gets the privacy information at their first contact and in any case within one month in the EU.
   rationale: 'GDPR Article 14 applies when personal data is not obtained from the person, and Article 14(3) sets the deadline: within a reasonable period and at the latest one month, or at the first communication. Unidentified, unconscious and newborn patients are always registered by someone else.'
+  jurisdiction: eu
 - id: BR-H53
   text: A contact can be marked as involved in the patient's care, and the patient can object to sharing with any contact. Staff may share with an involved contact only what is relevant to that involvement, and may tell family the patient's location, general condition or death, unless the patient objected. When the patient can't agree or object, because they are incapacitated or it is an emergency, staff decide in the patient's best interest and the decision is recorded.
   rationale: HIPAA permits these disclosures when the patient agrees, doesn't object, or, if they can't, when professional judgment finds it in their best interest (45 CFR 164.510(b)). In the EU, informing family of someone who can't consent rests on vital interests (GDPR Article 9(2)(c)). Recording objections stops a ward telling an estranged relative where a patient is.
@@ -503,6 +507,7 @@ validations:
 - field: identifiers
   rule: a US social security number has 9 digits and an area number other than 000, 666 or 900 to 999
   error: PATIENT_INVALID_IDENTIFIER
+  jurisdiction: us
 - field: identifiers
   rule: system and value not held by another record in use
   error: PATIENT_DUPLICATE_IDENTIFIER
@@ -518,6 +523,7 @@ validations:
 - field: addresses
   rule: unknown parts are blank, not UNKNOWN; a general delivery address uses the words GENERAL DELIVERY (Project US@)
   error: PATIENT_INVALID_ADDRESS
+  jurisdiction: us
 - field: languages
   rule: well-formed BCP 47 tags, at most one preferred
   error: PATIENT_INVALID_CODE
@@ -803,6 +809,7 @@ edgeCases:
   covers:
   - BR-H18
   - AC-H15
+  jurisdiction: eu
 - id: EC-H17
   situation: A colleague opens a nurse's very restricted record without a reason.
   behaviour: Rejected with PATIENT_REASON_REQUIRED. With a reason, it opens, and the privacy officer is told.
@@ -996,6 +1003,7 @@ edgeCases:
   covers:
   - BR-H49
   - AC-H58
+  jurisdiction: eu
 - id: EC-H50
   situation: A patient not seen for 11 years is booked for next month.
   behaviour: The record is not inactivated.
@@ -1232,6 +1240,7 @@ settings:
 - name: acp_acceptance
   type: required | voluntary
   description: Whether this hospital must accept address confidentiality program addresses. Washington and California require state and local agencies to accept them; private businesses may choose to. Set with legal advice per state. Required in the United States.
+  jurisdiction: us
 - name: patient_requested_delay
   type: duration per patient
   description: 'A delay the patient asked for before their own data is shown to them. Unset by default: no delay.'
@@ -1398,6 +1407,7 @@ acceptanceCriteria:
   verifies:
   - BR-H17
   - FR-H9
+  jurisdiction: us
 - id: AC-H20
   given: a patient with three accesses to their record
   when: they ask who accessed it, with jurisdiction eu
@@ -1405,6 +1415,7 @@ acceptanceCriteria:
   verifies:
   - BR-H19
   - FR-H11
+  jurisdiction: eu
 - id: AC-H21
   given: any patient
   when: it is exported
@@ -1443,6 +1454,7 @@ acceptanceCriteria:
   then: the same access rules and logging apply as for a living patient
   verifies:
   - BR-H13
+  jurisdiction: us
 - id: AC-H27
   given: two records proposed as a duplicate
   when: an HIM specialist marks them not a duplicate
@@ -1563,6 +1575,7 @@ acceptanceCriteria:
   verifies:
   - BR-H37
   - FR-H20
+  jurisdiction: us
 - id: AC-H45
   given: source and target records with different birth dates
   when: a merge is sent without choosing one, then with one chosen
@@ -1653,6 +1666,7 @@ acceptanceCriteria:
   then: Exchange receives the change for the national access service
   verifies:
   - BR-H49
+  jurisdiction: eu
 - id: AC-H59
   given: no patient with id P-404
   when: it is read
@@ -1782,12 +1796,14 @@ acceptanceCriteria:
   then: the request, denial and statement are linked to the record, move to the remaining record in the merge, and are still kept
   verifies:
   - BR-H51
+  jurisdiction: us
 - id: AC-H79
   given: jurisdiction eu and an unconscious patient registered from details their daughter gives
   when: the record is created
   then: informant is relative, patient.registered carries it, and the Consent module is told the privacy notice is owed
   verifies:
   - BR-H52
+  jurisdiction: eu
 - id: AC-H80
   given: a patient with a sister marked involved in care and a brother the patient objected to, and an unconscious patient with no recorded wishes
   when: each relative asks how the patient is, and staff share with the unconscious patient's spouse
@@ -3450,6 +3466,7 @@ technicalNotes:
 - id: TN-H6
   title: Standardise US addresses before matching
   text: Apply Project US@ (uppercase, standard suffix and state abbreviations, no punctuation except the ZIP+4 hyphen) to a comparison copy, and keep the address as entered for display.
+  jurisdiction: us
 compliance:
 - id: CMP-H1
   regulation: HIPAA Privacy Rule
@@ -3460,6 +3477,7 @@ compliance:
   covered_by:
   - BR-H23
   - DG-H3
+  jurisdiction: us
 - id: CMP-H2
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.502(f)
@@ -3468,6 +3486,7 @@ compliance:
   status: met
   covered_by:
   - BR-H13
+  jurisdiction: us
 - id: CMP-H3
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.502(g)
@@ -3479,6 +3498,7 @@ compliance:
   - BR-H15
   - BR-H25
   - BR-H45
+  jurisdiction: us
 - id: CMP-H4
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.520
@@ -3486,6 +3506,7 @@ compliance:
   how: The Consent module, which receives patient.registered.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-H5
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.522(b)
@@ -3494,6 +3515,7 @@ compliance:
   status: met
   covered_by:
   - BR-H16
+  jurisdiction: us
 - id: CMP-H6
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.524
@@ -3503,6 +3525,7 @@ compliance:
   covered_by:
   - BR-H37
   - BR-H48
+  jurisdiction: us
 - id: CMP-H7
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.526
@@ -3514,6 +3537,7 @@ compliance:
   - BR-H43
   - BR-H44
   - BR-H51
+  jurisdiction: us
 - id: CMP-H8
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.528
@@ -3521,6 +3545,7 @@ compliance:
   how: The Release of information module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-H9
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.308(a)(1)(ii)(D)
@@ -3530,6 +3555,7 @@ compliance:
   covered_by:
   - BR-H40
   - BR-H20
+  jurisdiction: us
 - id: CMP-H10
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(a)(1)
@@ -3538,6 +3564,7 @@ compliance:
   status: met
   covered_by:
   - BR-H20
+  jurisdiction: us
 - id: CMP-H11
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(b)
@@ -3548,6 +3575,7 @@ compliance:
   - BR-H19
   - FR-H10
   - CON-H2
+  jurisdiction: us
 - id: CMP-H12
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(a)(2)(iv) and (e)
@@ -3556,6 +3584,7 @@ compliance:
   status: met
   covered_by:
   - CON-H1
+  jurisdiction: us
 - id: CMP-H13
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.308(a)(1)(ii)(A)
@@ -3563,6 +3592,7 @@ compliance:
   how: An organisational duty of the deployment.
   status: deployment
   covered_by: []
+  jurisdiction: us
 - id: CMP-H14
   regulation: HIPAA Breach Notification Rule
   provision: 45 CFR 164.404
@@ -3570,6 +3600,7 @@ compliance:
   how: The Security module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-H15
   regulation: 21st Century Cures Act information blocking
   provision: 45 CFR 171.103
@@ -3578,6 +3609,7 @@ compliance:
   status: met
   covered_by:
   - BR-H48
+  jurisdiction: us
 - id: CMP-H16
   regulation: GDPR (EU) 2016/679
   provision: Article 5(1)(c)
@@ -3587,6 +3619,7 @@ compliance:
   covered_by:
   - BR-H6
   - DG-H3
+  jurisdiction: eu
 - id: CMP-H17
   regulation: GDPR (EU) 2016/679
   provision: Article 5(1)(d)
@@ -3597,6 +3630,7 @@ compliance:
   - BR-H28
   - BR-H17
   - BR-H32
+  jurisdiction: eu
 - id: CMP-H18
   regulation: GDPR (EU) 2016/679
   provision: Articles 5(1)(e), 17 and 17(3)
@@ -3607,6 +3641,7 @@ compliance:
   - BR-H18
   - BR-H24
   - FR-H16
+  jurisdiction: eu
 - id: CMP-H19
   regulation: GDPR (EU) 2016/679
   provision: Article 9
@@ -3616,6 +3651,7 @@ compliance:
   covered_by:
   - AS-H2
   - BR-H6
+  jurisdiction: eu
 - id: CMP-H20
   regulation: GDPR (EU) 2016/679
   provision: Articles 12(3) and 15
@@ -3625,6 +3661,7 @@ compliance:
   covered_by:
   - BR-H37
   - BR-H48
+  jurisdiction: eu
 - id: CMP-H21
   regulation: GDPR (EU) 2016/679
   provision: Article 13
@@ -3632,6 +3669,7 @@ compliance:
   how: The Consent module gives the privacy notice at registration.
   status: other module
   covered_by: []
+  jurisdiction: eu
 - id: CMP-H22
   regulation: GDPR (EU) 2016/679
   provision: Articles 16 and 18
@@ -3640,6 +3678,7 @@ compliance:
   status: met
   covered_by:
   - BR-H17
+  jurisdiction: eu
 - id: CMP-H23
   regulation: GDPR (EU) 2016/679
   provision: Article 19
@@ -3648,6 +3687,7 @@ compliance:
   status: met
   covered_by:
   - BR-H43
+  jurisdiction: eu
 - id: CMP-H24
   regulation: GDPR (EU) 2016/679
   provision: Article 20
@@ -3655,6 +3695,7 @@ compliance:
   how: Care is usually based on Article 9(2)(h), so Article 20 rarely applies; EU patients get portability of health data through the EHDS (Article 7), handled by Exchange.
   status: other module
   covered_by: []
+  jurisdiction: eu
 - id: CMP-H25
   regulation: GDPR (EU) 2016/679
   provision: Article 25
@@ -3664,6 +3705,7 @@ compliance:
   covered_by:
   - BR-H47
   - BR-H39
+  jurisdiction: eu
 - id: CMP-H26
   regulation: GDPR (EU) 2016/679
   provision: Article 32
@@ -3675,6 +3717,7 @@ compliance:
   - BR-H19
   - BR-H20
   - BR-H40
+  jurisdiction: eu
 - id: CMP-H27
   regulation: GDPR (EU) 2016/679
   provision: Article 87
@@ -3683,6 +3726,7 @@ compliance:
   status: met
   covered_by:
   - BR-H23
+  jurisdiction: eu
 - id: CMP-H28
   regulation: GDPR (EU) 2016/679
   provision: Articles 30, 33 to 35 and 37
@@ -3690,6 +3734,7 @@ compliance:
   how: Organisational duties of the deployment.
   status: deployment
   covered_by: []
+  jurisdiction: eu
 - id: CMP-H29
   regulation: European Health Data Space (EU) 2025/327
   provision: Articles 3, 4 and 9
@@ -3699,6 +3744,7 @@ compliance:
   covered_by:
   - BR-H49
   - BR-H19
+  jurisdiction: eu
 - id: CMP-H30
   regulation: GDPR (EU) 2016/679
   provision: Article 21
@@ -3707,6 +3753,7 @@ compliance:
   status: deployment
   covered_by:
   - AS-H2
+  jurisdiction: eu
 - id: CMP-H31
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.530(j)
@@ -3715,6 +3762,7 @@ compliance:
   status: met
   covered_by:
   - BR-H51
+  jurisdiction: us
 - id: CMP-H32
   regulation: ONC Health IT Certification
   provision: 45 CFR 170.315(b)(10)
@@ -3722,6 +3770,7 @@ compliance:
   how: This module gives its data for the export; Release of information produces it.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-H33
   regulation: GDPR (EU) 2016/679
   provision: Article 6(1)
@@ -3730,6 +3779,7 @@ compliance:
   status: deployment
   covered_by:
   - AS-H2
+  jurisdiction: eu
 - id: CMP-H34
   regulation: GDPR (EU) 2016/679
   provision: Article 14
@@ -3738,6 +3788,7 @@ compliance:
   status: other module
   covered_by:
   - BR-H52
+  jurisdiction: eu
 - id: CMP-H35
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.510(b)
@@ -3746,6 +3797,7 @@ compliance:
   status: met
   covered_by:
   - BR-H53
+  jurisdiction: us
 - id: CMP-H36
   regulation: GDPR (EU) 2016/679
   provision: Articles 44 to 49
@@ -3753,6 +3805,7 @@ compliance:
   how: Where data is stored and who processes it is a deployment choice.
   status: deployment
   covered_by: []
+  jurisdiction: eu
 ---
 Every clinical module refers to a patient by id. This module keeps that id
 pointing at one person, and keeps who that person is accurate over the years.

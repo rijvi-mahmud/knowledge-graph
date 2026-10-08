@@ -53,6 +53,7 @@ assumptions:
 - id: AS-E3
   text: Coverage says whether a patient is a Medicare beneficiary.
   rationale: The discharge-rights and observation notices apply to Medicare beneficiaries.
+  jurisdiction: us
 - id: AS-E4
   text: The jurisdiction and notice settings are set with legal advice before go-live.
   rationale: Notices and notification duties differ by country and US state.
@@ -202,6 +203,7 @@ dataModel:
   required: false
   description: 'Notices owed and given: the Important Message from Medicare (initial and follow-up) and the MOON, each with due and given times.'
   constraints: set by the service; given times recorded through the notice operation
+  jurisdiction: us
 - name: isolation_required
   type: code[]
   required: false
@@ -304,9 +306,11 @@ businessRules:
 - id: BR-E12
   text: For a Medicare beneficiary admitted as an inpatient, the Important Message from Medicare is due no later than 2 calendar days after admission, and a follow-up copy no more than 2 calendar days before discharge, unless the first was given within 2 days of discharge. Due notices are listed until recorded as given.
   rationale: Hospitals must give Medicare inpatients a standardized notice of their rights, including discharge appeal rights, at these times (42 CFR 405.1205(b) and (c)).
+  jurisdiction: us
 - id: BR-E13
   text: For a Medicare beneficiary in observation, the MOON is due no later than 36 hours after observation starts, or sooner on transfer, discharge or admission. It is listed until recorded as given.
   rationale: Hospitals must give the notice to Medicare patients receiving observation as outpatients for more than 24 hours (42 CFR 489.20(y)).
+  jurisdiction: us
 - id: BR-E14
   text: Admissions, discharges and transfers out of the hospital are announced so the Exchange module can notify the patient's established practitioners and post-acute providers, unless the patient's privacy preferences or the law prevent it. notification_preferences_default decides whether notifications go unless the patient objects, or only after asking.
   rationale: Hospitals with electronic records must send notifications at inpatient admission and at or just before discharge or transfer, consistent with the patient's expressed privacy preferences (42 CFR 482.24(d)).
@@ -552,12 +556,14 @@ edgeCases:
   covers:
   - BR-E12
   - AC-E11
+  jurisdiction: us
 - id: EC-E7
   situation: A Medicare patient goes into observation at 20:00 and is admitted at 14:00 the next day.
   behaviour: The MOON was due by 08:00 two days later, but admission makes it due at once if not yet given.
   covers:
   - BR-E13
   - AC-E12
+  jurisdiction: us
 - id: EC-E8
   situation: A patient who asked that their stay not be shared is discharged.
   behaviour: Exchange is told the patient's preference applies, and no notification is sent to their practitioners.
@@ -695,6 +701,7 @@ functionalRequirements:
   text: The service must track the Medicare notices due for each stay and record when they are given.
   priority: must
   verification: test
+  jurisdiction: us
 - id: FR-E8
   text: The service must announce admissions, discharges and transfers for practitioner notifications, honouring privacy preferences.
   priority: must
@@ -882,6 +889,7 @@ acceptanceCriteria:
   verifies:
   - BR-E12
   - FR-E7
+  jurisdiction: us
 - id: AC-E12
   given: a Medicare patient in observation from 20:00
   when: they are admitted the next afternoon without a MOON recorded
@@ -889,6 +897,7 @@ acceptanceCriteria:
   verifies:
   - BR-E13
   - FR-E7
+  jurisdiction: us
 - id: AC-E13
   given: a patient with no objection, and one whose preference prevents sharing
   when: each is admitted and discharged
@@ -1096,6 +1105,7 @@ acceptanceCriteria:
   then: the request, denial and statement are linked to the stay; the request is still kept
   verifies:
   - BR-E34
+  jurisdiction: us
 - id: AC-E45
   given: an elective admission requested as a pre-admission
   when: it is recorded
@@ -1456,6 +1466,7 @@ operations:
   - STAY_INVALID_CODE
   - STAY_REVISION_CONFLICT
   - STAY_DEPENDENCY_UNAVAILABLE
+  jurisdiction: us
 - name: Get a stay
   actor: Clinician
   description: Read a stay.
@@ -1731,6 +1742,7 @@ events:
   - notice
   - due_at
   - revision
+  jurisdiction: us
 - name: bed.status_changed
   description: A bed's status changed.
   payload:
@@ -2107,6 +2119,7 @@ risks:
   risk: A Medicare notice is missed.
   impact: The patient loses appeal rights and the hospital is out of compliance.
   mitigation: Due dates tracked and listed (BR-E12, BR-E13, PERF-E3).
+  jurisdiction: us
 - id: RISK-E3
   risk: Boarding hides admitted patients.
   impact: Orders and staffing miss them.
@@ -2186,6 +2199,7 @@ compliance:
   - BR-E1
   - BR-E11
   - BR-E32
+  jurisdiction: us
 - id: CMP-E2
   regulation: Medicare beneficiary notices
   provision: 42 CFR 405.1205
@@ -2194,6 +2208,7 @@ compliance:
   status: met
   covered_by:
   - BR-E12
+  jurisdiction: us
 - id: CMP-E3
   regulation: Medicare Outpatient Observation Notice
   provision: 42 CFR 489.20(y)
@@ -2202,6 +2217,7 @@ compliance:
   status: met
   covered_by:
   - BR-E13
+  jurisdiction: us
 - id: CMP-E4
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.24(d)
@@ -2210,6 +2226,7 @@ compliance:
   status: partly met
   covered_by:
   - BR-E14
+  jurisdiction: us
 - id: CMP-E5
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.43(a) and (b)
@@ -2218,6 +2235,7 @@ compliance:
   status: partly met
   covered_by:
   - BR-E15
+  jurisdiction: us
 - id: CMP-E6
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.43(c)
@@ -2225,6 +2243,7 @@ compliance:
   how: An organisational duty of the hospital.
   status: deployment
   covered_by: []
+  jurisdiction: us
 - id: CMP-E7
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.13(h)
@@ -2232,6 +2251,7 @@ compliance:
   how: The Visitors module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E8
   regulation: EMTALA
   provision: 42 CFR 489.24(e)
@@ -2239,6 +2259,7 @@ compliance:
   how: The Emergency department module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E9
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.510(a)
@@ -2247,6 +2268,7 @@ compliance:
   status: met
   covered_by:
   - BR-E17
+  jurisdiction: us
 - id: CMP-E10
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.502(b)
@@ -2255,6 +2277,7 @@ compliance:
   status: met
   covered_by:
   - BR-E18
+  jurisdiction: us
 - id: CMP-E11
   regulation: 42 CFR Part 2
   provision: 42 CFR 2.13
@@ -2263,6 +2286,7 @@ compliance:
   status: met
   covered_by:
   - BR-E18
+  jurisdiction: us
 - id: CMP-E12
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(b)
@@ -2272,6 +2296,7 @@ compliance:
   covered_by:
   - BR-E19
   - FR-E10
+  jurisdiction: us
 - id: CMP-E13
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(a)(2)(iv) and (e)
@@ -2280,6 +2305,7 @@ compliance:
   status: met
   covered_by:
   - CON-E1
+  jurisdiction: us
 - id: CMP-E14
   regulation: GDPR (EU) 2016/679
   provision: Article 5(1)(c)
@@ -2288,6 +2314,7 @@ compliance:
   status: met
   covered_by:
   - BR-E18
+  jurisdiction: eu
 - id: CMP-E15
   regulation: GDPR (EU) 2016/679
   provision: Article 9(2)(h) and 17(3)(c)
@@ -2296,6 +2323,7 @@ compliance:
   status: met
   covered_by:
   - BR-E27
+  jurisdiction: eu
 - id: CMP-E16
   regulation: GDPR (EU) 2016/679
   provision: Article 32
@@ -2305,6 +2333,7 @@ compliance:
   covered_by:
   - CON-E1
   - BR-E19
+  jurisdiction: eu
 - id: CMP-E17
   regulation: GDPR (EU) 2016/679
   provision: Articles 30, 33 to 35 and 37
@@ -2312,6 +2341,7 @@ compliance:
   how: Organisational duties of the deployment.
   status: deployment
   covered_by: []
+  jurisdiction: eu
 - id: CMP-E18
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.524
@@ -2320,6 +2350,7 @@ compliance:
   status: met
   covered_by:
   - BR-E24
+  jurisdiction: us
 - id: CMP-E19
   regulation: 21st Century Cures Act information blocking
   provision: 45 CFR 171.103
@@ -2328,6 +2359,7 @@ compliance:
   status: met
   covered_by:
   - BR-E24
+  jurisdiction: us
 - id: CMP-E20
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.526
@@ -2337,6 +2369,7 @@ compliance:
   covered_by:
   - BR-E24
   - BR-E34
+  jurisdiction: us
 - id: CMP-E21
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.528
@@ -2344,6 +2377,7 @@ compliance:
   how: The Release of information module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E22
   regulation: HIPAA Breach Notification Rule
   provision: 45 CFR 164.404
@@ -2351,6 +2385,7 @@ compliance:
   how: The Security module.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E23
   regulation: GDPR (EU) 2016/679
   provision: Articles 12(3) and 15
@@ -2359,6 +2394,7 @@ compliance:
   status: met
   covered_by:
   - BR-E24
+  jurisdiction: eu
 - id: CMP-E24
   regulation: GDPR (EU) 2016/679
   provision: Articles 16 and 18
@@ -2367,6 +2403,7 @@ compliance:
   status: met
   covered_by:
   - BR-E24
+  jurisdiction: eu
 - id: CMP-E25
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.530(j)
@@ -2375,6 +2412,7 @@ compliance:
   status: met
   covered_by:
   - BR-E34
+  jurisdiction: us
 - id: CMP-E26
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.12(c)(1)
@@ -2383,6 +2421,7 @@ compliance:
   status: met
   covered_by:
   - BR-E28
+  jurisdiction: us
 - id: CMP-E27
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.24(b)
@@ -2391,6 +2430,7 @@ compliance:
   status: met
   covered_by:
   - BR-E32
+  jurisdiction: us
 - id: CMP-E28
   regulation: ONC Health IT Certification
   provision: 45 CFR 170.315(b)(10)
@@ -2398,6 +2438,7 @@ compliance:
   how: This module gives its data for the export; Release of information produces it.
   status: other module
   covered_by: []
+  jurisdiction: us
 - id: CMP-E29
   regulation: HIPAA Security Rule
   provision: 45 CFR 164.312(c)(1)
@@ -2408,6 +2449,7 @@ compliance:
   - BR-E32
   - BR-E41
   - BR-E42
+  jurisdiction: us
 - id: CMP-E30
   regulation: GDPR (EU) 2016/679
   provision: Article 6(1)
@@ -2415,6 +2457,7 @@ compliance:
   how: 'The deployment states its basis with Article 9(2)(h): usually a legal obligation (6(1)(c)) or a public task (6(1)(e)) for public hospitals, or a contract (6(1)(b)) for private care.'
   status: deployment
   covered_by: []
+  jurisdiction: eu
 - id: CMP-E31
   regulation: GDPR (EU) 2016/679
   provision: Articles 44 to 49
@@ -2422,6 +2465,7 @@ compliance:
   how: Where data is stored and who processes it is a deployment choice.
   status: deployment
   covered_by: []
+  jurisdiction: eu
 - id: CMP-E32
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.510(b)
@@ -2429,6 +2473,7 @@ compliance:
   how: The Patients module records contacts involved in care and objections to sharing; staff follow them when family ask about a stay.
   status: other module
   covered_by: []
+  jurisdiction: us
 changelog:
 - version: 0.7.0
   date: '2026-10-08'

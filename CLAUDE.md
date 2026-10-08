@@ -217,6 +217,17 @@ only one with `variant:`. Each variant gets its own sidebar page right after
 the Introduction, listing its summary and its tagged items; untagged items
 apply to every variant. `pnpm check:specs` fails on a tag that isn't declared.
 
+**Jurisdiction tags.** An item that applies in only one jurisdiction carries
+`jurisdiction: us` or `jurisdiction: eu`; untagged items apply everywhere.
+`resolveSpec` prefixes its lead text with "US only:" or "EU only:", so both
+renderers show it without separate code, and the AGENTS.md section, `/llms.txt`
+and each spec's "How to read this spec" tell agents to skip items for
+jurisdictions their project doesn't operate in. Tag an item only when the item
+itself applies in one place (Medicare notices, TCPA limits, GDPR Article 14),
+not when its rationale merely cites a law or it states values for both. Every
+compliance item is tagged: `pnpm check:specs` fails on a HIPAA, CFR, Medicare,
+ONC or No Surprises item not tagged `us`, or a GDPR or EHDS item not tagged `eu`.
+
 Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
 both renderers) gives it a page in every module. URLs are
 `/docs/<module>/<group>/<section>`.

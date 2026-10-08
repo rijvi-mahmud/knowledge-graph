@@ -127,6 +127,49 @@ function mergeList(layers: { layer: string; items: Item[] }[], key: (i: Item) =>
   return out;
 }
 
+/** The field each list leads with, which carries the jurisdiction label. */
+const LEAD_FIELD: Record<string, string> = {
+  dataModel: 'description',
+  businessRules: 'text',
+  validations: 'rule',
+  workflows: 'outcome',
+  functionalRequirements: 'text',
+  nonFunctionalRequirements: 'text',
+  constraints: 'text',
+  assumptions: 'text',
+  edgeCases: 'situation',
+  settings: 'description',
+  personalData: 'purpose',
+  compliance: 'obligation',
+  risks: 'risk',
+  acceptanceCriteria: 'given',
+  operations: 'description',
+  events: 'description',
+  errors: 'message',
+  decisions: 'decision',
+  technicalNotes: 'text',
+};
+
+export const JURISDICTION_LABEL: Record<string, string> = { us: 'US only', eu: 'EU only' };
+
+/**
+ * Prefixes the lead text of every item tagged with a jurisdiction, such as
+ * "US only: ...". Done once here so the HTML and markdown renderers, which
+ * both take the resolved spec, can't drift apart.
+ */
+function labelJurisdictions(record: Record<string, unknown>) {
+  for (const [list, field] of Object.entries(LEAD_FIELD)) {
+    const items = record[list] as Item[] | undefined;
+    if (!items) continue;
+    record[list] = items.map((item) => {
+      const label = JURISDICTION_LABEL[str(item.jurisdiction)];
+      const text = item[field];
+      if (!label || typeof text !== 'string' || text.startsWith(label)) return item;
+      return { ...item, [field]: `${label}: ${text}` };
+    });
+  }
+}
+
 export function resolveSpec(
   node: SpecNode,
   lookup: (path: string) => SpecNode | undefined,
@@ -147,6 +190,8 @@ export function resolveSpec(
       key,
     );
   }
+
+  labelJurisdictions(record);
 
   const smOwner = [...chain].reverse().find((n) => n.data.stateMachine);
   merged.stateMachine = smOwner

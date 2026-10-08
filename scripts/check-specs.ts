@@ -10,6 +10,7 @@
  * - an error code returned by an operation or validation but not defined
  * - an id mentioned in the page (outside its changelog) that doesn't exist
  * - an item tagged with a variant the module doesn't declare
+ * - a compliance item under US law not tagged us, or under EU law not tagged eu
  * - an em or en dash anywhere in the page
  *
  * Warnings (exit code 0, or 1 with --strict):
@@ -168,6 +169,17 @@ for (const node of all) {
     for (const item of ((spec as Record<string, unknown>)[list] ?? []) as { variant?: string; id?: string; name?: string }[])
       if (item.variant && !variantIds.has(item.variant))
         errors.push(`${where}: ${item.id ?? item.name} is tagged with variant "${item.variant}", which isn't declared`);
+
+  // Compliance items name the law they follow, so their jurisdiction is known.
+  // Agents skip the other region's items, so a missing tag hides a duty.
+  const US_LAW = /HIPAA|CFR|Medicare|ONC|No Surprises|Affordable Care|CMS-|Social Security/;
+  const EU_LAW = /GDPR|European|EHDS|\(EU\)/;
+  for (const c of (spec.compliance ?? []) as { id: string; regulation: string; provision: string; jurisdiction?: string }[]) {
+    const law = `${c.regulation} ${c.provision}`;
+    const want = US_LAW.test(law) ? 'us' : EU_LAW.test(law) ? 'eu' : undefined;
+    if (want && c.jurisdiction !== want)
+      errors.push(`${where}: ${c.id} (${c.regulation}) should be tagged jurisdiction: ${want}`);
+  }
 
   // Every dependency states its contract: what this module needs or gives.
   for (const dep of spec.dependencies ?? [])
