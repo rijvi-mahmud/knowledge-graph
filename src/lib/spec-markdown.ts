@@ -92,7 +92,7 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
       'This is the complete spec for this page, with every inherited item already merged in.',
       'If a behaviour is not listed here, it is unspecified. Do not assume or invent it. Ask, or record it as an open question.',
       'Ids such as BR-1, FR-2 and AC-3 are stable. Cite them in code, tests and commit messages.',
-      'Items that start with "US only:" or "EU only:" apply only in that jurisdiction. Skip the ones for a jurisdiction your project doesn\'t operate in. Unmarked items apply everywhere.',
+      'Items that start with "US only:" or "EU only:" apply only in that jurisdiction. Skip the ones for a jurisdiction your project doesn\'t operate in, or add ?jurisdiction=us or ?jurisdiction=eu to this URL to leave them out. Unmarked items apply everywhere.',
       layered
         ? 'Tags such as [core] or [healthcare] show which layer an item comes from. "overrides X" means it replaces the item with the same id from layer X.'
         : `This is the core ${data.module} specification: nothing is inherited, and industry and domain pages build on it.`,

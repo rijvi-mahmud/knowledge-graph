@@ -6,6 +6,7 @@ import { specToMarkdown } from './spec-markdown';
 import { resolveSpec, type SpecNode } from './spec-inherit';
 import { activeSpecGroups, variantSpec, type ModuleSpecData } from '@/components/module-spec';
 import { sectionSummary, sectionTitle, type SpecSectionId } from './spec-sections';
+import { jurisdictionSpec, type Jurisdiction } from './spec-jurisdiction';
 
 /** Set on a spec sub-page: which module page it belongs to, and the section or variant it shows. */
 export interface SpecView {
@@ -192,32 +193,43 @@ export function getResolvedSpec(page: Page): ModuleSpecData {
 /** The TASL attribution line every markdown response ends with. */
 const licenseLine = (page: Page) => `License: ${attribution(page.data.title ?? page.url, `${siteUrl}${page.url}`)}`;
 
-export async function getLLMText(page: (typeof source)['$inferPage']) {
-  return `${await llmBody(page)}\n\n${licenseLine(page)}\n`;
+/**
+ * The page as markdown. With a jurisdiction, items tagged for another
+ * jurisdiction are left out, so an agent never reads the other region's rules.
+ */
+export async function getLLMText(page: (typeof source)['$inferPage'], jurisdiction?: Jurisdiction) {
+  const note = jurisdiction && page.data.module
+    ? `> Filtered for jurisdiction ${jurisdiction}: items that apply only in another jurisdiction are left out. Items without a jurisdiction label apply everywhere.\n\n`
+    : '';
+  return `${await llmBody(page, jurisdiction, note)}\n\n${licenseLine(page)}\n`;
 }
 
-async function llmBody(page: (typeof source)['$inferPage']) {
+async function llmBody(page: (typeof source)['$inferPage'], jurisdiction: Jurisdiction | undefined, note: string) {
+  const resolved = () => {
+    const spec = getResolvedSpec(page);
+    return jurisdiction ? jurisdictionSpec(spec, jurisdiction) : spec;
+  };
   // A sub-page is one section or one variant of the spec, with no prose of its own.
   const view = specViewOf(page);
   if (view?.variant) {
-    const full = getResolvedSpec(page);
+    const full = resolved();
     const v = full.variants?.find((x) => x.id === view.variant);
     const spec = specToMarkdown(variantSpec(full, view.variant));
-    return [`# ${page.data.title} (${page.url})`, v?.summary ?? '', 'Only the items specific to this variant are listed. Every other item in the full specification applies too.', spec]
+    return [`# ${page.data.title} (${page.url})`, note.trim(), v?.summary ?? '', 'Only the items specific to this variant are listed. Every other item in the full specification applies too.', spec]
       .filter(Boolean)
       .join('\n\n');
   }
   if (view) {
-    const spec = specToMarkdown(getResolvedSpec(page), view.section);
-    return `# ${page.data.title} (${page.url})\n\n${spec}`;
+    const spec = specToMarkdown(resolved(), view.section);
+    return `# ${page.data.title} (${page.url})\n\n${note}${spec}`;
   }
 
   const processed = await page.data.getText('processed');
   // The structured spec lives in frontmatter, so it has to be serialised
   // explicitly. The processed body carries only the prose half of the page.
-  const spec = specToMarkdown(getResolvedSpec(page));
+  const spec = specToMarkdown(resolved());
 
-  return [`# ${page.data.title} (${page.url})`, spec, processed]
+  return [`# ${page.data.title} (${page.url})`, note.trim(), spec, processed]
     .filter((part) => part.trim().length > 0)
     .join('\n\n');
 }

@@ -228,6 +228,15 @@ not when its rationale merely cites a law or it states values for both. Every
 compliance item is tagged: `pnpm check:specs` fails on a HIPAA, CFR, Medicare,
 ONC or No Surprises item not tagged `us`, or a GDPR or EHDS item not tagged `eu`.
 
+**Filtering by jurisdiction.** Agents add `?jurisdiction=us` or `eu` to any
+`.md` URL; `src/proxy.ts` rewrites it to the static `content.us.md` file the
+markdown route generates, because a static route never sees the query. People
+use the Jurisdiction selector on spec pages, which sets the `kg-jurisdiction`
+cookie; the proxy rewrites the HTML page to a static `__us` segment that the
+page route strips off. Both filter with `jurisdictionSpec`
+(`src/lib/spec-jurisdiction.ts`). Constants live in `src/lib/jurisdictions.ts`,
+which imports nothing, so the proxy and client code can use it.
+
 Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
 both renderers) gives it a page in every module. URLs are
 `/docs/<module>/<group>/<section>`.

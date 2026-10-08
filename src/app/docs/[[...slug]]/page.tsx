@@ -22,17 +22,31 @@ import { appName, gitConfig, siteUrl } from '@/lib/shared';
 import { activeSpecGroups, ModuleSpec, specToc, variantSpec } from '@/components/module-spec';
 import { sectionTitle } from '@/lib/spec-sections';
 import { OpenTarget } from '@/components/open-target';
+import { JurisdictionSelect } from '@/components/jurisdiction-select';
+import { JURISDICTIONS, jurisdictionSegment, splitJurisdictionSlug } from '@/lib/jurisdictions';
+import { jurisdictionSpec } from '@/lib/spec-jurisdiction';
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const params = await props.params;
-  const page = source.getPage(params.slug);
+  // The proxy adds a "__us" segment when the reader chose a jurisdiction.
+  const { slug, jurisdiction: chosen } = splitJurisdictionSlug(params.slug);
+  const page = source.getPage(slug);
   if (!page) notFound();
 
   const MDX = page.data.body;
-  const markdownUrl = getPageMarkdownUrl(page).url;
   const view0 = specViewOf(page);
+  const isSpec = Boolean(page.data.module || view0);
+  // Only spec pages have jurisdiction-specific items; other pages ignore the choice.
+  const jurisdiction = isSpec ? chosen : undefined;
+  const markdownUrl = getPageMarkdownUrl(page).url.replace(
+    /content\.md$/,
+    jurisdiction ? `content.${jurisdiction}.md` : 'content.md',
+  );
+  const resolved = jurisdiction
+    ? jurisdictionSpec(getResolvedSpec(page), jurisdiction)
+    : getResolvedSpec(page);
   // A variant page shows the spec cut down to that variant's items.
-  const spec = view0?.variant ? variantSpec(getResolvedSpec(page), view0.variant) : getResolvedSpec(page);
+  const spec = view0?.variant ? variantSpec(resolved, view0.variant) : resolved;
   // A spec sub-page shows one section of its module's spec and has no prose.
   const view = specViewOf(page);
   const section = view?.section;
@@ -66,13 +80,20 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
         {page.url}.md. Start at {siteUrl}/llms.txt for how to navigate the {appName}, and
         fetch only the sections a task needs.
       </p>
-      <div className="flex flex-row gap-2 items-center border-b pb-6">
+      <div className="flex flex-row flex-wrap gap-2 items-center border-b pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover
           markdownUrl={markdownUrl}
           githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${sourcePathOf(page)}`}
         />
+        {isSpec && <JurisdictionSelect current={jurisdiction} />}
       </div>
+      {jurisdiction && (
+        <p className="text-sm text-fd-muted-foreground">
+          Showing items for the {jurisdiction === 'us' ? 'United States' : 'European Union'} and
+          items that apply everywhere. Items for other jurisdictions are hidden.
+        </p>
+      )}
       <DocsBody>
         {!view && (
           <MDX
@@ -90,12 +111,19 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 }
 
 export async function generateStaticParams() {
-  return source.generateParams();
+  const params = source.generateParams();
+  // A filtered copy of each spec page, which the proxy serves for a reader's choice.
+  const filtered = source.getPages().flatMap((page) =>
+    page.data.module || specViewOf(page)
+      ? JURISDICTIONS.map((j) => ({ slug: [...page.slugs, jurisdictionSegment(j)] }))
+      : [],
+  );
+  return [...params, ...filtered];
 }
 
 export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): Promise<Metadata> {
   const params = await props.params;
-  const page = source.getPage(params.slug);
+  const page = source.getPage(splitJurisdictionSlug(params.slug).slug);
   if (!page) notFound();
 
   // "Data" alone is ambiguous in a browser tab, so sub-pages carry their module's title.
@@ -105,7 +133,11 @@ export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): P
     title: owner ? `${page.data.title} · ${owner.data.title}` : page.data.title,
     description: page.data.description,
     // Points agents and tools that read <head> to the markdown version.
-    alternates: { types: { 'text/markdown': `${siteUrl}${page.url}.md` } },
+    // The unfiltered page is canonical; jurisdiction-filtered copies share its URL.
+    alternates: {
+      canonical: `${siteUrl}${page.url}`,
+      types: { 'text/markdown': `${siteUrl}${page.url}.md` },
+    },
     openGraph: {
       images: getPageImageUrl(page).url,
     },

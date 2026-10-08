@@ -123,6 +123,10 @@ Examples (the second is illustrative; /llms.txt lists what exists):
    otherwise the module's core page. A more specific page already includes
    everything above it.
 4. Fetch only what the task needs, as markdown, by adding `.md` to the URL.
+   If the project operates in one jurisdiction, add `?jurisdiction=` and its
+   code, such as `.md?jurisdiction=us`, so items for other jurisdictions are
+   left out. If it operates in several, fetch without it and skip items
+   labelled for jurisdictions it doesn't operate in.
    Module pages are complete specs and can pass 100 KB, so prefer their
    sections, such as functions/business-rules, functions/validations,
    data/data-model, interfaces/operations, interfaces/errors,
@@ -177,9 +181,9 @@ Examples (the second is illustrative; /llms.txt lists what exists):
 6. If existing code contradicts the spec, report the conflict with the id.
    Don't silently change either side.
 7. Apply the jurisdiction under "Project context". Items that start with a
-   jurisdiction label, such as "US only:" or "EU only:", apply only there:
-   skip the ones for jurisdictions this project doesn't operate in. Unmarked
-   items apply everywhere. Set the spec's jurisdiction setting to match.
+   jurisdiction label, such as "US only:" or "EU only:", apply only there;
+   unmarked items apply everywhere. Set the spec's jurisdiction setting to
+   match.
 8. If the spec's status is draft, mention any code that depends on it in your
    summary.
 

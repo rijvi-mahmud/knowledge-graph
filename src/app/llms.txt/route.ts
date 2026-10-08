@@ -46,7 +46,7 @@ The specifications are licensed under ${contentLicense.name} (${contentLicense.u
 - Validations give each field's rule and error code. A data model field's "codes:" names the standard code system to use, for example HL7 v3 MaritalStatus for a healthcare marital status field. Use those codes.
 - Operations carry their HTTP method, path and success status; errors carry their HTTP status. Acceptance criteria are Given / When / Then and map one to one onto tests.
 - The Security folder's Compliance page lists each legal obligation, such as a HIPAA or GDPR provision, how the spec meets it, and the ids that do. Check it before building anything that handles personal data.
-- Settings decide what varies by deployment, such as the jurisdiction. Items that start with a jurisdiction label, such as "US only:" or "EU only:", apply only there; skip the ones for jurisdictions the project doesn't operate in. Unmarked items apply everywhere.
+- Settings decide what varies by deployment, such as the jurisdiction. Items that start with a jurisdiction label, such as "US only:" or "EU only:", apply only there; unmarked items apply everywhere. For a project in one jurisdiction, add ?jurisdiction=us or ?jurisdiction=eu to any .md URL to leave out other jurisdictions' items.
 - The Reference implementation pages (storage design, implementation notes) are non-normative: one way to build it.
 `;
 
