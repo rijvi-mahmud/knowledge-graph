@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.5.0
+version: 0.6.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -1107,6 +1107,19 @@ acceptanceCriteria:
   then: the first is marked R by the service; the second is not, until staff mark it
   verifies:
   - BR-E40
+- id: AC-E53
+  given: a bed that went to housekeeping at revision 7 and was marked unoccupied at revision 8
+  when: the revision 8 event reaches the bed board before revision 7
+  then: the board shows the bed unoccupied and ignores revision 7; each event carries changed_at
+  verifies:
+  - BR-E6
+  - FR-E2
+- id: AC-E54
+  given: an admitted patient
+  when: a leave starts with an expected return on Monday 10:00
+  then: stay.leave_started carries stay_id, patient_id, encounter_id and expected_return_at, so Appointments flags appointments without reading the stay
+  verifies:
+  - BR-E8
 operations:
 - name: Request an admission
   actor: Clinician
@@ -1468,6 +1481,7 @@ events:
   payload:
   - stay_id
   - patient_id
+  - encounter_id
   - expected_admission_at
   - pre_admission
   - revision
@@ -1476,6 +1490,7 @@ events:
   payload:
   - stay_id
   - patient_id
+  - encounter_id
   - patient_class
   - admitted_at
   - share_restricted
@@ -1484,23 +1499,31 @@ events:
   description: A pending or mistaken admission was cancelled.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - revision
 - name: stay.bed_assigned
   description: The patient was placed in a bed.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - bed_id
   - revision
 - name: stay.transfer_requested
   description: A transfer was requested and the target bed reserved.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - bed_id
   - revision
 - name: stay.transferred
   description: The patient moved to another bed.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - from_bed_id
   - bed_id
   - revision
@@ -1508,39 +1531,54 @@ events:
   description: Two patients swapped beds.
   payload:
   - stay_ids
+  - patient_ids
+  - encounter_ids
   - bed_ids
   - revisions
 - name: stay.movement_corrected
   description: A past movement was corrected.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - entry_id
   - revision
 - name: stay.transfer_cancelled
   description: A pending or recorded transfer was cancelled.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - revision
 - name: stay.leave_started
   description: A leave of absence started.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
+  - expected_return_at
   - revision
 - name: stay.leave_ended
   description: The patient returned from leave.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - revision
 - name: stay.leave_cancelled
   description: A leave of absence, or a return from one, was cancelled as recorded by mistake.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - cancelled
   - revision
 - name: stay.temporary_location_changed
   description: The patient left for a temporary location or returned, or either was cancelled.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - location_id
   - departed_at
   - returned_at
@@ -1550,6 +1588,8 @@ events:
   description: The stay changed between observation and inpatient.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - patient_class
   - effective_at
   - revision
@@ -1557,6 +1597,8 @@ events:
   description: The attending practitioner changed, or a change was cancelled and the previous one restored.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - attending_practitioner_id
   - effective_at
   - cancelled
@@ -1565,6 +1607,8 @@ events:
   description: An expected discharge time was set, changed or cleared (empty when cleared).
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - expected_discharge_at
   - revision
 - name: stay.discharged
@@ -1572,6 +1616,7 @@ events:
   payload:
   - stay_id
   - patient_id
+  - encounter_id
   - discharged_at
   - discharge_disposition
   - discharge_destination_id
@@ -1581,28 +1626,39 @@ events:
   description: A discharge was undone.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - revision
 - name: stay.notice_due
   description: A Medicare notice is due.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - notice
   - due_at
+  - revision
 - name: bed.status_changed
   description: A bed's status changed.
   payload:
   - bed_id
   - bed_status
+  - changed_at
+  - revision
 - name: stay.review_needed
   description: 'Someone must resolve this stay: two open stays after a merge, or a stay recorded since an undone merge.'
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - reason
   - revision
 - name: stay.correction_decided
   description: A correction request was decided.
   payload:
   - stay_id
+  - patient_id
+  - encounter_id
   - request_id
   - decision
   - revision
@@ -1611,11 +1667,14 @@ deliveryGuarantees:
   text: Events are published at least once; consumers drop one with a source and id they have seen.
   rationale: CloudEvents defines source plus id as the duplicate check.
 - id: DG-E2
-  text: Events for one stay can arrive out of order; each carries the revision, and consumers ignore a lower one.
+  text: Events for one stay, or one bed, can arrive out of order; each carries that stay's or bed's revision, and consumers ignore a lower one.
   rationale: Brokers and retries don't guarantee order.
 - id: DG-E3
   text: Events carry ids, codes and times, never names or diagnoses. share_restricted tells Exchange the patient's preference prevents notifications.
   rationale: Minimum necessary (45 CFR 164.502(b)) and GDPR data minimisation (Article 5(1)(c)).
+- id: DG-E4
+  text: Every event carries a unique id, its type and when the change happened. Stay events also carry the stay, patient and encounter ids and the stay's revision; bed events carry the bed id and its revision.
+  rationale: Consumers such as Appointments match by patient and encounter, and must not have to read the stay back, which fails while this module is down. CloudEvents defines id, type and time for every event.
 permissions:
 - name: stay.read
   description: Read stays, the census and the bed board.
@@ -1843,7 +1902,7 @@ dependencies:
   contract:
   - 'Gives: whether a patient is in an active stay, its kind and its encounter id, through the patient''s stay list'
   - 'Gives: stay.discharged and stay.class_changed, so appointments for the stay are reviewed'
-  - 'Gives: stay.leave_started, stay.leave_ended and stay.leave_cancelled, so appointments during a leave are reviewed'
+  - 'Gives: stay.leave_started (with expected_return_at), stay.leave_ended and stay.leave_cancelled, each with patient and encounter ids, so appointments during a leave are reviewed'
 - service: orders-service
   direction: upstream
   reason: owns admission, observation and discharge orders
@@ -2213,6 +2272,11 @@ compliance:
   status: other module
   covered_by: []
 changelog:
+- version: 0.6.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Every stay event carries patient_id and encounter_id; stay.leave_started carries expected_return_at; bed events carry changed_at and a revision (DG-E2, DG-E4). Additive payload fields only.
 - version: 0.5.0
   date: '2026-10-08'
   breaking: false

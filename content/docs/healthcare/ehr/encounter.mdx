@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.9.0
+version: 0.10.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -1426,7 +1426,7 @@ acceptanceCriteria:
 - id: AC-E61
   given: an inpatient encounter in progress with no clinical data, and another with a planned_end
   when: ADT cancels the first admission in error and clears the second expected discharge
-  then: the first is entered in error with status_reason admission_cancelled; the second has no planned_end
+  then: the first is entered in error with status_reason admission_cancelled, and encounter.entered_in_error carries it; the second has no planned_end
   verifies:
   - BR-E46
   - BR-E36
@@ -1946,12 +1946,14 @@ events:
   description: The encounter was opened by mistake.
   payload:
   - encounter_id
+  - status_reason
   - revision
 - name: encounter.record_overdue
   description: The record passed record_due_at.
   payload:
   - encounter_id
   - record_due_at
+  - revision
 - name: encounter.patient_review_needed
   description: 'Someone must check this encounter: after a patient merge was undone, or after a death that cancelled it was retracted.'
   payload:
@@ -2012,6 +2014,9 @@ deliveryGuarantees:
 - id: DG-E3
   text: Events carry ids, codes and changed field names, never diagnoses text, notes or the patient's details. Consumers read the encounter.
   rationale: Events fan out widely. This follows the minimum necessary standard (45 CFR 164.502(b)) and keeps sensitive encounters out of logs.
+- id: DG-E4
+  text: Every event carries a unique id, its type, the encounter it is about, when the change happened, and the revision.
+  rationale: Consumers order and deduplicate by these, and need the time of the change rather than the time they received it. CloudEvents defines id, type and time for every event.
 permissions:
 - name: encounter.read
   description: Read encounters.
@@ -2535,6 +2540,11 @@ references:
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
 changelog:
+- version: 0.10.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - encounter.entered_in_error carries status_reason; DG-E4 states what every event carries. Additive only.
 - version: 0.9.0
   date: '2026-10-08'
   breaking: false
