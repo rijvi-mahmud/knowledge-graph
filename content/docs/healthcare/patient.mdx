@@ -142,7 +142,7 @@ dataModel:
 - name: addresses
   type: address[]
   required: false
-  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing (Project US@). Unknown parts are left blank. An address can be marked as an address confidentiality program substitute, with the program and participant number (BR-H46).
+  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing (Project US@). Unknown parts are left blank. In the United States, an address can be marked as an address confidentiality program substitute, with the program and participant number.
   constraints: 'codes: use and type from FHIR AddressUse and AddressType; country ISO 3166-1 alpha-2; US state USPS two-letter code'
 - name: telecoms
   type: contact point[]
@@ -456,6 +456,7 @@ businessRules:
 - id: BR-H46
   text: An address confidentiality program substitute address is recorded as the patient's address with its program and participant number, and is never used for matching. Whether the hospital must accept it is set by acp_acceptance. The real address is not required.
   rationale: States such as Washington and California give survivors of abuse a substitute address that state and local agencies must accept, while private businesses may choose to. Many participants share one substitute address, so matching on it would link strangers.
+  jurisdiction: us
 - id: BR-H47
   text: Fields the service sets, such as replaced_by, last_care_at, revision, similar_name_alert, import_batch, external_links, legal_hold, accuracy_contested, correction_requests and demographics_confirmed_at, cannot be written by clients. Each changes only through its own operation.
   rationale: A client writing replaced_by could hide a record behind another one, and a forged last_care_at would change retention.
@@ -473,9 +474,8 @@ businessRules:
   text: Each correction request is kept and linked to the record it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the record, and in the United States for at least 6 years from its decision. It moves with the record in a merge.
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). A merge must not lose a disagreement that has to go with later disclosures (BR-H44).
 - id: BR-H52
-  text: The record notes who gave the registration details. When they came from someone other than the patient, such as a relative, emergency staff or the mother of a newborn, the Consent module is told, so the patient gets the privacy information at their first contact and in any case within one month in the EU.
+  text: The record notes who gave the registration details. In the European Union, when they came from someone other than the patient, such as a relative, emergency staff or the mother of a newborn, the Consent module is told, so the patient gets the privacy information at their first contact and in any case within one month.
   rationale: 'GDPR Article 14 applies when personal data is not obtained from the person, and Article 14(3) sets the deadline: within a reasonable period and at the latest one month, or at the first communication. Unidentified, unconscious and newborn patients are always registered by someone else.'
-  jurisdiction: eu
 - id: BR-H53
   text: A contact can be marked as involved in the patient's care, and the patient can object to sharing with any contact. Staff may share with an involved contact only what is relevant to that involvement, and may tell family the patient's location, general condition or death, unless the patient objected. When the patient can't agree or object, because they are incapacitated or it is an emergency, staff decide in the patient's best interest and the decision is recorded.
   rationale: HIPAA permits these disclosures when the patient agrees, doesn't object, or, if they can't, when professional judgment finds it in their best interest (45 CFR 164.510(b)). In the EU, informing family of someone who can't consent rests on vital interests (GDPR Article 9(2)(c)). Recording objections stops a ward telling an estranged relative where a patient is.
@@ -843,7 +843,6 @@ edgeCases:
   behaviour: accuracy_contested is set, so other modules see the date is disputed, until the request is decided.
   covers:
   - BR-H17
-  - AC-H19
 - id: EC-H23
   situation: A patient's name is a single word, such as a mononym common in parts of Indonesia.
   behaviour: Accepted as a given name with no family name.
@@ -979,6 +978,7 @@ edgeCases:
   covers:
   - BR-H46
   - AC-H54
+  jurisdiction: us
 - id: EC-H46
   situation: An integration sends replaced_by in an update.
   behaviour: Rejected with PATIENT_READ_ONLY_FIELD.
@@ -1015,13 +1015,13 @@ edgeCases:
   behaviour: The request and statement of disagreement move to the remaining record, so they still go with later disclosures.
   covers:
   - BR-H51
-  - AC-H78
 - id: EC-H52
   situation: A newborn is registered from the mother's details.
   behaviour: informant is relative, and the privacy information is given to the parents as the baby's representatives.
   covers:
   - BR-H52
   - AC-H79
+  jurisdiction: eu
 - id: EC-H53
   situation: An estranged parent phones the ward asking whether their adult son was admitted.
   behaviour: The son objected to sharing with them, so nothing is confirmed.
@@ -1640,6 +1640,7 @@ acceptanceCriteria:
   then: the first fails with PATIENT_INVALID_ADDRESS; the second is stored and excluded from matching
   verifies:
   - BR-H46
+  jurisdiction: us
 - id: AC-H55
   given: any patient
   when: an update sends last_care_at

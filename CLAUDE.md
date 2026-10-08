@@ -235,7 +235,10 @@ use the Jurisdiction selector on spec pages, which sets the `kg-jurisdiction`
 cookie; the proxy rewrites the HTML page to a static `__us` segment that the
 page route strips off. Both filter with `jurisdictionSpec`
 (`src/lib/spec-jurisdiction.ts`). Constants live in `src/lib/jurisdictions.ts`,
-which imports nothing, so the proxy and client code can use it.
+which imports nothing, so the proxy and client code can use it. `/openapi/<module>.json?jurisdiction=us`
+is served from a static `<module>.us.json` the same way. `pnpm check:specs`
+filters each spec for every jurisdiction and fails when a kept item cites,
+names or uses an item the filter hid, so a filtered page never dead-ends.
 
 Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
 both renderers) gives it a page in every module. URLs are

@@ -49,7 +49,19 @@ function toHtml(request: NextRequest) {
   return response;
 }
 
+/** /openapi/<module>.json?jurisdiction=us is served from the static <module>.us.json. */
+function toOpenApi(request: NextRequest) {
+  const jurisdiction = queryJurisdiction(request);
+  if (!isJurisdiction(jurisdiction)) return NextResponse.next();
+  const url = request.nextUrl.clone();
+  url.pathname = url.pathname.replace(/\.json$/, `.${jurisdiction}.json`);
+  url.search = '';
+  return NextResponse.rewrite(url);
+}
+
 export default function proxy(request: NextRequest) {
+  if (/^\/openapi\/.+\.json$/.test(request.nextUrl.pathname)) return toOpenApi(request);
+
   const result = rewriteSuffix(request.nextUrl.pathname);
   if (result) return toMarkdown(result, request);
 

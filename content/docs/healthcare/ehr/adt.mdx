@@ -376,7 +376,7 @@ businessRules:
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). Later disclosures must include them (164.526(d)(5)).
 - id: BR-E35
   text: 'A patient can go to another location for a while, such as imaging, dialysis or theatre, without leaving their stay: the bed stays reserved for them, the stay records where they are, and their return ends it. A departure or return recorded by mistake can be cancelled with a reason. Each is reported to Encounters. A boarding patient with no bed keeps their waiting location instead, which is restored on return.'
-  rationale: IHE PAM tracks temporary departures and arrivals (A09, A10, cancelled by A33 and A32) so staff can find the patient, and Encounters records the temporary location (its BR-E12). The bed must not be given away while the patient is at a scan.
+  rationale: IHE PAM tracks temporary departures and arrivals (A09, A10, cancelled by A33 and A32) so staff can find the patient, and Encounters records the temporary location. The bed must not be given away while the patient is at a scan.
 - id: BR-E36
   text: A patient on leave can be discharged without returning, for example when they die or decide not to come back. The leave ends at the discharge time, the reserved bed becomes housekeeping (BR-E6), and Encounters discharges the encounter from on hold.
   rationale: A patient who dies at home on leave (EC-E12) or doesn't return must still be discharged. Requiring a return first would record a return that never happened.

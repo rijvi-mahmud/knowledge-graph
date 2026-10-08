@@ -188,7 +188,7 @@ takes precedence. A direct instruction in chat overrides it.
 | `/docs/<page>.md` | One module page: the complete spec, merged with everything it inherits. Can pass 100 KB |
 | `/docs/<page>.md?jurisdiction=us` | Any `.md` URL above, without items that apply only in other jurisdictions. Use `us` or `eu`; unmarked items are always kept |
 | `/llms-full.txt` | Every page in one file. For research, too large to keep in context |
-| `/openapi/<page>.json` | One module's endpoints, success statuses and error codes as OpenAPI 3.1, generated from the spec. The spec page stays normative |
+| `/openapi/<page>.json` | One module's endpoints, success statuses and error codes as OpenAPI 3.1, generated from the spec. The spec page stays normative . Add `?jurisdiction=us` or `eu` to leave out other jurisdictions' endpoints |
 | `/versions/<page>/<version>.md` | A module's merged spec as published at that version, for comparing with what your code cites. Listed under Optional in `/llms.txt` |
 
 Requests to any docs URL with an `Accept: text/markdown` header also return

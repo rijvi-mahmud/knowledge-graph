@@ -425,6 +425,7 @@ edgeCases:
   covers:
   - BR-H13
   - AC-H17
+  jurisdiction: us
 - id: EC-H12
   situation: A practitioner licensed only in New York is booked for a video visit with a patient in New Jersey.
   behaviour: Rejected with APPOINTMENT_PRACTITIONER_NOT_LICENSED, unless the practitioner is permitted there.
@@ -712,6 +713,7 @@ acceptanceCriteria:
   then: no text is sent
   verifies:
   - BR-H13
+  jurisdiction: us
 - id: AC-H18
   given: jurisdiction us, a practitioner licensed only in New York, and a virtual appointment with patient_location New Jersey
   when: it is booked
