@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.10.0
+version: 0.11.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -98,7 +98,7 @@ dataModel:
   type: identifier[]
   required: true
   description: Numbers other systems use for the encounter, such as the visit number (HL7 v2 PV1-19, FHIR Encounter.identifier).
-  constraints: 'a visit number from visit_number_system assigned when opened, never reused; codes: identifier type from HL7 v2 Table 0203 (VN visit number, AN account number)'
+  constraints: 'a visit number from visit_number_system assigned when opened, never reused; a merged duplicate''s visit number stays on the remaining encounter as an old identifier; codes: identifier type from HL7 v2 Table 0203 (VN visit number, AN account number)'
 - name: patient_id
   type: string
   required: true
@@ -113,7 +113,7 @@ dataModel:
   type: reason
   required: false
   description: 'Why a planned encounter was cancelled, or an encounter marked entered in error: a code and optional text. Separate from reasons, which say why the encounter takes place.'
-  constraints: 'required with status cancelled or entered_in_error; patient_deceased, patient_entered_in_error, check_in_undone and admission_cancelled are set by the service; staff choose from cancel_reasons; codes: none standard, local to this specification (FHIR R5 Encounter has no status reason element)'
+  constraints: 'required with status cancelled or entered_in_error; patient_deceased, patient_entered_in_error, check_in_undone, admission_cancelled and merged are set by the service; staff choose from cancel_reasons; codes: none standard, local to this specification (FHIR R5 Encounter has no status reason element)'
 - name: subject_status
   type: enum
   required: false
@@ -296,6 +296,11 @@ dataModel:
   required: false
   description: 'Requests to correct part of the encounter: what was asked and by whom, when, the deadline and any extension, the decision and its reason, any statement of disagreement and rebuttal, and who was told (BR-E44).'
   constraints: set by the service through correction requests
+- name: merged_into
+  type: string
+  required: false
+  description: The encounter this duplicate was merged into (BR-E48).
+  constraints: set by the service; set only with status entered_in_error
 relationships:
 - type: belongs_to
   target: patient
@@ -413,7 +418,7 @@ businessRules:
   text: When the Patients module records a death, the patient's planned encounters are cancelled with the reason patient_deceased. Encounters in progress are discharged by Admission, discharge and transfer or a clinician.
   rationale: A planned stay or visit for someone who has died would stay on lists and schedules. Encounters in progress need a person to record what happened.
 - id: BR-E29
-  text: After a patient merge, if the remaining patient has two inpatient or observation encounters in progress or on hold, both are kept and encounter.patient_review_needed is emitted for each, so an HIM specialist resolves them.
+  text: After a patient merge, if the remaining patient has two inpatient or observation encounters in progress or on hold, both are kept and encounter.patient_review_needed is emitted for each, so an HIM specialist resolves them. Merging them (BR-E48) resolves it.
   rationale: Duplicate records can each hold an open stay for the same admission. Refusing the merge keeps the duplicate; keeping both silently breaks the one-stay rule (BR-E21).
 - id: BR-E30
   text: When Appointments undoes a check-in, the planned encounter opened for it is cancelled with the reason check_in_undone.
@@ -473,6 +478,12 @@ businessRules:
   text: When Admission, discharge and transfer cancels an admission recorded in error, the encounter it started is marked entered in error with the reason admission_cancelled. When it clears an expected discharge, planned_end is cleared.
   rationale: FHIR uses cancelled only for encounters that never started, so a started encounter opened by mistake is entered in error. ADT cancels an admission only when no clinical data is recorded, which Encounters also requires. IHE PAM cancels a pending discharge with A25.
   variant: inpatient
+- id: BR-E47
+  text: An encounter recorded on the wrong patient is moved to the right patient by an HIM specialist, with a reason. It keeps its id and visit number; on a locked encounter the move is also recorded as an amendment. The move is refused if the right patient is not in use or would then have two inpatient or observation encounters open (BR-E21). An encounter that belongs to a stay moves only with its stay, through Admission, discharge and transfer.
+  rationale: A visit with notes on the wrong person is a record overlay, which ONC SAFER Guide 6 counts among the most dangerous identification errors. Entered in error is refused once clinical data exists, so a move is the only fix. HL7 moves a visit between patients (A45). Clinical modules keep their entries on the encounter id, so they follow it.
+- id: BR-E48
+  text: Two encounters of the same patient for one visit are merged by an HIM specialist, with a reason. The duplicate's appointments, locations, participants and diagnoses join the remaining encounter; the duplicate becomes entered in error with status_reason merged and merged_into set, and its visit number stays on the remaining encounter as an old identifier. encounter.merged tells clinical modules to move their entries. Encounters that belong to stays merge only when their stays merge.
+  rationale: Double check-ins and patient merges create two encounters for one visit (BR-E29). HL7 merges visits (A42). Keeping the old visit number lets laboratory and billing messages sent with it still find the visit (BR-E34).
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -510,7 +521,7 @@ validations:
 - field: virtual_service, patient_location
   rule: an https URL, and a US state or EU member state; required for class virtual
   error: ENCOUNTER_INVALID_VIRTUAL
-- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial, accuracy_contested, correction_requests
+- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial, accuracy_contested, correction_requests, merged_into
   rule: never sent by clients (BR-E19)
   error: ENCOUNTER_READ_ONLY_FIELD
 - field: revision
@@ -544,7 +555,7 @@ validations:
   rule: not_asked, listed or opted_out; listed only for inpatient and observation encounters
   error: ENCOUNTER_INVALID_CODE
 - field: status_reason
-  rule: required to cancel or mark entered in error; a code from cancel_reasons, or a service-set code
+  rule: required to cancel, mark entered in error, move or merge; a code from cancel_reasons, or a service-set code
   error: ENCOUNTER_REASON_REQUIRED
 stateMachine:
   initial: planned
@@ -594,6 +605,21 @@ stateMachine:
     to: entered_in_error
     trigger: mark entered in error
     guard: has_clinical_data unset
+  - from: planned
+    to: entered_in_error
+    trigger: merged into another encounter (BR-E48)
+  - from: in_progress
+    to: entered_in_error
+    trigger: merged into another encounter (BR-E48)
+  - from: on_hold
+    to: entered_in_error
+    trigger: merged into another encounter (BR-E48)
+  - from: discharged
+    to: entered_in_error
+    trigger: merged into another encounter (BR-E48)
+  - from: completed
+    to: entered_in_error
+    trigger: merged into another encounter (BR-E48)
 workflows:
 - name: Open at check-in
   trigger: Appointments reports appointment.checked_in
@@ -896,6 +922,18 @@ edgeCases:
   covers:
   - BR-E45
   - AC-E60
+- id: EC-E39
+  situation: A laboratory result arrives with the visit number of an encounter that was merged yesterday.
+  behaviour: The old visit number is found on the remaining encounter, so the result files to the right visit.
+  covers:
+  - BR-E48
+  - AC-E63
+- id: EC-E40
+  situation: A clinic visit with a signed note was registered on the patient's twin.
+  behaviour: The encounter is moved to the right twin; the note follows the encounter, and the move is an amendment because the encounter was locked.
+  covers:
+  - BR-E47
+  - AC-E62
 functionalRequirements:
 - id: FR-E1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -951,6 +989,10 @@ functionalRequirements:
   verification: test
 - id: FR-E14
   text: The service must record why an encounter was cancelled or entered in error, separately from why it took place.
+  priority: must
+  verification: test
+- id: FR-E15
+  text: The service must move an encounter to another patient and merge duplicate encounters, keeping every visit number.
   priority: must
   verification: test
 nonFunctionalRequirements:
@@ -1430,6 +1472,27 @@ acceptanceCriteria:
   verifies:
   - BR-E46
   - BR-E36
+- id: AC-E62
+  given: a completed outpatient encounter with notes recorded on the wrong patient, and an inpatient encounter that belongs to a stay
+  when: an HIM specialist moves each with a reason
+  then: the first keeps its id and visit number, an amendment is recorded and encounter.moved is emitted; the second fails with ENCOUNTER_BELONGS_TO_STAY (409)
+  verifies:
+  - BR-E47
+  - FR-E15
+- id: AC-E63
+  given: two ambulatory encounters for the same patient from a double check-in, with visit numbers V100 and V101, and an encounter of another patient
+  when: V101 is merged into V100, and the other patient's encounter is merged into V100
+  then: V101 becomes entered in error with status_reason merged and merged_into, V100 lists V101 as an old identifier, and encounter.merged is emitted; the second fails with ENCOUNTER_INVALID_MERGE (409)
+  verifies:
+  - BR-E48
+  - FR-E15
+- id: AC-E64
+  given: an inpatient encounter
+  when: ADT reports stay.moved and, for another pair, stay.merged
+  then: the encounter is moved with the stay, and the two encounters are merged as BR-E48 describes
+  verifies:
+  - BR-E47
+  - BR-E48
 operations:
 - name: Open an encounter
   actor: System
@@ -1696,6 +1759,37 @@ operations:
   - ENCOUNTER_INVALID_TRANSITION
   - ENCOUNTER_REASON_REQUIRED
   - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Move to another patient
+  actor: Health information management (HIM) specialist
+  description: Move an encounter recorded on the wrong patient to the right one.
+  method: POST
+  path: /encounters/{id}/move
+  success: 200
+  input: encounter id, revision, the right patient, reason
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_PATIENT
+  - ENCOUNTER_CONCURRENT_STAY
+  - ENCOUNTER_BELONGS_TO_STAY
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Merge duplicate encounters
+  actor: Health information management (HIM) specialist
+  description: Merge a duplicate encounter into the encounter that remains.
+  method: POST
+  path: /encounters/{id}/merge
+  success: 200
+  input: remaining encounter id and revision, duplicate encounter id and revision, reason
+  output: the remaining encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_MERGE
+  - ENCOUNTER_BELONGS_TO_STAY
+  - ENCOUNTER_REASON_REQUIRED
   - ENCOUNTER_REVISION_CONFLICT
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Report clinical data
@@ -2004,6 +2098,19 @@ events:
   - encounter_id
   - accuracy_contested
   - revision
+- name: encounter.moved
+  description: An encounter was moved to the right patient.
+  payload:
+  - encounter_id
+  - patient_id
+  - previous_patient_id
+  - revision
+- name: encounter.merged
+  description: A duplicate encounter was merged into this one; clinical modules move their entries.
+  payload:
+  - encounter_id
+  - merged_encounter_id
+  - revision
 deliveryGuarantees:
 - id: DG-E1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -2074,7 +2181,7 @@ accessMatrix:
     System: any
     Patient: none
   permission: encounter.write
-- action: Complete, amend or mark entered in error
+- action: Complete, amend, mark entered in error, move or merge
   roles:
     Clinician: none
     Registrar: none
@@ -2306,6 +2413,12 @@ errors:
 - code: ENCOUNTER_REASON_REQUIRED
   http: 422
   message: Give a reason for cancelling or marking entered in error.
+- code: ENCOUNTER_BELONGS_TO_STAY
+  http: 409
+  message: This encounter belongs to a stay. Move or merge the stay in Admission, discharge and transfer.
+- code: ENCOUNTER_INVALID_MERGE
+  http: 409
+  message: Only two encounters of the same patient can be merged.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -2325,6 +2438,7 @@ dependencies:
   reason: reports check-ins and walk-ins
   criticality: soft
   contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
   - 'Receives: appointment.checked_in'
   - 'Receives: appointment.check_in_undone'
   - 'Gives: encounter.appointment_added, when a check-in joins an open encounter'
@@ -2345,7 +2459,7 @@ dependencies:
   reason: reports admissions, transfers, leave, class changes and discharges
   criticality: soft
   contract:
-  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, bed swaps, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return and their cancels, attending changes and their cancels, class change, re-admission, discharge (including from leave), cancelled discharge, admissions cancelled in error and cleared expected discharges'
+  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, bed swaps, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return and their cancels, attending changes and their cancels, class change, re-admission, discharge (including from leave), cancelled discharge, admissions cancelled in error and cleared expected discharges, stays moved to another patient, and merged stays'
   - 'Gives: the encounter id for each stay'
   - 'Gives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled and encounter.class_changed, confirming what was recorded'
   - 'Gives: encounter.observation_started with when the US observation notice is due; deciding who gets the notice, and giving it, is ADT''s concern'
@@ -2371,6 +2485,7 @@ dependencies:
   reason: holds notes and reports when documentation is complete
   criticality: soft
   contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
   - 'Receives: documentation complete, and data recorded against the encounter'
   - 'Gives: encounter.started, encounter.discharged, encounter.completed and encounter.amended, so notes open and lock with the encounter'
   - 'Gives: encounter.record_overdue, for the responsible practitioner''s deficiency list'
@@ -2380,6 +2495,7 @@ dependencies:
   reason: orders, results, medications and conditions attach data to encounters
   criticality: soft
   contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
   - 'Gives: encounter.created, encounter.updated, encounter.participant_changed and encounter.entered_in_error, and the sensitivity codes to carry'
   - 'Receives: data recorded against the encounter'
   - 'Gives: encounter.patient_review_needed after an undone patient merge'
@@ -2390,6 +2506,7 @@ dependencies:
   reason: codes and charges encounters
   criticality: soft
   contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
   - 'Asks: which account does this encounter belong to? (account_ids)'
   - 'Gives: encounter.completed with diagnoses, class history and length'
   - 'Gives: encounter.amended, encounter.cancelled, encounter.discontinued, encounter.class_changed and encounter.department_changed'
@@ -2539,7 +2656,16 @@ references:
 - id: REF-E20
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
+- id: REF-E21
+  title: HL7 v2 Table 0003, event types (A42 merge visit, A45 move visit)
+  url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 changelog:
+- version: 0.11.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Move an encounter recorded on the wrong patient (BR-E47, A45) and merge duplicate encounters, keeping old visit numbers (BR-E48, A42).
+  - Compliance adds HIPAA integrity (164.312(c)), GDPR Article 6 and international transfers.
 - version: 0.10.0
   date: '2026-10-08'
   breaking: false
@@ -3028,6 +3154,30 @@ compliance:
   obligation: Certified health IT lets a user export all of one patient's electronic health information at any time.
   how: This module gives its data for the export; Release of information produces it.
   status: other module
+  covered_by: []
+- id: CMP-E24
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(c)(1)
+  obligation: Protect electronic health information from improper alteration or destruction.
+  how: Completed encounters are locked; later changes, moves and merges are amendments or recorded events, never silent edits.
+  status: met
+  covered_by:
+  - BR-E8
+  - BR-E47
+  - BR-E48
+- id: CMP-E25
+  regulation: GDPR (EU) 2016/679
+  provision: Article 6(1)
+  obligation: Processing health data needs a lawful basis under Article 6 as well as an exception under Article 9.
+  how: 'The deployment states its basis with Article 9(2)(h): usually a legal obligation (6(1)(c)) or a public task (6(1)(e)) for public hospitals, or a contract (6(1)(b)) for private care.'
+  status: deployment
+  covered_by: []
+- id: CMP-E26
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 44 to 49
+  obligation: Transfers of personal data outside the EU need an adequacy decision or appropriate safeguards.
+  how: Where data is stored and who processes it is a deployment choice.
+  status: deployment
   covered_by: []
 ---
 Every note, order and result in the record belongs to an encounter. This

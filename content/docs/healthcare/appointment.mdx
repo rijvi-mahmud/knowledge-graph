@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.9.0
+version: 0.10.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -190,6 +190,15 @@ businessRules:
 - id: BR-H22
   text: 'A cancellation records a code from the HL7 appointment cancellation reasons. Reasons the service sets itself keep their own code, mapped to one HL7 code for exchange: patient_deceased to pat-dec and patient_entered_in_error to oth-err.'
   rationale: FHIR Appointment.cancellationReason uses the HL7 appointment-cancellation-reason code system, so other systems and reports can tell a patient cancelling from a provider or an error. A local free-text reason can't be counted or exchanged.
+- id: BR-H23
+  text: A new appointment cannot be booked, rebooked or rescheduled for a patient the Patients module records as deceased.
+  rationale: BR-H17 cancels a deceased patient's appointments, but a booking made afterwards, such as from an old referral, would send reminders to a grieving family and hold a slot nobody will use.
+- id: BR-H24
+  text: Where no_show_limit is set, a patient, or their representative, cannot book for themselves once the patient has had that many no-shows within no_show_lookback; staff can still book for them. The refusal tells them to contact the hospital.
+  rationale: Many hospitals restrict self-booking after repeated missed appointments, so staff can talk to the patient first. No-show rates are higher for patients facing transport, cost or language barriers, so a blanket refusal can cut off care; the limit is off by default and never stops staff booking.
+- id: BR-H25
+  text: A participant's response is exchanged as FHIR participant.status (accepted, declined, tentative, needs-action), and whether they are required as participant.required.
+  rationale: FHIR R5 requires a status for every appointment participant, with the same four values as iCalendar, so the core response maps one to one.
 validations:
 - field: participants
   rule: at least one participant with the role patient and one with the role practitioner
@@ -227,6 +236,9 @@ validations:
 - field: cancelled_reason
   rule: a code from HL7 appointment-cancellation-reason, with text when the code is other
   error: APPOINTMENT_INVALID_CODE
+- field: participants
+  rule: the patient is not recorded as deceased by the Patients module
+  error: APPOINTMENT_PATIENT_DECEASED
 stateMachine:
   initial: booked
   states:
@@ -474,6 +486,18 @@ edgeCases:
   covers:
   - BR-H22
   - AC-H32
+- id: EC-H23
+  situation: A referral for a patient who has since died arrives, and a booking is attempted.
+  behaviour: Refused with APPOINTMENT_PATIENT_DECEASED; no reminder is sent.
+  covers:
+  - BR-H23
+  - AC-H33
+- id: EC-H24
+  situation: A patient who missed three appointments tries to book online.
+  behaviour: They are asked to contact the hospital, and staff book for them after talking.
+  covers:
+  - BR-H24
+  - AC-H34
 functionalRequirements:
 - id: FR-H1
   text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
@@ -557,6 +581,13 @@ settings:
 - name: service_code_system
   type: code system
   description: The code system for service_type. HCPCS with CPT-4 in the United States (45 CFR 162.1002); set per member state in the EU.
+- name: no_show_limit
+  type: integer
+  description: How many no-shows within no_show_lookback stop a patient booking for themselves (BR-H24). Unset means no limit. Set with the hospital's policy.
+- name: no_show_lookback
+  type: duration
+  default: 12 months
+  description: The period no-shows are counted over for no_show_limit.
 acceptanceCriteria:
 - id: AC-H1
   given: a booking with two practitioners and no patient
@@ -767,6 +798,24 @@ acceptanceCriteria:
   verifies:
   - BR-H22
   - BR-H17
+- id: AC-H33
+  given: a patient recorded as deceased, and a cancelled appointment of theirs
+  when: a new appointment is booked for them, and the cancelled one is rebooked
+  then: both fail with APPOINTMENT_PATIENT_DECEASED (422)
+  verifies:
+  - BR-H23
+- id: AC-H34
+  given: no_show_limit 3, no_show_lookback 12 months, and a patient with 3 no-shows this year
+  when: the patient books online, and a Scheduler books for them
+  then: the patient's booking fails with APPOINTMENT_NO_SHOW_LIMIT (403); the Scheduler's succeeds
+  verifies:
+  - BR-H24
+- id: AC-H35
+  given: an appointment whose practitioner accepted and whose patient has not answered
+  when: it is exported as FHIR
+  then: participant.status is accepted for the practitioner and needs-action for the patient, each with participant.required
+  verifies:
+  - BR-H25
 operations:
 - name: Book an appointment
   actor: Requester
@@ -795,6 +844,8 @@ operations:
   - APPOINTMENT_INVALID_CODE
   - APPOINTMENT_PRACTITIONER_NOT_LICENSED
   - APPOINTMENT_INVALID_VIRTUAL_SERVICE
+  - APPOINTMENT_PATIENT_DECEASED
+  - APPOINTMENT_NO_SHOW_LIMIT
   - APPOINTMENT_READ_ONLY_FIELD
   - APPOINTMENT_INVALID_TEXT
   - APPOINTMENT_INVALID_REFERENCE
@@ -976,6 +1027,12 @@ errors:
 - code: APPOINTMENT_CARE_STARTED
   http: 409
   message: Care has started, so the check-in can't be undone.
+- code: APPOINTMENT_PATIENT_DECEASED
+  http: 422
+  message: The patient is recorded as deceased.
+- code: APPOINTMENT_NO_SHOW_LIMIT
+  http: 403
+  message: This patient can't book online right now. Ask them to contact the hospital.
 personalData:
 - field: reason
   category: health data
@@ -1133,6 +1190,11 @@ references:
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
 changelog:
+- version: 0.10.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - No bookings for deceased patients (BR-H23); an optional no-show limit for self-booking (BR-H24); participant responses map to FHIR (BR-H25); GDPR Article 6 lawful basis.
 - version: 0.9.0
   date: '2026-10-08'
   breaking: false
@@ -1215,7 +1277,7 @@ dependencies:
   reason: owns patient records
   criticality: hard
   contract:
-  - 'Asks: does this patient exist and is the record in use? A merged record answers with the record that replaced it'
+  - 'Asks: does this patient exist, is the record in use, and is the patient alive? A merged record answers with the record that replaced it'
   - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
   - 'Asks: where to contact the patient, honouring confidential communications'
   - 'Asks: the patient''s preferred language and whether they need an interpreter'
@@ -1397,6 +1459,13 @@ compliance:
   obligation: Certified health IT lets a user export all of one patient's electronic health information at any time.
   how: This module gives its data for the export; Release of information produces it.
   status: other module
+  covered_by: []
+- id: CMP-H18
+  regulation: GDPR (EU) 2016/679
+  provision: Article 6(1)
+  obligation: Processing health data needs a lawful basis under Article 6 as well as an exception under Article 9.
+  how: 'The deployment states its basis with Article 9(2)(h): usually a legal obligation (6(1)(c)) or a public task (6(1)(e)) for public hospitals, or a contract (6(1)(b)) for private care.'
+  status: deployment
   covered_by: []
 tables:
 - name: appointment_access_log

@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.9.0
+version: 0.10.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -99,7 +99,7 @@ dataModel:
   type: enum
   required: false
   description: Why needs_review was set.
-  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged | encounter_entered_in_error | patient_on_leave; set only with needs_review; codes: none standard, local to this specification'
+  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged | encounter_entered_in_error | patient_on_leave | resource_unavailable | encounter_moved; set only with needs_review; codes: none standard, local to this specification'
 - name: equipment_ids
   type: string[]
   required: false
@@ -221,6 +221,12 @@ businessRules:
   text: When a patient in a stay starts a leave of absence, each of their observation and inpatient appointments that starts before the expected return is flagged needs_review with review_reason patient_on_leave. If the leave is cancelled, the flag is removed from those appointments; a Scheduler decides the rest.
   rationale: A patient on leave isn't on the ward. Without a review, staff go to an empty bed or record a no-show for a patient the hospital let go home for the weekend. IHE PAM sends leave (A21) and its cancel (A52).
   variant: inpatient
+- id: BR-E26
+  text: When Organization reports that a practitioner no longer holds a role in a department from a date, or that a room or item of equipment is out of service for a period, each active appointment that relies on it in that period is flagged needs_review with review_reason resource_unavailable. Nothing is cancelled automatically.
+  rationale: BR-E8 and BR-E9 are checked at booking, but people leave and rooms close afterwards. Without a flag, patients arrive for a doctor who has gone or a room that is shut. A Scheduler moves or cancels each one, because another practitioner or room may suit.
+- id: BR-E27
+  text: When Encounters merges a duplicate encounter into another, appointments linked to the duplicate are linked to the remaining one. When Encounters moves an encounter to another patient, appointments linked to it are flagged needs_review with review_reason encounter_moved.
+  rationale: HL7 merges (A42) and moves (A45) visits. A link to a retired encounter loses the visit; an appointment whose encounter now belongs to someone else was probably booked for the wrong patient too, which only a person can decide.
 validations:
 - field: department_id
   rule: Organization confirms the department exists
@@ -463,6 +469,12 @@ edgeCases:
   covers:
   - BR-E25
   - AC-E34
+- id: EC-E26
+  situation: A consultant retires and has clinics booked for the next three months.
+  behaviour: Every clinic after the retirement date is flagged for a Scheduler, who moves each patient to another consultant.
+  covers:
+  - BR-E26
+  - AC-E35
 functionalRequirements:
 - id: FR-E1
   text: The service must book appointments into a department and, optionally, a room and equipment, all of which belong to the department.
@@ -716,6 +728,7 @@ dependencies:
   - 'Asks: which rooms and equipment belong to this department?'
   - 'Asks: does this practitioner hold a role in this department on this date?'
   - 'Asks: which sensitivity codes apply to this department?'
+  - 'Receives: a practitioner''s role in a department ending, and a room or equipment out of service, each with its dates'
   - Staffing departments and managing rooms and equipment is Organization's concern
 - service: encounter-service
   direction: downstream
@@ -727,6 +740,7 @@ dependencies:
   - 'Receives: encounter.started, encounter.discontinued, encounter.cancelled and encounter.entered_in_error for the encounter opened at check-in'
   - 'Gives: appointment.check_in_undone, so the planned encounter is cancelled'
   - 'Gives: appointment.encounter_linked, confirming the link it recorded'
+  - 'Receives: encounter.merged and encounter.moved'
   - How encounters are documented is Encounter's concern
 - service: referral-service
   direction: upstream
@@ -1124,6 +1138,18 @@ acceptanceCriteria:
   then: the physiotherapy is flagged needs_review with patient_on_leave and the scan is not; for the cancelled leave the flag is removed
   verifies:
   - BR-E25
+- id: AC-E35
+  given: appointments next week with Dr Rao, and in room 4
+  when: Organization reports Dr Rao's role ends on Friday and room 4 is closed Tuesday to Thursday
+  then: Dr Rao's appointments after Friday and room 4's appointments on those days are flagged needs_review with resource_unavailable; the rest are unchanged
+  verifies:
+  - BR-E26
+- id: AC-E36
+  given: an appointment linked to an encounter that is merged into another, and one linked to an encounter moved to another patient
+  when: Encounters reports each
+  then: the first is linked to the remaining encounter and appointment.encounter_linked is emitted; the second is flagged needs_review with encounter_moved
+  verifies:
+  - BR-E27
 decisions:
 - id: ADR-E1
   decision: Overbooking is a per-department setting with a limit and no default, and it never applies to patients.
@@ -1189,6 +1215,11 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.10.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Appointments are flagged when a practitioner, room or equipment stops being available (BR-E26), and follow merged and moved encounters (BR-E27).
 - version: 0.9.0
   date: '2026-10-08'
   breaking: false

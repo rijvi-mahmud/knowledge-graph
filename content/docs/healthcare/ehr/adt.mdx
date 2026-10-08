@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.6.0
+version: 0.7.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -247,6 +247,11 @@ dataModel:
   required: false
   description: 'Requests to correct part of the stay record: what was asked and by whom, when, the deadline and any extension, the decision and its reason, any statement of disagreement and rebuttal, and who was told (BR-E34).'
   constraints: set by the service through correction requests
+- name: merged_into
+  type: string
+  required: false
+  description: The stay this duplicate was merged into (BR-E42).
+  constraints: set by the service; set only on a cancelled stay
 relationships:
 - type: belongs_to
   target: patient
@@ -327,7 +332,7 @@ businessRules:
   text: When the Patients module records a death, the patient's pending admissions are cancelled, and an admitted stay not already discharged as expired is discharged with disposition expired at the recorded time.
   rationale: A death recorded elsewhere, such as by a registrar or from an outside report, must still close the stay, free the bed and stop the notices.
 - id: BR-E22
-  text: After a patient merge, if the remaining patient has two stays pending or admitted, both are kept and listed for a bed manager to resolve; the one-stay rule (BR-E2) is not applied to the move. When a merge is undone, stays recorded since the merge are listed for review.
+  text: After a patient merge, if the remaining patient has two stays pending or admitted, both are kept and listed for a bed manager to resolve; the one-stay rule (BR-E2) is not applied to the move. When a merge is undone, stays recorded since the merge are listed for review. Merging the two stays (BR-E42) resolves it.
   rationale: Duplicate records can each hold an open stay for the same admission. Refusing the merge keeps the duplicate; closing one silently could discharge a real patient.
 - id: BR-E23
   text: When the Patients module marks a patient entered in error, their pending admissions are cancelled.
@@ -383,6 +388,15 @@ businessRules:
 - id: BR-E40
   text: An admission is marked as a re-admission by the service when this hospital discharged the patient within readmission_window before it. Staff can also mark it when they know of a discharge from another hospital in that window.
   rationale: Medicare defines a readmission as an admission to the same or another hospital within 30 days of a discharge (42 CFR 412.152), and readmission rates affect payment. This module sees only its own discharges, so staff add the others.
+- id: BR-E41
+  text: A stay recorded on the wrong patient is moved to the right patient by an HIM specialist, with a reason. It keeps its id and history, and its encounter moves with it through Encounters. The move is refused if the right patient is not in use, or already has another stay pending or admitted (BR-E2).
+  rationale: Registering a stay on the wrong person is a record overlay, a leading identification error in ONC SAFER Guide 6. Cancelling and re-entering would lose the beds, notices and clinical data already recorded. HL7 moves a visit or account between patients (A45, A44).
+- id: BR-E42
+  text: Two stays of the same patient for one hospitalisation, such as after a patient merge, are merged by a bed manager or HIM specialist, with a reason. The duplicate's bed history, history and notices join the remaining stay; the duplicate is cancelled with merged_into set, and any bed it held becomes housekeeping. Encounters merges their encounters.
+  rationale: BR-E22 keeps both stays after a patient merge so nothing is lost, but someone must then combine them; cancelling one is refused once clinical data exists. HL7 merges two visits into one (A42).
+- id: BR-E43
+  text: A pending admission not admitted by expected_admission_at plus pending_admission_grace is listed as overdue, and stay.review_needed is emitted with reason admission_overdue. It is never cancelled automatically.
+  rationale: An elective patient who doesn't arrive leaves a pending stay, and possibly a reserved bed, that nobody releases. A person decides, because the patient may only be late.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -405,14 +419,14 @@ validations:
 - field: expected_admission_at, expected_discharge_at, leave
   rule: RFC 3339 instants; expected discharge not before admission; leave return not before its start
   error: STAY_INVALID_PERIOD
-- field: id, encounter_id, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for, revision, accuracy_contested, shares_mother_location, bed_history, history, correction_requests
+- field: id, encounter_id, admitted_at, discharged_at, observation_started_at, notices, bed_reserved_for, revision, accuracy_contested, shares_mother_location, bed_history, history, correction_requests, merged_into
   rule: never sent by clients (BR-E20)
   error: STAY_READ_ONLY_FIELD
 - field: level_of_care
   rule: from levels_of_care; the assigned bed's unit provides it
   error: STAY_BED_UNAVAILABLE
 - field: reason
-  rule: required to cancel an admission, a discharge, a leave, a return, a temporary departure or return, or an attending change, to change class, and to correct a movement (BR-E32)
+  rule: required to cancel an admission, a discharge, a leave, a return, a temporary departure or return, or an attending change, to change class, to correct a movement, and to move or merge a stay (BR-E32)
   error: STAY_REASON_REQUIRED
 - field: bed_history
   rule: a correction names an existing entry, keeps periods in order and within the stay, and never puts two stays in one bed at once (BR-E29)
@@ -450,6 +464,15 @@ stateMachine:
     to: admitted
     trigger: cancel discharge
     guard: the bed is still free or reserved (BR-E10)
+  - from: admitted
+    to: cancelled
+    trigger: merged into another stay (BR-E42)
+  - from: pending_admission
+    to: cancelled
+    trigger: merged into another stay (BR-E42)
+  - from: discharged
+    to: cancelled
+    trigger: merged into another stay (BR-E42)
 workflows:
 - name: Admit from the emergency department
   trigger: An emergency physician decides to admit
@@ -631,6 +654,18 @@ edgeCases:
   covers:
   - BR-E39
   - AC-E51
+- id: EC-E24
+  situation: Two patients called Ana are admitted the same night and one stay is recorded on the wrong Ana.
+  behaviour: The stay is moved to the right Ana with a reason; its encounter and notes follow it.
+  covers:
+  - BR-E41
+  - AC-E55
+- id: EC-E25
+  situation: An elective patient doesn't arrive for their planned admission.
+  behaviour: The stay is listed as overdue; a person cancels it or waits, and the reserved bed is released if cancelled.
+  covers:
+  - BR-E43
+  - AC-E57
 functionalRequirements:
 - id: FR-E1
   text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
@@ -696,9 +731,13 @@ functionalRequirements:
   text: The service must record temporary departures and returns, and their cancels, keeping the bed reserved.
   priority: must
   verification: test
+- id: FR-E17
+  text: The service must move a stay to another patient and merge duplicate stays, and list overdue pending admissions.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: compatibility
-  text: 'Events map to HL7 v2 ADT messages: pre-admit A05 and its cancel A38, pending admit A14 and its cancel A27, admit A01 and cancel A11, transfer A02 and cancel A12, pending transfer A15 and cancel A26, swap patients A17, temporary departure A09 and arrival A10 and their cancels A33 and A32, discharge A03 and cancel A13, pending discharge A16 and cancel A25, class changes A06 and A07, leave A21 and A22 and their cancels A52 and A53, change attending doctor A54 and its cancel A55, and corrected movements Z99. This follows IHE PAM (ITI-31).'
+  text: 'Events map to HL7 v2 ADT messages: pre-admit A05 and its cancel A38, pending admit A14 and its cancel A27, admit A01 and cancel A11, transfer A02 and cancel A12, pending transfer A15 and cancel A26, swap patients A17, temporary departure A09 and arrival A10 and their cancels A33 and A32, discharge A03 and cancel A13, pending discharge A16 and cancel A25, class changes A06 and A07, leave A21 and A22 and their cancels A52 and A53, change attending doctor A54 and its cancel A55, corrected movements Z99, move visit A45 and merge visit A42. This follows IHE PAM (ITI-31).'
 - category: compatibility
   text: Bed status maps to FHIR Location.operationalStatus with HL7 v2 Table 0116.
 - category: security
@@ -744,6 +783,10 @@ settings:
   type: duration
   default: 30 days
   description: How soon after a discharge an admission counts as a re-admission. The default follows 42 CFR 412.152.
+- name: pending_admission_grace
+  type: duration
+  default: '0'
+  description: How long after expected_admission_at a pending admission waits before it is listed as overdue (BR-E43).
 performanceTargets:
 - id: PERF-E1
   indicator: Boarding time
@@ -1120,6 +1163,27 @@ acceptanceCriteria:
   then: stay.leave_started carries stay_id, patient_id, encounter_id and expected_return_at, so Appointments flags appointments without reading the stay
   verifies:
   - BR-E8
+- id: AC-E55
+  given: a stay admitted on Ana Lopez that belongs to Ana Lopes, and Ana Lopes already admitted elsewhere in another case
+  when: the first stay is moved to Ana Lopes with a reason, and in the second case without a reason
+  then: when Ana Lopes has no open stay, the stay keeps its id and emits stay.moved and Encounters moves its encounter; if she already has one, it fails with STAY_CONCURRENT (409); without a reason it fails with STAY_REASON_REQUIRED (422)
+  verifies:
+  - BR-E41
+  - FR-E17
+- id: AC-E56
+  given: two admitted stays for the same patient after a merge, in beds 4 and 9, and a stay of another patient
+  when: the bed 9 stay is merged into the bed 4 stay, and the other patient's stay is merged into one of them
+  then: the bed 9 stay is cancelled with merged_into, bed 9 becomes housekeeping, stay.merged is emitted and Encounters merges the encounters; merging another patient's stay fails with STAY_INVALID_MERGE (409)
+  verifies:
+  - BR-E42
+  - BR-E22
+- id: AC-E57
+  given: pending_admission_grace 2 hours and a pending admission expected at 08:00
+  when: the patient hasn't been admitted by 10:00
+  then: the stay is listed as overdue, stay.review_needed is emitted with reason admission_overdue, and it stays pending
+  verifies:
+  - BR-E43
+  - FR-E17
 operations:
 - name: Request an admission
   actor: Clinician
@@ -1255,6 +1319,35 @@ operations:
   - STAY_BED_UNAVAILABLE
   - STAY_INVALID_PERIOD
   - STAY_INVALID_TRANSITION
+  - STAY_REASON_REQUIRED
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Move a stay to another patient
+  actor: Registrar
+  description: Move a stay recorded on the wrong patient to the right one.
+  method: POST
+  path: /stays/{id}/move
+  success: 200
+  input: stay id, revision, the right patient, reason
+  output: the stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_INVALID_PATIENT
+  - STAY_CONCURRENT
+  - STAY_REASON_REQUIRED
+  - STAY_REVISION_CONFLICT
+  - STAY_DEPENDENCY_UNAVAILABLE
+- name: Merge duplicate stays
+  actor: Bed manager
+  description: Merge a duplicate stay into the stay that remains.
+  method: POST
+  path: /stays/{id}/merge
+  success: 200
+  input: remaining stay id and revision, duplicate stay id and revision, reason
+  output: the remaining stay
+  errors:
+  - STAY_NOT_FOUND
+  - STAY_INVALID_MERGE
   - STAY_REASON_REQUIRED
   - STAY_REVISION_CONFLICT
   - STAY_DEPENDENCY_UNAVAILABLE
@@ -1646,7 +1739,7 @@ events:
   - changed_at
   - revision
 - name: stay.review_needed
-  description: 'Someone must resolve this stay: two open stays after a merge, or a stay recorded since an undone merge.'
+  description: 'Someone must resolve this stay: two open stays after a merge, a stay recorded since an undone merge, or an overdue pending admission.'
   payload:
   - stay_id
   - patient_id
@@ -1661,6 +1754,23 @@ events:
   - encounter_id
   - request_id
   - decision
+  - revision
+- name: stay.moved
+  description: A stay was moved to the right patient.
+  payload:
+  - stay_id
+  - patient_id
+  - previous_patient_id
+  - encounter_id
+  - revision
+- name: stay.merged
+  description: A duplicate stay was merged into this one.
+  payload:
+  - stay_id
+  - patient_id
+  - encounter_id
+  - merged_stay_id
+  - merged_encounter_id
   - revision
 deliveryGuarantees:
 - id: DG-E1
@@ -1779,6 +1889,17 @@ accessMatrix:
     Patient: none
   permission: stay.write
   note: An HIM specialist in the Registrar role.
+- action: Move a stay to another patient, or merge duplicate stays
+  roles:
+    Bed manager: any
+    Registrar: any
+    Clinician: none
+    Environmental services: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: stay.write
+  note: Moves are made by an HIM specialist in the Registrar role; merges by a bed manager or HIM specialist.
 personalData:
 - field: patient_id, encounter_id, status, patient_class, admission_type, admit_source, admission_order_id, attending_practitioner_id, readmission, level_of_care, shares_mother_location, pre_admission, history
   category: health data; shows the person was admitted, and how
@@ -1873,6 +1994,9 @@ errors:
 - code: STAY_MOVEMENT_NOT_FOUND
   http: 404
   message: No such movement on this stay.
+- code: STAY_INVALID_MERGE
+  http: 409
+  message: Only two stays of the same patient whose periods overlap can be merged.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -1890,7 +2014,7 @@ dependencies:
   reason: keeps the clinical record of each stay
   criticality: soft
   contract:
-  - 'Gives: stay.admission_requested (with pre_admission), stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.beds_swapped, stay.movement_corrected, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.leave_cancelled, stay.temporary_location_changed, stay.class_changed, stay.attending_changed, stay.discharge_expected, stay.discharged and stay.discharge_cancelled'
+  - 'Gives: stay.admission_requested (with pre_admission), stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.beds_swapped, stay.movement_corrected, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.leave_cancelled, stay.temporary_location_changed, stay.class_changed, stay.attending_changed, stay.discharge_expected, stay.discharged, stay.discharge_cancelled, stay.moved and stay.merged'
   - 'Gives: an admission cancelled in error, so the encounter is marked entered in error'
   - 'Gives: a re-admission flag and the facility directory answer'
   - 'Receives: the encounter id for each stay, encounter.observation_started, and whether clinical data is recorded'
@@ -2048,6 +2172,9 @@ references:
 - id: REF-E17
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
+- id: REF-E18
+  title: HL7 v2 Table 0003, event types (A42, A44, A45)
+  url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
@@ -2271,7 +2398,45 @@ compliance:
   how: This module gives its data for the export; Release of information produces it.
   status: other module
   covered_by: []
+- id: CMP-E29
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(c)(1)
+  obligation: Protect electronic health information from improper alteration or destruction.
+  how: Every change is kept in history with who, when, the previous value and the reason; moves and merges are recorded, never deleted.
+  status: met
+  covered_by:
+  - BR-E32
+  - BR-E41
+  - BR-E42
+- id: CMP-E30
+  regulation: GDPR (EU) 2016/679
+  provision: Article 6(1)
+  obligation: Processing health data needs a lawful basis under Article 6 as well as an exception under Article 9.
+  how: 'The deployment states its basis with Article 9(2)(h): usually a legal obligation (6(1)(c)) or a public task (6(1)(e)) for public hospitals, or a contract (6(1)(b)) for private care.'
+  status: deployment
+  covered_by: []
+- id: CMP-E31
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 44 to 49
+  obligation: Transfers of personal data outside the EU need an adequacy decision or appropriate safeguards.
+  how: Where data is stored and who processes it is a deployment choice.
+  status: deployment
+  covered_by: []
+- id: CMP-E32
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.510(b)
+  obligation: Tell family about the patient's location, condition or death only with agreement, no objection, or professional judgment of best interest.
+  how: The Patients module records contacts involved in care and objections to sharing; staff follow them when family ask about a stay.
+  status: other module
+  covered_by: []
 changelog:
+- version: 0.7.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Move a stay recorded on the wrong patient (BR-E41, A45) and merge duplicate stays (BR-E42, A42).
+  - Overdue pending admissions are listed (BR-E43, pending_admission_grace).
+  - Compliance adds HIPAA integrity (164.312(c)), family disclosures (164.510(b)), GDPR Article 6 and international transfers.
 - version: 0.6.0
   date: '2026-10-08'
   breaking: false

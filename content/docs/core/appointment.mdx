@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.11.0
+version: 0.12.0
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -101,10 +101,10 @@ dataModel:
   required: true
   description: Stable identifier, immutable for the life of the appointment.
 - name: participants
-  type: array<{ identity_id, role, time_zone?, locale?, attendance? }>
+  type: array<{ identity_id, role, required, response, time_zone?, locale?, attendance? }>
   required: true
   description: The parties involved. role is a label such as host or guest; industry layers define their own roles. time_zone and locale override the person's preferences in Identity for this appointment. attendance is attended or absent, recorded at close-out.
-  constraints: at least 2 entries and no more than capacity; identity_id values are distinct and resolvable; each time_zone is a valid IANA name; each locale is a valid BCP 47 tag
+  constraints: 'at least 2 entries and no more than capacity; identity_id values are distinct and resolvable; each time_zone is a valid IANA name; each locale is a valid BCP 47 tag; required defaults to true; response is needs_action, accepted, declined or tentative, accepted for the participant who booked; codes: iCalendar ROLE (RFC 5545): required REQ-PARTICIPANT, optional OPT-PARTICIPANT; iCalendar PARTSTAT: NEEDS-ACTION, ACCEPTED, DECLINED, TENTATIVE'
 - name: start_time
   type: local datetime
   required: true
@@ -153,6 +153,11 @@ dataModel:
   type: string
   required: false
   description: Shared by the appointments of one series.
+- name: rebooked_from_id
+  type: string
+  required: false
+  description: The cancelled appointment this one replaces, when it was rebooked (BR-27).
+  constraints: set by the service; an appointment that was cancelled
 - name: appointment_type_id
   type: string
   required: false
@@ -182,7 +187,7 @@ dataModel:
 - name: history
   type: array<{ revision, change, actor, at, previous_start_at?, previous_end_at? }>
   required: true
-  description: 'Every change to the appointment, oldest first: booked, confirmed, rescheduled, updated, participant_added, participant_removed, cancelled, completed, no_show, attendance_corrected or anonymised.'
+  description: 'Every change to the appointment, oldest first: booked, confirmed, rescheduled, updated, participant_added, participant_removed, participant_responded, rebooked, cancelled, completed, no_show, attendance_corrected or anonymised.'
   constraints: append-only; entries are never changed or removed, except that erasure replaces actor identity ids (BR-11)
 - name: created_at
   type: instant
@@ -310,8 +315,14 @@ businessRules:
   text: If an appointment has a participant with the role host, the last host cannot be removed.
   rationale: A host confirms, updates and changes participants (permission matrix). Without one, a group appointment has nobody to run it.
 - id: BR-25
-  text: Fields the service sets, such as status, start_at, end_at, history and the cancellation and completion fields, cannot be written by clients. Status changes only through its operations.
+  text: Fields the service sets, such as status, start_at, end_at, history, rebooked_from_id and the cancellation and completion fields, cannot be written by clients. Status changes only through its operations.
   rationale: A client that writes status directly skips the state machine, its guards and its events. One that writes start_at bypasses the time zone rules.
+- id: BR-26
+  text: 'Each participant has a response: needs_action until they answer, then accepted, declined or tentative; the participant who books is accepted. Only the participant, or a Scheduler for them, records it. A participant who declines gets no reminders. When a required participant declines, the appointment is not cancelled automatically; appointment.participant_responded tells the host or a Scheduler, who decides.'
+  rationale: iCalendar gives every attendee a participation status (PARTSTAT) and a role saying whether they are required (RFC 5545), and calendar products show who accepted or declined. Without it, an appointment whose other party already said no looks confirmed. Cancelling automatically would remove an appointment the host may want to keep with someone else.
+- id: BR-27
+  text: A cancelled appointment can be rebooked at a new time. The new appointment copies its participants and details, records rebooked_from_id, and is checked like any booking. The cancelled appointment never changes.
+  rationale: Cancelled is terminal (BR-5), so a cancellation made by mistake, or one the participants want to undo, is reversed by rebooking. The link keeps the history that a fresh booking would lose, and the original slot may already be taken, so the new one is checked again.
 validations:
 - field: start_time
   rule: must be strictly before end_time
@@ -373,6 +384,9 @@ validations:
 - field: series_id, appointment_type_id
   rule: refer to an existing series or appointment type
   error: APPOINTMENT_INVALID_REFERENCE
+- field: participants response
+  rule: needs_action, accepted, declined or tentative, recorded by the participant or a Scheduler
+  error: APPOINTMENT_INVALID_RESPONSE
 stateMachine:
   initial: booked
   states:
@@ -779,6 +793,18 @@ edgeCases:
   covers:
   - BR-17
   - AC-50
+- id: EC-40
+  situation: The guest declines an appointment the host still expects them at.
+  behaviour: The appointment stays booked; the host sees the decline and decides whether to cancel or reschedule.
+  covers:
+  - BR-26
+  - AC-66
+- id: EC-41
+  situation: A Scheduler cancels the wrong appointment, and someone else has since booked its slot.
+  behaviour: Rebooking at the same time fails with APPOINTMENT_SLOT_TAKEN; the Scheduler rebooks at another free time, linked to the cancelled one.
+  covers:
+  - BR-27
+  - AC-67
 functionalRequirements:
 - id: FR-1
   text: The service must let an authorised actor book an appointment for two or more participants.
@@ -876,6 +902,14 @@ functionalRequirements:
   priority: must
   verification: test
   text: The service must let a Scheduler reschedule many active appointments at once, selected like a bulk cancel, either to a new time and weekday or by shifting each one by a fixed amount, checking each appointment separately and reporting the result for each.
+- id: FR-25
+  text: The service must record each participant's response and whether they are required, and stop reminders to participants who declined.
+  priority: must
+  verification: test
+- id: FR-26
+  text: The service must rebook a cancelled appointment as a new appointment linked to it.
+  priority: should
+  verification: test
 nonFunctionalRequirements:
 - category: availability
   text: Read paths stay available when downstream consumers are unavailable, and downstream outages never block a booking.
@@ -1409,6 +1443,20 @@ acceptanceCriteria:
   then: appointment.participant_added and appointment.participant_removed are emitted in turn
   verifies:
   - BR-15
+- id: AC-66
+  given: a booked appointment between a host who booked it and a required guest
+  when: it is read, the guest declines, the host records a response for the guest, and the guest sends maybe
+  then: the host is accepted and the guest needs_action; the decline emits appointment.participant_responded with required true and the guest gets no reminders; the host's attempt fails with APPOINTMENT_INVALID_RESPONSE (422); maybe fails with APPOINTMENT_INVALID_RESPONSE (422)
+  verifies:
+  - BR-26
+  - FR-25
+- id: AC-67
+  given: an appointment cancelled by mistake, and a booked one
+  when: the first is rebooked at a free time, and the second is rebooked
+  then: a new appointment is booked with rebooked_from_id set and the cancelled one is unchanged; the second fails with APPOINTMENT_NOT_CANCELLED (409)
+  verifies:
+  - BR-27
+  - FR-26
 events:
 - name: appointment.booked
   description: A new appointment was created, as pending or booked.
@@ -1419,6 +1467,7 @@ events:
   - end_at
   - time_zone
   - status
+  - rebooked_from_id
   - revision
 - name: appointment.rescheduled
   description: An appointment moved to a new slot.
@@ -1485,6 +1534,14 @@ events:
   payload:
   - appointment_id
   - identity_id
+  - revision
+- name: appointment.participant_responded
+  description: A participant accepted, declined or tentatively accepted.
+  payload:
+  - appointment_id
+  - identity_id
+  - response
+  - required
   - revision
 - name: appointment.ended
   description: A booked appointment reached its end without being closed out.
@@ -1558,6 +1615,14 @@ accessMatrix:
     Scheduler: any
     System: none
   permission: appointment.write
+- action: Respond to an appointment
+  roles:
+    Requester: none
+    Participant: own
+    Scheduler: any
+    System: none
+  note: A participant records only their own response.
+  permission: appointment.write
 - action: Cancel
   roles:
     Requester: own
@@ -1573,6 +1638,14 @@ accessMatrix:
     Scheduler: any
     System: none
   permission: appointment.manage
+- action: Rebook a cancelled appointment
+  roles:
+    Requester: own
+    Participant: own
+    Scheduler: any
+    System: none
+  note: Own appointments, checked like any booking, including self_service_cutoff.
+  permission: appointment.write
 - action: Reschedule in bulk
   roles:
     Requester: none
@@ -1749,6 +1822,12 @@ errors:
 - code: APPOINTMENT_INVALID_REFERENCE
   http: 422
   message: The series or appointment type doesn't exist.
+- code: APPOINTMENT_INVALID_RESPONSE
+  http: 422
+  message: A response is needs_action, accepted, declined or tentative, and only the participant or a Scheduler can record it.
+- code: APPOINTMENT_NOT_CANCELLED
+  http: 409
+  message: Only a cancelled appointment can be rebooked.
 dependencies:
 - service: calendar-service
   direction: upstream
@@ -1775,6 +1854,7 @@ dependencies:
   - 'Gives: appointment.ended, so the host is asked to close the appointment out'
   - 'Gives: appointment.anonymised, so Notification erases its copy of the personal data'
   - Delivery, channels and message templates are Notification's concern
+  - 'Gives: appointment.participant_responded, so the host or a Scheduler hears when someone declines'
 - service: scheduler-service
   direction: upstream
   reason: durable timers for reminders and automatic no-show recording
@@ -1986,8 +2066,8 @@ references:
   title: Stripe API, pagination
   url: https://docs.stripe.com/api/pagination
 - id: REF-31
-  title: ISO/IEC/IEEE 29148, characteristics of individual requirements
-  url: https://www.modernrequirements.com/blogs/iso-29148-explained/
+  title: ISO/IEC/IEEE 29148:2018, characteristics of individual requirements
+  url: https://www.iso.org/standard/72089.html
   note: Necessary, implementation free, unambiguous, singular, feasible, verifiable and more.
 - id: REF-32
   title: Cal.com, require confirmation for bookings
@@ -1995,7 +2075,20 @@ references:
 - id: REF-33
   title: Acuity Scheduling, booking appointments for clients (bulk reschedule)
   url: https://help.acuityscheduling.com/hc/en-us/articles/16676870828685-Booking-appointments-for-clients
+- id: REF-34
+  title: RFC 5545, participation status (PARTSTAT) and role (ROLE)
+  url: https://www.rfc-editor.org/rfc/rfc5545#section-3.2.12
+- id: REF-35
+  title: GDPR (EU) 2016/679 on EUR-Lex (Articles 6 and 44 to 49)
+  url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
 changelog:
+- version: 0.12.0
+  date: '2026-10-08'
+  breaking: false
+  changes:
+  - Participants accept, decline or tentatively accept, and are required or optional (BR-26, iCalendar PARTSTAT and ROLE).
+  - A cancelled appointment can be rebooked, linked to the original (BR-27).
+  - GDPR lawful basis (Article 6) and international transfers (Articles 44 to 49) as deployment duties; REF-31 now points to ISO.
 - version: 0.11.0
   date: '2026-10-08'
   breaking: false
@@ -2217,6 +2310,21 @@ operations:
   - APPOINTMENT_PARTICIPANT_NOT_FOUND
   - APPOINTMENT_INVALID_PARTICIPANTS
   - APPOINTMENT_HOST_REQUIRED
+- name: Respond to an appointment
+  actor: Participant
+  description: Accept, decline or tentatively accept an appointment.
+  method: POST
+  path: /appointments/{id}/participants/{identity_id}/response
+  success: 200
+  input: appointment id, identity, revision, response
+  output: the updated appointment
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_PARTICIPANT_NOT_FOUND
+  - APPOINTMENT_TERMINAL_STATE
+  - APPOINTMENT_ENDED
+  - APPOINTMENT_INVALID_RESPONSE
+  - APPOINTMENT_REVISION_CONFLICT
 - name: Cancel an appointment
   actor: Requester
   description: Cancel the appointment without deleting it. Accepts a retry key.
@@ -2244,6 +2352,24 @@ operations:
   - APPOINTMENT_CANCEL_REASON_REQUIRED
   - APPOINTMENT_INVALID_TIME_RANGE
   - APPOINTMENT_INVALID_BULK_FILTER
+- name: Rebook a cancelled appointment
+  actor: Scheduler
+  description: Book a new appointment that replaces a cancelled one, with the same participants and details.
+  method: POST
+  path: /appointments/{id}/rebook
+  success: 201
+  input: cancelled appointment id, new start and end time, optional time zone
+  output: the new appointment
+  errors:
+  - APPOINTMENT_NOT_FOUND
+  - APPOINTMENT_NOT_CANCELLED
+  - APPOINTMENT_INVALID_TIME_RANGE
+  - APPOINTMENT_START_IN_PAST
+  - APPOINTMENT_INVALID_LOCAL_TIME
+  - APPOINTMENT_AMBIGUOUS_LOCAL_TIME
+  - APPOINTMENT_SLOT_TAKEN
+  - APPOINTMENT_AVAILABILITY_UNAVAILABLE
+  - APPOINTMENT_IDEMPOTENCY_KEY_REUSED
 - name: Reschedule in bulk
   actor: Scheduler
   description: Move many appointments at once. Each one is checked and moved separately, keeping its id and calendar.
@@ -2367,6 +2493,9 @@ tables:
   - name: series_id
     type: uuid
     nullable: true
+  - name: rebooked_from_id
+    type: uuid
+    nullable: true
   - name: appointment_type_id
     type: uuid
     nullable: true
@@ -2440,6 +2569,12 @@ tables:
     type: uuid
   - name: role
     type: text
+  - name: required
+    type: boolean
+    default: 'true'
+  - name: response
+    type: text
+    default: '''needs_action'''
   - name: time_zone
     type: text
     nullable: true
@@ -2572,22 +2707,11 @@ technicalNotes:
 - id: TN-1
   title: Prevent overlaps in the database
   text: Store each participant's slot as a tstzrange and add an exclusion constraint. Ranges exclude their upper bound by default, so back-to-back slots don't conflict. A conflicting insert fails with SQLSTATE 23P01 (exclusion_violation); map it to APPOINTMENT_SLOT_TAKEN.
-  code: |
-    CREATE EXTENSION IF NOT EXISTS btree_gist;
-
-    ALTER TABLE appointment_participants
-      ADD CONSTRAINT no_overlapping_appointments
-      EXCLUDE USING gist (identity_id WITH =, slot WITH &&)
-      WHERE (active);
+  code: "CREATE EXTENSION IF NOT EXISTS btree_gist;\n\nALTER TABLE appointment_participants\n  ADD CONSTRAINT no_overlapping_appointments\n  EXCLUDE USING gist (identity_id WITH =, slot WITH &&)\n  WHERE (active);\n"
 - id: TN-2
   title: Derive instants from the agreed time
   text: Convert start_time and end_time with a time zone aware library and reject skipped or repeated times instead of guessing. Record the time zone database release in tz_version. When a new release ships, recompute booked appointments whose tz_version is older and whose start_at is still in the future.
-  code: |
-    // JavaScript Temporal: throws a RangeError for a skipped or repeated time
-    Temporal.ZonedDateTime.from(
-      { timeZone: 'America/New_York', year: 2026, month: 11, day: 1, hour: 1, minute: 30 },
-      { disambiguation: 'reject' },
-    );
+  code: "// JavaScript Temporal: throws a RangeError for a skipped or repeated time\nTemporal.ZonedDateTime.from(\n  { timeZone: 'America/New_York', year: 2026, month: 11, day: 1, hour: 1, minute: 30 },\n  { disambiguation: 'reject' },\n);\n"
 - id: TN-3
   title: Store idempotent results in the same transaction
   text: Save the caller, key, a hash of the request and the response in the same transaction as the change. A retry with the same key and hash returns the saved response. A retry with the same key and a different hash fails with APPOINTMENT_IDEMPOTENCY_KEY_REUSED. Prune keys older than idempotency_key_retention.
@@ -2597,19 +2721,11 @@ technicalNotes:
 - id: TN-5
   title: Detect concurrent changes with the revision
   text: Update with the revision the client sent in the WHERE clause, for every change including cancellation. If no row changes, someone else changed the appointment first, so return APPOINTMENT_REVISION_CONFLICT.
-  code: |
-    UPDATE appointments
-       SET start_local = $3, end_local = $4, revision = revision + 1, updated_at = now()
-     WHERE id = $1 AND revision = $2 AND status IN ('pending', 'booked');
+  code: "UPDATE appointments\n   SET start_local = $3, end_local = $4, revision = revision + 1, updated_at = now()\n WHERE id = $1 AND revision = $2 AND status IN ('pending', 'booked');\n"
 - id: TN-6
   title: Publish events through a transactional outbox
   text: Insert each event into the outbox table in the same transaction as the change. A separate relay publishes unpublished rows and then sets published_at. The relay can publish an event twice if it crashes in between, so consumers must ignore an event whose source and id they have already seen.
-  code: |
-    BEGIN;
-      UPDATE appointments SET status = 'cancelled', ... WHERE id = $1 AND status = 'booked';
-      INSERT INTO outbox (id, type, subject, payload)
-        VALUES (gen_random_uuid(), 'appointment.cancelled', $1, $2);
-    COMMIT;
+  code: "BEGIN;\n  UPDATE appointments SET status = 'cancelled', ... WHERE id = $1 AND status = 'booked';\n  INSERT INTO outbox (id, type, subject, payload)\n    VALUES (gen_random_uuid(), 'appointment.cancelled', $1, $2);\nCOMMIT;\n"
 compliance:
 - id: CMP-1
   regulation: GDPR (EU) 2016/679
@@ -2673,6 +2789,20 @@ compliance:
   provision: Articles 30, 33 to 35
   obligation: Records of processing, breach notification within 72 hours, and impact assessments.
   how: Organisational duties of the deployment, not of this module.
+  status: deployment
+  covered_by: []
+- id: CMP-9
+  regulation: GDPR (EU) 2016/679
+  provision: Article 6(1)
+  obligation: Every processing of personal data has a lawful basis.
+  how: The deployment records its basis, usually performance of a contract (6(1)(b)) for bookings a person makes, and states it in its privacy notice.
+  status: deployment
+  covered_by: []
+- id: CMP-10
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 44 to 49
+  obligation: Transfers of personal data outside the EU need an adequacy decision or appropriate safeguards.
+  how: Where data is stored and who processes it is a deployment choice.
   status: deployment
   covered_by: []
 ---
