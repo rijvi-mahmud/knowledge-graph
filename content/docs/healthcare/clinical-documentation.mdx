@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.4.0
+version: 0.4.1
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.4.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - documentation.* events carry documentation_sequence, and deficiency events their revision, so consumers can order them (DG-H4).
 - version: 0.4.0
   date: '2026-10-09'
   breaking: false
@@ -512,6 +517,11 @@ dataModel:
   required: false
   description: Why an HIM specialist closed it as unresolvable.
   constraints: required with status closed_unresolvable
+- name: deficiency.revision
+  type: integer
+  required: true
+  description: Goes up with every change to the deficiency.
+  constraints: set by the service
 relationships:
 - type: belongs_to
   target: patient
@@ -1716,6 +1726,12 @@ acceptanceCriteria:
   then: the readings move to the remaining record with moved_from set; the patient-entered information is hidden from care views and listed for an HIM specialist
   verifies:
   - BR-H57
+- id: AC-H68
+  given: Encounters has applied documentation.reopened with documentation_sequence 4 for an encounter
+  when: a delayed documentation.completed with documentation_sequence 3 arrives
+  then: it is ignored and the encounter stays open for documentation
+  verifies:
+  - BR-H21
 operations:
 - name: Start a note
   actor: Clinician
@@ -2325,18 +2341,21 @@ events:
   payload:
   - encounter_id
   - patient_id
+  - documentation_sequence
 - name: documentation.completed
   description: An encounter's documentation is complete.
   payload:
   - encounter_id
   - patient_id
   - completed_at
+  - documentation_sequence
 - name: documentation.reopened
   description: An encounter reported complete has something missing again.
   payload:
   - encounter_id
   - patient_id
   - reason
+  - documentation_sequence
 - name: deficiency.opened
   description: A practitioner owes the record something.
   payload:
@@ -2345,6 +2364,7 @@ events:
   - practitioner_id
   - kind
   - due_at
+  - revision
 - name: deficiency.delinquent
   description: A deficiency is past delinquency_after.
   payload:
@@ -2352,6 +2372,7 @@ events:
   - encounter_id
   - practitioner_id
   - kind
+  - revision
 - name: observation.recorded
   description: An observation was recorded, preliminary from a device or final.
   payload:
@@ -2389,8 +2410,8 @@ deliveryGuarantees:
   text: Events carry ids, codes and sensitivity, never note text or values. Consumers read the note or observation.
   rationale: Events fan out widely. This follows the minimum necessary standard (45 CFR 164.502(b)) and GDPR data minimisation (Article 5(1)(c)).
 - id: DG-H4
-  text: Every event carries a unique id, its type, the entry it is about, when the change happened, and the revision where the entry has one.
-  rationale: Consumers order and deduplicate by these. CloudEvents defines id, type and time for every event.
+  text: Every event carries a unique id, its type, the entry it is about, when the change happened, and the revision of the note, observation or deficiency it is about. documentation.data_recorded, documentation.completed and documentation.reopened carry documentation_sequence, which goes up with each of them for that encounter, and consumers ignore one lower than they have applied.
+  rationale: A reopened report overtaken by an older completed one would let Encounters complete an encounter whose record is incomplete again.
 permissions:
 - name: note.read
   description: Read notes of patients in your care.

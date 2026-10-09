@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.3.1
+version: 0.3.3
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -472,7 +472,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-H9
-  text: The service must return practitioners as HL7 FHIR R5 Practitioner, conforming to US Core Practitioner in the United States.
+  text: The service must return practitioners as HL7 FHIR R5 Practitioner resources; in the United States, the R4.0.1 API conforms to US Core Practitioner.
   priority: must
   verification: inspection
 - id: FR-H10
@@ -963,7 +963,7 @@ apiConventions:
   text: Every create accepts an Idempotency-Key header; a retry returns the original result.
   reference: IETF draft-ietf-httpapi-idempotency-key-header
 - topic: FHIR
-  text: Practitioners are returned as HL7 FHIR R5 Practitioner, conforming to US Core Practitioner in the United States, when the request asks for application/fhir+json (FR-H9).
+  text: Practitioners are returned as HL7 FHIR R5 Practitioner, with the US Core Practitioner R4.0.1 API in the United States, when the request asks for application/fhir+json (FR-H9).
 - topic: Dates
   text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
   reference: ISO 8601
@@ -1033,6 +1033,7 @@ events:
   description: A duplicate record was merged into another.
   payload:
   - practitioner_id
+  - revision
   - merged_into
 deliveryGuarantees:
 - id: DG-H1
@@ -1326,6 +1327,16 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.3.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - practitioner.merged carries the revision, as DG-H2 promises.
+- version: 0.3.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'FR-H9: R5 Practitioner resources aren''t claimed to conform to US Core, an R4.0.1 guide; the US Core API is FR-H10.'
 - version: 0.3.1
   date: '2026-10-09'
   breaking: false

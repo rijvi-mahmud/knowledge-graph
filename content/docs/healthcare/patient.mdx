@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.13.3
+version: 0.13.5
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -160,7 +160,7 @@ dataModel:
 - name: interpreter_needed
   type: boolean
   required: false
-  description: Whether the patient needs an interpreter (USCDI v6).
+  description: Whether the patient needs an interpreter (USCDI v5 and later, Interpreter Needed).
   constraints: 'codes: yes, no or unknown, as the US Core Interpreter Needed extension'
 - name: multiple_birth
   type: boolean or integer
@@ -1193,7 +1193,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-H30
-  text: 'In the United States, the service must serve Patient through a FHIR R4.0.1 API conforming to the US Core version 45 CFR 170.215(b)(1) adopts (STU 6.1.0, or a later version ONC approves): the search interactions the US Core Server CapabilityStatement marks mandatory for a single patient, and group export through FHIR Bulk Data Access 1.0.0. This API runs on FHIR R4 even though the module maps to FHIR R5 elsewhere; apps are authorized by Identity with SMART App Launch 2.0.0.'
+  text: 'In the United States, the service must serve Patient through a FHIR R4.0.1 API conforming to the US Core version 45 CFR 170.215(b)(1) adopts (STU 6.1.0, or a later version ONC approves through the Standards Version Advancement Process, such as STU 9.0.0 with USCDI v6 from 29 August 2026): the search interactions the US Core Server CapabilityStatement marks mandatory for a single patient, and group export through FHIR Bulk Data Access 1.0.0. This API runs on FHIR R4 even though the module maps to FHIR R5 elsewhere; apps are authorized by Identity with SMART App Launch 2.0.0.'
   priority: must
   verification: demonstration
   jurisdiction: us
@@ -1239,8 +1239,8 @@ constraints:
   text: Coded fields use the code systems named in the data model. A deployment's local codes are mapped to them before data leaves this module.
   rationale: Exchange with other systems, reporting and certification all assume these code systems. A local code with no mapping is lost at the boundary.
 - id: CON-H5
-  text: Patients are exchanged as FHIR R5 Patient resources conforming to US Core Patient (9.0.0) in the United States and to the HL7 Europe Base and Core guide (2.0.1) in the European Union.
-  rationale: US Core is what ONC certification tests, and US Core requires Project US@ addresses for certifying systems. HL7 Europe Base is the shared EU starting point.
+  text: Patients are exchanged as FHIR R5 Patient resources, and in an R4.0.1 representation that conforms to US Core Patient in the United States, in the version 45 CFR 170.215(b)(1) adopts or a later one ONC approves, and to HL7 Europe Base and Core 2.0.1 in the European Union. Both guides are built on FHIR R4.0.1, so an R5 resource is never claimed to conform to them.
+  rationale: US Core is what ONC certification tests, and US Core requires Project US@ addresses for certifying systems. HL7 Europe Base is the shared EU starting point. Both are R4 guides (their package manifests list FHIR 4.0.1).
 settings:
 - name: jurisdiction
   type: us | eu
@@ -1494,7 +1494,7 @@ acceptanceCriteria:
 - id: AC-H21
   given: any patient
   when: it is exported
-  then: the result is a valid HL7 FHIR R5 Patient resource that validates against US Core Patient for jurisdiction us and HL7 Europe Base for jurisdiction eu
+  then: the result is a valid HL7 FHIR R5 Patient resource, and its R4.0.1 representation validates against US Core Patient for jurisdiction us and HL7 Europe Base for jurisdiction eu
   verifies:
   - FR-H12
   - CON-H5
@@ -2458,7 +2458,7 @@ deliveryGuarantees:
   text: Events are published at least once. Consumers treat an event with a source and id they have already seen as a duplicate.
   rationale: A relay can publish twice if it crashes after publishing. CloudEvents defines source plus id as the duplicate check.
 - id: DG-H2
-  text: Events for one patient can arrive out of order. Each carries the revision, and consumers ignore one lower than a revision they have applied.
+  text: Events about a change to a patient record can arrive out of order. Each carries the revision, and consumers ignore one lower than a revision they have applied. Alerts about access, patient.restricted_access and patient.search_volume_alert, change no record, so they carry the time instead and their order doesn't matter.
   rationale: Brokers and retries don't guarantee order. The revision orders every change to a record.
 - id: DG-H3
   text: Events carry ids and the names of changed fields, never names, birth dates, addresses or identifiers. Consumers read the record for details.
@@ -3249,6 +3249,16 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.13.5
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - DG-H2 is scoped to events that change a record; access alerts carry their time.
+- version: 0.13.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'CON-H5: R5 resources are never claimed to conform to US Core or HL7 Europe Base, which are FHIR R4.0.1 guides; the R4.0.1 representation does. FR-H30 names the 2026 SVAP versions (US Core 9.0.0, USCDI v6) as an option. Interpreter Needed is USCDI v5.'
 - version: 0.13.3
   date: '2026-10-09'
   breaking: false

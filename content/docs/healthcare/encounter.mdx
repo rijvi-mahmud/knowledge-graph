@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.2.0
+version: 0.2.1
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.2.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The Clinical documentation contract orders documentation events by documentation_sequence.
 - version: 0.2.0
   date: '2026-10-09'
   breaking: true
@@ -2137,6 +2142,7 @@ dependencies:
   - 'Gives: encounter.patient_review_needed after an undone patient merge'
   - 'Gives: encounter.record_overdue, for the responsible practitioner''s deficiency list'
   - Discharge summaries and reports are Clinical documentation's concern
+  - Ignores a documentation event with a documentation_sequence lower than one already applied
 - service: clinical-modules
   direction: downstream
   reason: orders, results, medications and conditions attach data to encounters
