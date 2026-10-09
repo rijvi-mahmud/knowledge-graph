@@ -35,4 +35,4 @@ jobs:
       - name: Lint the generated OpenAPI files
         run: |
           find .next/server/app/openapi -name '*.json.body' -exec sh -c 'cp "$1" "${1%.body}"' _ {} \;
-          find .next/server/app/openapi -name '*.json' -exec npx -y @redocly/cli@2 lint --extends=minimal {} +
+          find .next/server/app/openapi -name '*.json' -exec npx -y @redocly/cli@2.62.0 lint --extends=minimal {} +

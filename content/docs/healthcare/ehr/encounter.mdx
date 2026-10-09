@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.4
+version: 0.13.5
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,11 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.5
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Keeps the hospital wording of the locations field (pending transfers, held beds) as an override.
 - version: 0.13.4
   date: '2026-10-09'
   breaking: false
@@ -180,6 +185,11 @@ dataModel:
   required: true
   description: Where the encounter is in its lifecycle.
   constraints: 'planned | in_progress | on_hold | discharged | completed | cancelled | discontinued | entered_in_error; changed only through operations; codes: FHIR R5 EncounterStatus (in-progress, on-hold, entered-in-error)'
+- name: locations
+  type: location stay[]
+  required: false
+  description: Locations the patient has been in, each with an entry id, period and status, owned by the Organization module. The id lets a past movement be corrected.
+  constraints: 'status planned | active | reserved | completed (FHIR): planned for a pending transfer, reserved for a bed held while the patient is elsewhere; at most one active'
 businessRules:
 - id: BR-E3
   text: An emergency encounter is opened, in progress with subject status arrived, when the Emergency department module registers an arrival. Its subject status follows triage, care and departure as that module reports them.

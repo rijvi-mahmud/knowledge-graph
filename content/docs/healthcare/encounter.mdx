@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.4
+version: 0.1.5
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.5
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The locations field explains planned and reserved without hospital examples; the EHR layer keeps pending transfers and held beds.
 - version: 0.1.4
   date: '2026-10-09'
   breaking: false
@@ -205,7 +210,7 @@ dataModel:
   type: location stay[]
   required: false
   description: Locations the patient has been in, each with an entry id, period and status, owned by the Organization module. The id lets a past movement be corrected.
-  constraints: 'status planned | active | reserved | completed (FHIR): planned for a pending transfer, reserved for a bed held while the patient is elsewhere; at most one active'
+  constraints: 'status planned | active | reserved | completed (FHIR): planned for a move that hasn''t happened yet, reserved for a place held while the patient is elsewhere; at most one active'
 - name: reasons
   type: reason[]
   required: false
