@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.4.2
+version: 0.4.3
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -1609,6 +1609,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Asks: which departments are Part 2 programs?'
+  - 'Asks: the time zone of the organization holding a consent, for its expiry date'
   - Departments are Organization's concern
 - service: terminology-service
   direction: upstream
@@ -1755,6 +1756,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-164.514
   note: (f), fundraising communications and the opt-out.
 changelog:
+- version: 0.4.3
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - The Organization contract asks for the time zone BR-H12 reads expiry dates in.
 - version: 0.4.2
   date: '2026-10-10'
   breaking: false
