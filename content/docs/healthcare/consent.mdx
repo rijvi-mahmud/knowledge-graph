@@ -1,0 +1,1894 @@
+---
+title: Consent
+description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
+module: consent
+version: 0.1.0
+status: draft
+industry: healthcare
+purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
+scope:
+- Consent to treatment and informed consent to a procedure, with who obtained it
+- In the United States, HIPAA authorizations, 42 CFR Part 2 consents, restriction requests, requests not to share electronic health information, and the Notice of Privacy Practices acknowledgment
+- In the European Union, GDPR consent where consent is the legal basis, privacy information under Articles 13 and 14, and EHDS restrictions and opt-outs
+- Revocation, expiry and refusal of any of them
+- Whether a patient has an advance directive, and its document
+- Opt-outs from contact channels
+- Answering whether a use or disclosure of a patient's data is allowed, and recording each answer
+- Recording emergency use of restricted data
+nonGoals:
+- Research consent and ethics committee approval. A Research module owns them.
+- What an advance directive says and the orders it leads to, such as a do-not-resuscitate order. Orders owns orders; this module records that a directive exists and holds its document.
+- Who may act for a patient, and in what scope. The Patients module records it; this module asks.
+- Releasing copies of the record and the accounting of disclosures. Release of information owns them, asking this module before each disclosure.
+- Labelling data as sensitive. The module that owns the data sets its sensitivity codes; this module reads them.
+- The content of the Notice of Privacy Practices and the organization's privacy policies. The organization writes them; this module records who received which version.
+actors:
+- name: Registrar
+  description: Gives notices, records consents and authorizations at registration and admission.
+- name: Clinician
+  description: Obtains informed consent for treatment and procedures, and records emergency use of restricted data.
+- name: Privacy officer
+  description: Decides restriction requests and their termination, and reviews emergency uses.
+- name: Patient
+  description: A patient, or a representative within their authority, using the portal or signing on paper.
+- name: System
+  description: Other modules asking whether a use or disclosure is allowed.
+assumptions:
+- id: AS-H1
+  text: Each module that owns data labels it with sensitivity codes, such as substance use disorder or reproductive health.
+  rationale: This module decides from labels; it can't know what a note or result is about.
+- id: AS-H2
+  text: The Patients module records who may act for a patient, in what scope, and whether the patient is alive and a minor.
+  rationale: Who may sign is decided from that record, not here.
+- id: AS-H3
+  text: Modules ask before each use or disclosure that could need consent and state its purpose.
+  rationale: A consent nobody checks protects no one.
+glossary:
+- term: Consent
+  definition: A recorded decision by a patient, or someone acting for them, to permit or deny something, such as a treatment or a disclosure (FHIR Consent).
+- term: Authorization
+  definition: In the United States, the signed permission HIPAA requires for a use or disclosure the law doesn't otherwise allow (45 CFR 164.508).
+- term: Part 2 program
+  definition: A federally assisted program that provides substance use disorder treatment, whose records 42 CFR Part 2 protects.
+- term: Restriction
+  definition: A patient's request to limit uses or disclosures for treatment, payment or operations (45 CFR 164.522), or, in the EU, to limit professionals' access (EHDS Article 8).
+- term: Opt-out
+  definition: A patient's choice not to take part, such as in the EU from access through access services (EHDS Article 10) or from secondary use (EHDS Article 71), or from a contact channel.
+- term: Disclosure check
+  definition: 'A question from a module: may this data be used or disclosed, for this purpose, to this recipient? The answer is permit or deny, with its basis and obligations.'
+- term: Advance directive
+  definition: A written instruction, such as a living will or a health care power of attorney, about care if the patient can't decide (42 CFR 489.100).
+- term: Purpose of use
+  definition: Why data is used or disclosed, such as treatment, payment or operations, from HL7 v3 PurposeOfUse.
+concepts:
+- name: Consent to care is not permission to share
+  description: Agreeing to a treatment says nothing about who may see the record. In the United States, sharing for treatment, payment and operations needs no consent, while other disclosures need an authorization; in the EU, care data is processed because care needs it (GDPR Article 9(2)(h)), and consent is the basis only for things such as research or marketing.
+- name: The answer, not the form
+  description: Modules never read consent forms. They ask whether a use or disclosure is allowed, and get permit or deny with the basis and the obligations, such as a notice that must go with the data.
+- name: Nothing is deleted
+  description: A revoked, expired or mistaken consent changes status and stays, because every past disclosure must be explainable by the consent in force at the time.
+dataModel:
+- name: consent.id
+  type: string
+  required: true
+  description: The consent id. Never changes or is reused.
+  constraints: set by the service
+- name: consent.patient_id
+  type: string
+  required: true
+  description: The patient it is about, owned by the Patients module.
+- name: consent.kind
+  type: enum
+  required: true
+  description: What it is, from consent_kinds.
+  constraints: 'treatment | procedure | hipaa_authorization | part2_consent | sud_counseling_notes | restriction | do_not_share | share_despite_risk | gdpr_consent | ehds_restriction | ehds_primary_opt_out | ehds_secondary_opt_out | contact_opt_out | advance_directive; codes: none standard, local to this specification; each kind maps to a FHIR consent category, such as acd, dnr, polst, npp or research, and to a regulatory basis'
+- name: consent.status
+  type: enum
+  required: true
+  description: Where it is in its lifecycle.
+  constraints: 'draft | active | inactive | not-done | entered-in-error; codes: FHIR R5 consent-state-codes'
+- name: consent.decision
+  type: enum
+  required: true
+  description: Whether it permits or denies what its provisions describe.
+  constraints: 'permit | deny; codes: FHIR R5 consent-provision-type'
+- name: consent.provisions
+  type: provision[]
+  required: true
+  description: 'What it covers: the data (sensitivity codes, categories or specific records), purposes, actions, who may disclose, recipients, and a period; provisions can nest, for exceptions.'
+  constraints: 'codes: purpose from HL7 v3 PurposeOfUse, such as TREAT, ETREAT, HPAYMT, HOPERAT, PATRQT; data labels from HL7 v3 ActCode sensitivity, such as SUD, PSY, HIV, SDV, SEX'
+- name: consent.period
+  type: period
+  required: false
+  description: When it takes effect and when it expires, or the event that ends it, such as end of treatment.
+- name: consent.signatures
+  type: signature[]
+  required: false
+  description: Who signed, as patient or as a representative with a description of their authority, how (on paper or electronically), when, and any witness or interpreter.
+- name: consent.document
+  type: attachment
+  required: false
+  description: The signed form or the text the patient agreed to, kept unaltered, with the version of the form.
+- name: consent.statements
+  type: code[]
+  required: false
+  description: The required statements the form contained, such as the right to revoke and the risk of redisclosure.
+  constraints: 'codes: none standard, local to this specification'
+- name: consent.conditioned
+  type: boolean
+  required: false
+  description: Whether care or payment was made conditional on signing, and under which exception.
+- name: consent.request_decision
+  type: decision
+  required: false
+  description: 'For a restriction request: agreed or declined, by whom, when and why.'
+- name: consent.revocation
+  type: revocation
+  required: false
+  description: When the revocation was received, how, by whom, its written evidence, and what was already done in reliance.
+- name: consent.procedure
+  type: code
+  required: false
+  description: 'For informed consent: the treatment or procedure, the practitioner who obtained it, and that risks, benefits and alternatives were discussed.'
+- name: consent.channel
+  type: code
+  required: false
+  description: 'For a contact opt-out: the channel and purpose, such as text messages for appointment reminders.'
+  constraints: 'codes: FHIR ContactPointSystem for the channel'
+- name: consent.status_reason
+  type: text
+  required: false
+  description: Why it was refused, expired, revoked or marked entered in error.
+- name: consent.revision
+  type: integer
+  required: true
+  description: Goes up with every change.
+  constraints: set by the service
+- name: notice.id
+  type: string
+  required: true
+  description: The notice delivery id.
+  constraints: set by the service
+- name: notice.kind
+  type: enum
+  required: true
+  description: Which notice.
+  constraints: 'npp | part2_notice | privacy_information; codes: none standard, local to this specification'
+- name: notice.version
+  type: string
+  required: true
+  description: Which version of the notice was given.
+- name: notice.given_at
+  type: instant
+  required: false
+  description: When it was given, and how.
+- name: notice.acknowledgment
+  type: acknowledgment
+  required: false
+  description: The written acknowledgment, or the good-faith attempt and why it wasn't obtained.
+- name: notice.due_by
+  type: instant
+  required: false
+  description: When it must be given by.
+- name: emergency_use.id
+  type: string
+  required: true
+  description: The emergency use id.
+  constraints: set by the service
+- name: emergency_use.details
+  type: emergency use
+  required: true
+  description: The patient, the restricted data used or disclosed, the medical personnel and their facility, who disclosed it, when, the nature of the emergency, and the request not to redisclose.
+- name: check.id
+  type: string
+  required: true
+  description: The disclosure check id, with who asked, the data, purpose, recipient, the answer, its basis and when.
+  constraints: set by the service
+relationships:
+- type: belongs_to
+  target: patient
+  note: '1: consent.patient_id, owned by the Patients module (FHIR Consent.subject 0..1, required here)'
+- type: has_many
+  target: provision
+  note: '1..*: what a consent covers, nesting for exceptions (FHIR Consent.provision 0..*)'
+- type: has_many
+  target: signature
+  note: '0..*: patient and representative signatures (FHIR Consent.grantor and verification)'
+- type: has_many
+  target: notice
+  note: '0..*: notices given to a patient, each with its acknowledgment'
+- type: has_many
+  target: emergency use
+  note: '0..*: emergency uses of a patient''s restricted data'
+- type: has_many
+  target: check
+  note: '0..*: disclosure checks about a patient, each naming the consents it relied on'
+- type: can_trigger
+  target: event:consent.revoked
+businessRules:
+- id: BR-H1
+  text: Every consent is about one patient whose record is in use, is of a kind listed in consent_kinds, and names its legal basis. Each kind maps to a FHIR consent category.
+  rationale: One record per decision, with its basis, is what lets every later disclosure be explained; FHIR R5 Consent models a decision with its category and regulatory basis.
+- id: BR-H2
+  text: Consent to treatment is never used as permission to disclose, and permission to disclose is never used as consent to treatment. In the European Union, GDPR consent is recorded only for processing whose legal basis is consent, never for care itself.
+  rationale: A HIPAA consent for treatment, payment and operations can't stand in for an authorization (45 CFR 164.506(b)(2)); in the EU, care data is processed under GDPR Article 9(2)(h), and calling it consent would let a withdrawal appear to stop care records.
+- id: BR-H3
+  text: 'In the United States, a HIPAA authorization is active only when it contains every core element: a specific description of the information, who may disclose it, who may receive it, each purpose (at the request of the individual is enough when the patient starts it), an expiration date or event, and the signature and date, with a representative''s authority described. It must also state the right to revoke in writing and how, whether care can be conditioned on signing, and that disclosed information may be redisclosed, all in plain language. A request missing any of them is refused, listing every missing one, and the patient gets a copy when the organization asked for the authorization.'
+  rationale: These are the core elements and required statements of a valid authorization (45 CFR 164.508(c)(1) to (4)).
+  jurisdiction: us
+- id: BR-H4
+  text: In the United States, a disclosure check never relies on an authorization that has expired, whose expiration event is known to have happened, that is incomplete, that is known to be revoked, that breaks the rules on combining or conditioning, or whose material information is known to be false.
+  rationale: These are the defects that make an authorization invalid (45 CFR 164.508(b)(2)).
+  jurisdiction: us
+- id: BR-H5
+  text: In the United States, an authorization for psychotherapy notes can be combined only with another for psychotherapy notes, and no authorization is combined with one that care was conditioned on, except research authorizations combined as the rules allow. Care, payment, enrollment or eligibility is never conditioned on signing an authorization, except research-related treatment, or care given only to create information for a third party.
+  rationale: HIPAA limits compound authorizations and prohibits conditioning, with these exceptions (45 CFR 164.508(b)(3) and (4)).
+  jurisdiction: us
+- id: BR-H6
+  text: In the United States, a Part 2 consent is active only with the patient's name; who may disclose; a specific description of the information; the recipients, which for a single consent for all future treatment, payment and operations can be described generally, and which name an intermediary and its participants; each purpose; the right to revoke in writing; an expiration date or event (end of the treatment or none is enough for treatment, payment and operations); the signature, of the minor or of a person authorized for a patient lacking capacity or deceased; the date; and, for treatment, payment and operations, the statements on redisclosure and on the consequences of refusing.
+  rationale: These are the required elements of a Part 2 consent; electronic signatures are allowed where law doesn't forbid them, and the rules apply from 16 February 2026 (42 CFR 2.31(a); 89 FR 12472).
+  jurisdiction: us
+- id: BR-H7
+  text: In the United States, a use or disclosure of SUD counseling notes needs its own consent, which can be combined only with another consent for SUD counseling notes and on which no care or payment is conditioned.
+  rationale: Part 2 protects SUD counseling notes the way HIPAA protects psychotherapy notes (42 CFR 2.31(b)).
+  jurisdiction: us
+- id: BR-H8
+  text: 'In the United States, a permitted disclosure of Part 2 records comes with the obligation to attach the statement 42 CFR 2.32 requires, and the answer says how the recipient may redisclose: a covered entity or business associate receiving under a consent for treatment, payment and operations may redisclose as HIPAA allows, except in proceedings against the patient.'
+  rationale: Every disclosure with consent must carry the Part 2 notice, and redisclosure follows the consent and HIPAA (42 CFR 2.32, 2.33).
+  jurisdiction: us
+- id: BR-H9
+  text: In the United States, where state law lets a minor obtain SUD treatment alone, only the minor signs a Part 2 consent; where state law requires a parent's consent to treatment, both the minor and the parent or guardian sign. minor_consent_rules holds the state rules.
+  rationale: Part 2 decides who signs for a minor from state law (42 CFR 2.14).
+  jurisdiction: us
+- id: BR-H10
+  text: A consent is signed by the patient, or by a representative acting within the scope the Patients module records, whose authority is described on the consent. Signatures are on paper or electronic as signature_methods allows; an electronic signature is accepted unless the law requires another form for that kind.
+  rationale: A consent signed by someone without authority is invalid; electronic signatures have legal effect in the United States (15 U.S.C. 7001) and can't be refused in the EU only for being electronic (Regulation (EU) No 910/2014, Article 25).
+- id: BR-H11
+  text: 'A patient, or a representative within their scope, can revoke a consent at any time. A HIPAA authorization or Part 2 consent is revoked in writing, which includes the portal; GDPR consent and EHDS opt-outs are withdrawn as easily as they were given. Revocation takes effect when received and stops future uses only: what was already done in reliance on it stands. The consent becomes inactive and is kept.'
+  rationale: HIPAA and Part 2 allow written revocation except for action already taken in reliance (45 CFR 164.508(b)(5); 42 CFR 2.31(a)(6)); GDPR requires withdrawal to be as easy as giving and not to affect earlier processing (Article 7(3)); EHDS opt-outs are reversible (Articles 10(1) and 71(1)).
+- id: BR-H12
+  text: A consent with an expiration date becomes inactive at the end of that date where the patient was, and consent.expired is emitted; one ending on an event becomes inactive when staff record the event.
+  rationale: An expired authorization is invalid (45 CFR 164.508(b)(2)(i); 42 CFR 2.31(c)(1)); end dates are inclusive, as FHIR periods are.
+- id: BR-H13
+  text: In the United States, a patient can ask to restrict uses or disclosures for treatment, payment or operations, or disclosures to family and friends. A privacy officer agrees or declines, except that a request not to tell a health plan about a service the patient paid for in full, for payment or operations and where no law requires it, must be agreed. An agreed restriction binds every disclosure check, except emergency treatment and disclosures the law requires or permits without the patient's agreement.
+  rationale: Patients may request restrictions, the self-pay restriction must be agreed, and restrictions don't block required or public-interest disclosures (45 CFR 164.522(a)(1)).
+  jurisdiction: us
+- id: BR-H14
+  text: In the United States, an agreed restriction ends when the patient agrees in writing, or orally with that documented, or when the organization tells the patient it is ending it, which then applies only to information created or received after telling them and never to a self-pay restriction.
+  rationale: These are the only ways to terminate a restriction (45 CFR 164.522(a)(2)).
+  jurisdiction: us
+- id: BR-H15
+  text: In the United States, a patient can ask the organization not to share their electronic health information. The request is documented, applied the same way for every patient, and ended only as a restriction is (BR-H14).
+  rationale: Honouring such a request isn't information blocking when these conditions are met (45 CFR 171.202(e)).
+  jurisdiction: us
+- id: BR-H16
+  text: In the United States, when care_access_policy is set, disclosure checks withhold the reproductive health information it covers, labelled SEX, from the access, exchange or use it names, and nothing more. A patient's explicit request to share that information despite the risk, recorded as share_despite_risk, overrides it. The 2024 HIPAA attestation for reproductive health information is not applied, because a court vacated it.
+  rationale: Withholding to reduce exposure to legal action isn't information blocking when tailored and based on a written policy, and the patient can nullify it (45 CFR 171.206(a) and (b)); the attestation in 45 CFR 164.509 was vacated nationwide in Purl v. HHS (N.D. Tex. 2025), and the appeal was dismissed on 10 September 2025.
+  jurisdiction: us
+- id: BR-H17
+  text: In the United States, a patient is given the Notice of Privacy Practices by their first service, or as soon as practicable after emergency treatment, and is asked for a written acknowledgment; if it isn't obtained, the good-faith attempt and the reason are recorded. Patients of a Part 2 program are also told at admission, or when they regain capacity, that federal law protects their SUD records.
+  rationale: Providers must give the notice and try to get an acknowledgment (45 CFR 164.520(c)(2)); Part 2 programs must give their notice at admission (42 CFR 2.22(a)).
+  jurisdiction: us
+- id: BR-H18
+  text: In the European Union, a patient gets privacy information when their data is collected from them, and when it comes from someone else, such as a relative or emergency staff, within privacy_information_deadline, at most one month, or at first contact if sooner.
+  rationale: GDPR requires information at collection (Article 13) or, for data obtained elsewhere, within a reasonable period and at the latest one month (Article 14(3)).
+  jurisdiction: eu
+- id: BR-H19
+  text: In the European Union, a GDPR consent is recorded with the exact text and version the patient agreed to, who agreed, when and how, is explicit for health data, is presented apart from other matters, and is never a condition of care.
+  rationale: The controller must be able to show consent was given, and it must be distinguishable, explicit for special categories and freely given (GDPR Articles 7(1), 7(2), 7(4) and 9(2)(a)).
+  jurisdiction: eu
+- id: BR-H20
+  text: In the European Union, a patient can restrict health professionals' access to all or parts of their data. They are told first that this may affect their care. Disclosure checks for health professionals then answer as if the restricted data weren't there, so the restriction itself is never visible to them, except access to protect the patient's vital interests, which is logged for the patient to see.
+  rationale: EHDS gives the right to restrict access, requires the patient to be told of its effect, keeps the fact of a restriction hidden from providers, and allows vital-interest access that is logged (EHDS Articles 8 and 11(5)); these apply from 26 March 2029 (Article 105).
+  jurisdiction: eu
+- id: BR-H21
+  text: In the European Union, where primary_use_opt_out says the member state provides it, a patient can opt out of access to their data through access services, and opt back in; vital-interest access follows the member state's rules.
+  rationale: Member states may give this right, which must be reversible (EHDS Article 10).
+  jurisdiction: eu
+- id: BR-H22
+  text: In the European Union, a patient can opt out of secondary use at any time without giving a reason, and opt back in. consent.opt_out_changed is emitted so their data is left out of datasets for permits approved after the opt-out; permits approved before it are unaffected.
+  rationale: EHDS gives this reversible right and limits its effect to later permits (EHDS Article 71(1) and (3)); Chapter IV applies from 26 March 2029 (Article 105).
+  jurisdiction: eu
+- id: BR-H23
+  text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure. A use the law allows without consent, such as treatment within the organization, is permitted with basis law. Every check and its answer is logged.
+  rationale: Modules need one consistent answer instead of reading forms; the log shows what each disclosure relied on, for audits and the accounting of disclosures.
+- id: BR-H24
+  text: 'Restricted data can be used or disclosed in an emergency: under an agreed restriction for emergency treatment, with a request that the receiving provider not redisclose it; for Part 2 records to medical personnel in a bona fide emergency, documented at once with the personnel and their facility, who disclosed, when and the nature of the emergency; and in the EU to protect vital interests, logged for the patient. Each is recorded as an emergency use and reviewed by a privacy officer.'
+  rationale: HIPAA, Part 2 and the EHDS each allow emergency use under these conditions (45 CFR 164.522(a)(1)(iii) and (iv); 42 CFR 2.51; EHDS Article 11(5)).
+- id: BR-H25
+  text: Informed consent to a treatment or procedure records the procedure, the practitioner who obtained it, that risks, benefits and alternatives were discussed in a language the patient understands, and the signature where consent_required_procedures requires one. The patient can withdraw it until the procedure starts. In an emergency without consent, the clinician records why.
+  rationale: Patients have the right to make informed decisions, including to refuse treatment (42 CFR 482.13(b)(2)); which procedures need written consent is set by law and by the organization.
+- id: BR-H26
+  text: Whether an adult patient has executed an advance directive is recorded, with its kind and document, at the moment advance_directive_information_at sets for the organization, after giving written information on their rights. Care is never conditioned on whether they have one, and the orders a directive leads to are the Orders module's.
+  rationale: Providers must document in a prominent part of the record whether the patient has an advance directive and must not condition care on it (42 CFR 489.102(a)(2) and (a)(3)); when depends on the kind of provider (489.102(b)).
+- id: BR-H27
+  text: A patient can opt out of a contact channel for a purpose, such as text reminders, by any reasonable means, including replying stop. The opt-out is honoured without delay and within contact_opt_out_deadline, and the Patients module is answered from it.
+  rationale: In the United States, consent to calls and texts can be revoked by any reasonable means and must be honoured within ten business days (47 CFR 64.1200(a)(10)); a patient's choice of channel should be respected everywhere.
+- id: BR-H28
+  text: When the Patients module merges two records, the consents of both move to the remaining record; where they conflict, the deny applies until a privacy officer reviews them. When it undoes a merge, consents recorded since are listed for review. When it records a death, consents stay in force until they end, and an estate representative can revoke them. When a representative's authority ends, consents they signed are listed for review and the patient is asked to confirm or revoke them. When it marks a record entered in error, its consents are listed for review.
+  rationale: A consent must follow the right person; a conflict resolved toward deny protects the patient until a person decides; HIPAA protects a deceased person's information for 50 years and treats an executor as their personal representative (45 CFR 164.502(f) and (g)(4)).
+- id: BR-H29
+  text: Consents, revocations, notices with their acknowledgments, emergency uses and checks are kept for six years from when they were created or last in effect, whichever is later, or for consent_retention if longer, and while a legal hold the Patients module reports applies. Erasure is refused until then.
+  rationale: HIPAA requires documentation to be kept six years from creation or last effective date (45 CFR 164.530(j)(2)); GDPR Article 17(3)(b) and (e) exempt records needed for legal obligations and claims.
+- id: BR-H30
+  text: A consent recorded on the wrong patient or twice is marked entered in error with a reason; it no longer counts in disclosure checks, and it is kept.
+  rationale: Deleting it would leave earlier disclosures unexplained; FHIR marks such a consent entered-in-error.
+- id: BR-H31
+  text: When this module can't be reached, modules allow use for treatment inside the organization and deny every other disclosure until it answers.
+  rationale: Blocking care because a consent service is down harms the patient, while a disclosure outside the organization can't be undone.
+- id: BR-H32
+  text: Every change sends the revision it read; a stale revision fails.
+  rationale: Two staff recording on one consent must not overwrite each other.
+validations:
+- field: consent.patient_id
+  rule: A patient record in use, as the Patients module answers
+  error: CONSENT_INVALID_PATIENT
+- field: consent.kind
+  rule: A kind listed in consent_kinds for this jurisdiction
+  error: CONSENT_INVALID_KIND
+- field: consent.provisions
+  rule: Every element the kind requires is present; every missing element is listed
+  error: CONSENT_INCOMPLETE
+- field: consent.provisions
+  rule: Purposes, actions and sensitivity labels are valid codes
+  error: CONSENT_INVALID_CODE
+- field: consent.document
+  rule: Not combined with another authorization or consent where the law forbids it
+  error: CONSENT_COMPOUND_NOT_ALLOWED
+- field: consent.conditioned
+  rule: True only under an exception the law allows
+  error: CONSENT_CONDITIONING_NOT_ALLOWED
+- field: consent.signatures
+  rule: Each signer is the patient or a representative within their scope, or the persons the law requires for a minor
+  error: CONSENT_SIGNER_NOT_AUTHORIZED
+- field: consent.revocation
+  rule: For a HIPAA authorization or Part 2 consent, written evidence of the revocation
+  error: CONSENT_REVOCATION_EVIDENCE_REQUIRED
+- field: consent.status
+  rule: Fields the service sets, such as status and revision, can't be written by clients
+  error: CONSENT_READ_ONLY_FIELD
+stateMachine:
+  initial:
+  - draft
+  - active
+  states:
+  - draft
+  - active
+  - inactive
+  - not-done
+  - entered-in-error
+  transitions:
+  - from: draft
+    to: active
+    trigger: complete and signed, or a restriction request agreed (BR-H3, BR-H6, BR-H13)
+  - from: draft
+    to: not-done
+    trigger: the patient refuses, or a restriction request is declined (BR-H13)
+  - from: active
+    to: inactive
+    trigger: revoked, expired or a restriction terminated (BR-H11, BR-H12, BR-H14)
+  - from: draft
+    to: entered-in-error
+    trigger: recorded by mistake (BR-H30)
+  - from: active
+    to: entered-in-error
+    trigger: recorded by mistake (BR-H30)
+  - from: inactive
+    to: entered-in-error
+    trigger: recorded by mistake (BR-H30)
+workflows:
+- name: Sign an authorization
+  trigger: A patient asks for records to be sent to someone, or the organization asks for an authorization
+  actor: Registrar
+  steps:
+  - Start a draft with the information, recipient, purpose and expiry
+  - The service lists any missing element
+  - The patient, or their representative, signs on paper or in the portal
+  - The patient gets a copy
+  outcome: An active authorization disclosure checks can rely on.
+- name: Revoke a consent
+  trigger: The patient asks to revoke
+  actor: Patient
+  steps:
+  - The patient revokes in the portal or in writing
+  - The consent becomes inactive from that moment
+  - consent.revoked is emitted
+  outcome: No new use or disclosure relies on it; earlier ones stand.
+- name: Decide a restriction request
+  trigger: A patient asks to restrict a use or disclosure
+  actor: Privacy officer
+  steps:
+  - Record the request as a draft restriction
+  - Agree or decline; a self-pay request to a health plan is always agreed
+  - Tell the patient, and Billing for a self-pay restriction
+  outcome: Disclosure checks honour every agreed restriction.
+- name: Check a disclosure
+  trigger: A module is about to use or disclose data
+  actor: System
+  steps:
+  - Send the patient, data labels, purpose, requester and recipient
+  - Get permit or deny with basis and obligations
+  - Apply the obligations, such as attaching the Part 2 statement
+  outcome: Every use and disclosure is backed by a logged answer.
+- name: Give the privacy notice
+  trigger: A patient's first service, or patient.registered with an informant in the EU
+  actor: Registrar
+  steps:
+  - Give the current notice or privacy information
+  - Ask for a written acknowledgment, or record the attempt and the reason
+  outcome: Every patient has been given the notice, provably.
+- name: Use restricted data in an emergency
+  trigger: A patient needs emergency treatment and restricted data is needed
+  actor: Clinician
+  steps:
+  - Use or disclose only what the emergency needs
+  - Record the emergency use with the personnel, time and nature of the emergency
+  - A privacy officer reviews it
+  outcome: Care isn't blocked, and the exception is documented.
+edgeCases:
+- id: EC-H1
+  situation: A patient revokes an authorization an hour after records were sent.
+  behaviour: The sending stands; nothing further is sent under it.
+  covers:
+  - BR-H11
+  - AC-H11
+- id: EC-H2
+  situation: A teenager in a state that lets minors obtain SUD treatment alone asks that their parents not be told.
+  behaviour: Only the minor can sign a Part 2 consent, so a disclosure to the parents is denied without it.
+  covers:
+  - BR-H9
+  - AC-H9
+  jurisdiction: us
+- id: EC-H3
+  situation: A patient paid cash for an HIV test and doesn't want the insurer to know.
+  behaviour: The self-pay restriction must be agreed, Billing is told, and the organization can't end it.
+  covers:
+  - BR-H13
+  - BR-H14
+  - AC-H13
+  jurisdiction: us
+- id: EC-H4
+  situation: An EU patient restricted their mental health notes, then arrives unconscious.
+  behaviour: The emergency team can reach what vital interests need, which is logged for the patient; otherwise the notes stay invisible.
+  covers:
+  - BR-H20
+  - BR-H24
+  - AC-H20
+  jurisdiction: eu
+- id: EC-H5
+  situation: Two duplicate records are merged; one had permission to share with a daughter and the other a restriction against it.
+  behaviour: Deny applies until a privacy officer reviews both.
+  covers:
+  - BR-H28
+  - AC-H28
+- id: EC-H6
+  situation: A parent signed an authorization for their child, who then turns 18.
+  behaviour: It is listed for review, and the now-adult patient is asked to confirm or revoke it.
+  covers:
+  - BR-H28
+- id: EC-H7
+  situation: A patient replies "please don't text me anymore" instead of stop.
+  behaviour: A reasonable person would read it as an opt-out, so it is recorded as one.
+  covers:
+  - BR-H27
+  - AC-H27
+- id: EC-H8
+  situation: The consent service is down during a night shift.
+  behaviour: Care inside the organization continues; disclosures outside wait.
+  covers:
+  - BR-H31
+  - AC-H31
+- id: EC-H9
+  situation: A patient dies and their executor asks to revoke an authorization for research.
+  behaviour: The executor can revoke it as the patient's estate representative.
+  covers:
+  - BR-H28
+  - BR-H10
+- id: EC-H10
+  situation: A form version changes while a patient is halfway through signing in the portal.
+  behaviour: They sign the version they were shown, which is stored unaltered with the consent.
+  covers:
+  - CON-H2
+  - FR-H1
+- id: EC-H11
+  situation: A patient opts out of text reminders but still wants phone calls.
+  behaviour: The opt-out covers only the channel and purpose chosen.
+  covers:
+  - BR-H27
+- id: EC-H12
+  situation: An authorization ends "at the end of my treatment" and the treatment ends.
+  behaviour: Staff record the event, and the authorization becomes inactive.
+  covers:
+  - BR-H12
+functionalRequirements:
+- id: FR-H1
+  text: The service must record consents of every kind in consent_kinds, validate their required elements, and keep their documents unaltered.
+  priority: must
+  verification: test
+- id: FR-H2
+  text: The service must apply revocation, expiry, refusal and entered in error without deleting any consent.
+  priority: must
+  verification: test
+- id: FR-H3
+  text: The service must answer disclosure checks with permit or deny, basis and obligations, and log every answer.
+  priority: must
+  verification: test
+- id: FR-H4
+  text: The service must handle restriction requests, their decisions and terminations, and requests not to share.
+  priority: must
+  verification: test
+  jurisdiction: us
+- id: FR-H5
+  text: The service must track notices owed and given, with acknowledgments or documented attempts.
+  priority: must
+  verification: test
+- id: FR-H6
+  text: The service must record GDPR consents, EHDS restrictions and opt-outs, and keep EHDS restrictions invisible to health professionals.
+  priority: must
+  verification: test
+  jurisdiction: eu
+- id: FR-H7
+  text: The service must record emergency uses of restricted data for review.
+  priority: must
+  verification: test
+- id: FR-H8
+  text: The service must record informed consent to procedures and whether an advance directive exists.
+  priority: must
+  verification: test
+- id: FR-H9
+  text: The service must record contact opt-outs from any reasonable means and answer the Patients module from them.
+  priority: must
+  verification: test
+- id: FR-H10
+  text: The service must follow patient merges, unmerges, deaths, representative changes and records entered in error.
+  priority: must
+  verification: test
+- id: FR-H11
+  text: The service must keep consent records for their retention and refuse erasure until it ends.
+  priority: must
+  verification: test
+nonFunctionalRequirements:
+- category: security
+  text: Part 2 consents, emergency uses and disclosure checks are readable only by the roles in the access matrix, and every read is logged.
+- category: availability
+  text: Disclosure checks are on the path of every disclosure, so they need high availability; deployments set an SLO, and BR-H31 says what callers do when it is missed.
+- category: compatibility
+  text: Consents map to HL7 FHIR R5 Consent, with categories from the HL7 consent category code system and purposes from HL7 v3 PurposeOfUse.
+- category: portability
+  text: No requirement depends on a particular database, signature product or framework.
+constraints:
+- id: CON-H1
+  text: Consent records are never deleted or overwritten before their retention ends; changes are new revisions with history.
+  rationale: Every past disclosure must be explainable by the consent in force at the time (BR-H23).
+- id: CON-H2
+  text: A signed document is stored unaltered, with a digest that shows it hasn't changed.
+  rationale: A consent is evidence; an altered form proves nothing.
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. Required.
+- name: consent_kinds
+  type: catalogue
+  description: The kinds of consent the organization uses, each with its FHIR category, legal basis, required elements, form versions and whether it can expire. Set by the organization from law; the required elements of HIPAA authorizations and Part 2 consents are fixed by this specification's rules.
+- name: minor_consent_rules
+  type: map
+  description: 'By US state or EU member state: which services a minor may consent to alone, such as SUD treatment, and who must also sign. Varies by place and needs legal advice; unset means a parent or guardian signs for every minor.'
+- name: signature_methods
+  type: map
+  description: Which signature methods each kind accepts, such as wet ink, a portal signature or, in the EU, an advanced or qualified electronic signature.
+- name: consent_required_procedures
+  type: code[]
+  description: The treatments and procedures that need written informed consent. Set by the organization and by law.
+- name: npp_version
+  type: string
+  description: The current version of the Notice of Privacy Practices and its effective date (United States).
+  jurisdiction: us
+- name: care_access_policy
+  type: policy
+  description: 'In the United States, the organization''s written policy under 45 CFR 171.206: which reproductive health information is withheld from which access, exchange or use, and why. Unset means none is withheld.'
+  jurisdiction: us
+- name: privacy_information_deadline
+  type: duration
+  description: In the EU, how soon privacy information is given for data obtained from someone other than the patient. At most one month (GDPR Article 14(3)).
+  jurisdiction: eu
+- name: primary_use_opt_out
+  type: boolean
+  description: In the EU, whether the member state provides the opt-out from access through access services (EHDS Article 10). Default false.
+  jurisdiction: eu
+- name: advance_directive_information_at
+  type: code
+  description: 'When advance directive information is given and the answer recorded, by kind of provider: at inpatient admission for hospitals, before care for home health (42 CFR 489.102(b)).'
+- name: contact_opt_out_deadline
+  type: duration
+  description: How soon a contact opt-out is honoured. At most ten business days in the United States (47 CFR 64.1200(a)(10)); default one business day.
+- name: consent_retention
+  type: duration
+  description: How long consent records are kept. At least six years from creation or last effective date in the United States (45 CFR 164.530(j)(2)); longer where state or member state law requires, which needs legal advice.
+performanceTargets:
+- id: PERF-H1
+  indicator: Disclosure check latency
+  target: Set by each deployment as an SLO
+  measurement: 99th percentile time to answer a disclosure check.
+- id: PERF-H2
+  indicator: Contact opt-outs honoured on time
+  target: 100%
+  measurement: Share of contact opt-outs in effect within contact_opt_out_deadline.
+- id: PERF-H3
+  indicator: Privacy notices given
+  target: 100%
+  measurement: Share of first services with the notice given and an acknowledgment or a documented attempt.
+acceptanceCriteria:
+- id: AC-H1
+  given: a merged-away patient record, and a kind not in consent_kinds
+  when: a consent is recorded for each
+  then: they fail with CONSENT_INVALID_PATIENT and HTTP 422, and CONSENT_INVALID_KIND and HTTP 422; a valid one is created with HTTP 201 and its FHIR category
+  verifies:
+  - BR-H1
+  - FR-H1
+- id: AC-H2
+  given: a signed general consent to treatment
+  when: a records request to an outside lawyer is checked, relying on it
+  then: the answer is deny, because consent to treatment isn't permission to disclose
+  verifies:
+  - BR-H2
+- id: AC-H3
+  given: jurisdiction us and a draft HIPAA authorization with no expiry and no recipient
+  when: it is signed
+  then: it fails with CONSENT_INCOMPLETE and HTTP 422, listing both; completed and signed, it becomes active, consent.activated is emitted and a copy is sent to the patient
+  verifies:
+  - BR-H3
+  - FR-H1
+  jurisdiction: us
+- id: AC-H4
+  given: jurisdiction us, an authorization that expired yesterday and one known to be revoked
+  when: a disclosure relying on each is checked
+  then: both answers are deny with the defect named
+  verifies:
+  - BR-H4
+  - BR-H12
+  jurisdiction: us
+- id: AC-H5
+  given: jurisdiction us
+  when: a psychotherapy notes authorization combined with a general one, and an authorization marked as a condition of treatment, are recorded
+  then: they fail with CONSENT_COMPOUND_NOT_ALLOWED and HTTP 422, and CONSENT_CONDITIONING_NOT_ALLOWED and HTTP 422
+  verifies:
+  - BR-H5
+  jurisdiction: us
+- id: AC-H6
+  given: jurisdiction us and a Part 2 consent for treatment, payment and operations with recipients "my treating providers, health plans, third-party payers, and people helping to operate this program" and expiry none
+  when: it is signed, and another missing the redisclosure statement is signed
+  then: the first becomes active; the second fails with CONSENT_INCOMPLETE and HTTP 422
+  verifies:
+  - BR-H6
+  jurisdiction: us
+- id: AC-H7
+  given: jurisdiction us and a Part 2 consent covering all records
+  when: a disclosure of SUD counseling notes is checked
+  then: the answer is deny until a separate consent for SUD counseling notes is active
+  verifies:
+  - BR-H7
+  jurisdiction: us
+- id: AC-H8
+  given: jurisdiction us and an active Part 2 consent for treatment, payment and operations
+  when: a disclosure to a health plan is checked
+  then: the answer is permit, with the obligation to attach the 42 CFR 2.32 statement and the redisclosure limit for proceedings against the patient
+  verifies:
+  - BR-H8
+  - BR-H23
+  jurisdiction: us
+- id: AC-H9
+  given: jurisdiction us and minor_consent_rules letting a 16-year-old obtain SUD treatment alone in their state
+  when: their parent signs a Part 2 consent for them
+  then: it fails with CONSENT_SIGNER_NOT_AUTHORIZED and HTTP 422; signed by the minor it becomes active
+  verifies:
+  - BR-H9
+  jurisdiction: us
+- id: AC-H10
+  given: a representative whose scope the Patients module records as appointments only
+  when: they sign an authorization, and the patient signs one electronically in the portal
+  then: the first fails with CONSENT_SIGNER_NOT_AUTHORIZED and HTTP 422; the second is accepted
+  verifies:
+  - BR-H10
+- id: AC-H11
+  given: an active HIPAA authorization, a disclosure already made under it, and an EU GDPR consent
+  when: the first is revoked without written evidence, then in the portal, and the GDPR consent is withdrawn with one click
+  then: the first attempt fails with CONSENT_REVOCATION_EVIDENCE_REQUIRED and HTTP 422; the portal revocation makes it inactive, emits consent.revoked and leaves the earlier disclosure standing; the withdrawal works as easily
+  verifies:
+  - BR-H11
+  - FR-H2
+- id: AC-H12
+  given: an authorization expiring on 30 June
+  when: the clock passes the end of 30 June where the patient was
+  then: it becomes inactive and consent.expired is emitted
+  verifies:
+  - BR-H12
+- id: AC-H13
+  given: jurisdiction us and a patient who paid in full for a visit
+  when: they ask not to tell their health plan, and a privacy officer declines
+  then: the decline fails with CONSENT_RESTRICTION_REQUIRED and HTTP 409; agreed, consent.restriction_decided is emitted with self_pay true and disclosure checks to the plan answer deny
+  verifies:
+  - BR-H13
+  - FR-H4
+  jurisdiction: us
+- id: AC-H14
+  given: jurisdiction us, an agreed self-pay restriction and an agreed restriction to family
+  when: the organization terminates each by telling the patient
+  then: the first fails with CONSENT_TERMINATION_NOT_ALLOWED and HTTP 409; the second ends for information created after the patient was told
+  verifies:
+  - BR-H14
+  jurisdiction: us
+- id: AC-H15
+  given: jurisdiction us and a patient's request not to share their EHI with a health information exchange
+  when: it is recorded and an exchange disclosure is checked
+  then: the request is documented and the answer is deny; the same request from another patient is treated the same way
+  verifies:
+  - BR-H15
+  jurisdiction: us
+- id: AC-H16
+  given: jurisdiction us and care_access_policy withholding SEX-labelled information from requests from outside the organization
+  when: such a request is checked, then checked again after the patient records share_despite_risk
+  then: the first answer is deny with basis care_access_policy; the second is permit; no attestation is asked for
+  verifies:
+  - BR-H16
+  jurisdiction: us
+- id: AC-H17
+  given: jurisdiction us and a patient's first visit, and an emergency patient
+  when: the notice is given and the patient declines to sign, and the emergency patient is treated
+  then: the first notice records the attempt and the reason, and an attempt without a reason fails with CONSENT_REASON_REQUIRED and HTTP 422; the emergency patient's notice is due as soon as practicable and consent.notice_due is emitted
+  verifies:
+  - BR-H17
+  - FR-H5
+  jurisdiction: us
+- id: AC-H18
+  given: jurisdiction eu and patient.registered with an informant
+  when: the event arrives
+  then: a privacy information notice is owed within privacy_information_deadline and consent.notice_due is emitted
+  verifies:
+  - BR-H18
+  jurisdiction: eu
+- id: AC-H19
+  given: jurisdiction eu and a patient asked to agree to photographs for teaching
+  when: they agree in the portal
+  then: the consent records the exact text and version, who, when and how, and it is shown apart from other matters
+  verifies:
+  - BR-H19
+  - FR-H6
+  jurisdiction: eu
+- id: AC-H20
+  given: jurisdiction eu and a patient who restricted access to their psychiatric notes
+  when: a nurse's view is checked, then a clinician's access to protect the patient's vital interests is recorded
+  then: the nurse's answer omits the notes without saying they are restricted; the vital-interest access is recorded as an emergency use the patient can see
+  verifies:
+  - BR-H20
+  jurisdiction: eu
+- id: AC-H21
+  given: jurisdiction eu, primary_use_opt_out true
+  when: a patient opts out and later back in
+  then: each emits consent.opt_out_changed and the opt-out is reversed
+  verifies:
+  - BR-H21
+  jurisdiction: eu
+- id: AC-H22
+  given: jurisdiction eu and a data permit approved before a patient's secondary use opt-out and one approved after
+  when: datasets for each are checked
+  then: the earlier permit's processing continues; the later one leaves the patient out; consent.opt_out_changed was emitted
+  verifies:
+  - BR-H22
+  jurisdiction: eu
+- id: AC-H23
+  given: a patient with an active authorization and an agreed restriction covering the same disclosure
+  when: the disclosure is checked, then a use for treatment inside the organization
+  then: the first answer is deny with both consents named as basis; the second is permit with basis law; both are logged with a check id
+  verifies:
+  - BR-H23
+  - FR-H3
+- id: AC-H24
+  given: jurisdiction us and a Part 2 patient unconscious in the emergency department
+  when: a clinician records an emergency use of their SUD records
+  then: it is recorded with the personnel, facility, discloser, time and nature, consent.emergency_use_recorded is emitted, and a record without the nature fails with CONSENT_REASON_REQUIRED and HTTP 422
+  verifies:
+  - BR-H24
+  - FR-H7
+  jurisdiction: us
+- id: AC-H25
+  given: consent_required_procedures including colonoscopy
+  when: a clinician records informed consent without the discussion of risks, then with it
+  then: the first fails with CONSENT_INCOMPLETE and HTTP 422; the second is active with the practitioner named
+  verifies:
+  - BR-H25
+  - FR-H8
+- id: AC-H26
+  given: an adult inpatient
+  when: they say they have a living will and provide it
+  then: the consent summary shows an advance directive on file with its document; booking care for a patient without one is never refused
+  verifies:
+  - BR-H26
+- id: AC-H27
+  given: a patient receiving text reminders
+  when: they reply stop
+  then: a contact opt-out for text reminders is active within contact_opt_out_deadline, consent.opt_out_changed is emitted, and the Patients module is answered from it
+  verifies:
+  - BR-H27
+  - FR-H9
+- id: AC-H28
+  given: two records merged, one with an active authorization and the other with a restriction on the same disclosure
+  when: patient.merged arrives and the disclosure is checked
+  then: both consents are on the remaining record, the answer is deny, and consent.review_needed is emitted
+  verifies:
+  - BR-H28
+  - FR-H10
+- id: AC-H29
+  given: a revoked authorization from three years ago, and a patient asking for erasure
+  when: the request is made
+  then: it is refused while consent_retention applies, and the authorization is still readable
+  verifies:
+  - BR-H29
+  - FR-H11
+  - CON-H1
+- id: AC-H30
+  given: a consent recorded on the wrong patient
+  when: it is marked entered in error without a reason, then with one
+  then: the first fails with CONSENT_REASON_REQUIRED and HTTP 422; then it is entered-in-error, consent.entered_in_error is emitted and checks ignore it
+  verifies:
+  - BR-H30
+- id: AC-H31
+  given: this module unreachable
+  when: a module asks about a treatment use inside the organization and about a disclosure to an insurer
+  then: it allows the treatment use and denies the disclosure until this module answers
+  verifies:
+  - BR-H31
+- id: AC-H32
+  given: a consent at revision 3
+  when: it is changed with revision 2, a client sets status, a create is retried with one key and a different body, an unknown consent is read, and a nurse decides a restriction
+  then: they fail with CONSENT_REVISION_CONFLICT and HTTP 409, CONSENT_READ_ONLY_FIELD and HTTP 422, CONSENT_IDEMPOTENCY_KEY_REUSED and HTTP 422, CONSENT_NOT_FOUND and HTTP 404, and CONSENT_FORBIDDEN and HTTP 403
+  verifies:
+  - BR-H32
+- id: AC-H33
+  given: an active consent
+  when: a draft-only change is made, and a refusal is recorded on it
+  then: both fail with CONSENT_INVALID_STATUS and HTTP 409; a refusal of a draft emits consent.refused
+  verifies:
+  - FR-H2
+- id: AC-H34
+  given: a provision with purpose code XYZ
+  when: it is recorded
+  then: it fails with CONSENT_INVALID_CODE and HTTP 422
+  verifies:
+  - FR-H1
+- id: AC-H35
+  given: the Patients module unreachable
+  when: a consent is recorded
+  then: it fails with CONSENT_DEPENDENCY_UNAVAILABLE and HTTP 503
+  verifies:
+  - FR-H1
+- id: AC-H36
+  given: a signed authorization document
+  when: its stored copy is compared with the digest recorded at signing
+  then: they match, and any change would show
+  verifies:
+  - CON-H2
+operations:
+- name: Record a consent
+  actor: Registrar
+  description: Record a consent, authorization, restriction request, opt-out or advance directive, as a draft or, when complete and signed, active. Accepts a retry key.
+  method: POST
+  path: /consents
+  success: 201
+  input: patient, kind, decision, provisions, period, signatures, document, statements and conditioned
+  output: the consent, with any missing elements listed
+  errors:
+  - CONSENT_INVALID_PATIENT
+  - CONSENT_INVALID_KIND
+  - CONSENT_INCOMPLETE
+  - CONSENT_INVALID_CODE
+  - CONSENT_COMPOUND_NOT_ALLOWED
+  - CONSENT_CONDITIONING_NOT_ALLOWED
+  - CONSENT_SIGNER_NOT_AUTHORIZED
+  - CONSENT_READ_ONLY_FIELD
+  - CONSENT_IDEMPOTENCY_KEY_REUSED
+  - CONSENT_FORBIDDEN
+  - CONSENT_DEPENDENCY_UNAVAILABLE
+- name: Get a consent
+  actor: Registrar
+  description: A consent with its provisions, signatures, document and history.
+  method: GET
+  path: /consents/{id}
+  success: 200
+  input: consent id
+  output: the consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_FORBIDDEN
+- name: Search consents
+  actor: Registrar
+  description: A patient's consents by kind and status.
+  method: GET
+  path: /consents
+  success: 200
+  input: patient, kind, status, limit and cursor
+  output: consents and next_cursor
+  errors:
+  - CONSENT_FORBIDDEN
+- name: Change a draft
+  actor: Registrar
+  description: Change a draft consent before it is signed.
+  method: PATCH
+  path: /consents/{id}
+  success: 200
+  input: the fields to change and revision
+  output: the consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_INCOMPLETE
+  - CONSENT_INVALID_CODE
+  - CONSENT_READ_ONLY_FIELD
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+- name: Sign a consent
+  actor: Patient
+  description: Add a signature; a complete consent becomes active and consent.activated is emitted.
+  method: POST
+  path: /consents/{id}/signatures
+  success: 200
+  input: signer, their role and authority, method, and revision
+  output: the consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_INCOMPLETE
+  - CONSENT_SIGNER_NOT_AUTHORIZED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+  - CONSENT_DEPENDENCY_UNAVAILABLE
+- name: Revoke a consent
+  actor: Patient
+  description: Revoke an active consent from the moment the revocation is received.
+  method: POST
+  path: /consents/{id}/revocation
+  success: 200
+  input: who revokes, how, written evidence where required, and revision
+  output: the inactive consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_SIGNER_NOT_AUTHORIZED
+  - CONSENT_REVOCATION_EVIDENCE_REQUIRED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+- name: Record a refusal
+  actor: Registrar
+  description: Record that the patient refused a draft consent.
+  method: POST
+  path: /consents/{id}/refusal
+  success: 200
+  input: reason and revision
+  output: the consent, not-done
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+- name: Mark entered in error
+  actor: Registrar
+  description: Mark a consent recorded on the wrong patient or twice.
+  method: POST
+  path: /consents/{id}/entered-in-error
+  success: 200
+  input: reason and revision
+  output: the consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+- name: Decide a restriction request
+  actor: Privacy officer
+  description: Agree to or decline a restriction request.
+  method: POST
+  path: /consents/{id}/decision
+  success: 200
+  input: agreed or declined, reason and revision
+  output: the consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_RESTRICTION_REQUIRED
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+  jurisdiction: us
+- name: Terminate a restriction
+  actor: Privacy officer
+  description: End an agreed restriction, as BR-H14 allows.
+  method: POST
+  path: /consents/{id}/termination
+  success: 200
+  input: how it ends (patient's written or documented oral agreement, or notice to the patient), and revision
+  output: the consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_TERMINATION_NOT_ALLOWED
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+  jurisdiction: us
+- name: Check a use or disclosure
+  actor: System
+  description: Answer whether a use or disclosure is allowed, with its basis and obligations, and log the answer.
+  method: POST
+  path: /disclosure-checks
+  success: 200
+  input: patient, data labels, categories or records, purpose, requester and recipient
+  output: permit or deny, basis, obligations and the check id
+  errors:
+  - CONSENT_INVALID_PATIENT
+  - CONSENT_INVALID_CODE
+  - CONSENT_FORBIDDEN
+  - CONSENT_DEPENDENCY_UNAVAILABLE
+- name: Record an emergency use
+  actor: Clinician
+  description: Record that restricted data was used or disclosed in an emergency.
+  method: POST
+  path: /emergency-uses
+  success: 201
+  input: patient, data, personnel and facility, nature of the emergency, and the request not to redisclose
+  output: the emergency use
+  errors:
+  - CONSENT_INVALID_PATIENT
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_FORBIDDEN
+- name: List notices
+  actor: Registrar
+  description: Notices given to or owed to a patient.
+  method: GET
+  path: /patients/{patient_id}/notices
+  success: 200
+  input: patient
+  output: notices with due dates and acknowledgments
+  errors:
+  - CONSENT_INVALID_PATIENT
+  - CONSENT_FORBIDDEN
+- name: Record a notice acknowledgment
+  actor: Registrar
+  description: Record a notice as given, with the acknowledgment or the good-faith attempt and why it wasn't obtained.
+  method: POST
+  path: /notices/{id}/acknowledgment
+  success: 200
+  input: given_at, how, and acknowledgment or attempt with reason
+  output: the notice
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_FORBIDDEN
+- name: List contact opt-outs
+  actor: System
+  description: The channels and purposes a patient opted out of.
+  method: GET
+  path: /patients/{patient_id}/contact-opt-outs
+  success: 200
+  input: patient
+  output: opt-outs with channel, purpose and when
+  errors:
+  - CONSENT_INVALID_PATIENT
+  - CONSENT_FORBIDDEN
+- name: Get a consent summary
+  actor: Clinician
+  description: 'What a clinician needs at the point of care: whether an advance directive is on file and its document, and the informed consents for upcoming procedures. Restrictions a patient made under EHDS Article 8 are never shown.'
+  method: GET
+  path: /patients/{patient_id}/consent-summary
+  success: 200
+  input: patient
+  output: the summary
+  errors:
+  - CONSENT_INVALID_PATIENT
+  - CONSENT_FORBIDDEN
+apiConventions:
+- topic: Authentication
+  text: Callers authenticate through the Identity and access module and every operation checks the permission in the access matrix.
+- topic: Errors
+  text: Errors use problem details (application/problem+json) with a code member, such as CONSENT_INCOMPLETE; a validation error lists every failing field.
+  reference: RFC 9457
+- topic: Pagination
+  text: 'Lists are cursor-based: limit and an optional cursor in, next_cursor out.'
+- topic: Concurrency
+  text: Every change sends the revision it read; a stale revision fails with CONSENT_REVISION_CONFLICT (BR-H32).
+- topic: Retries
+  text: Every create accepts an Idempotency-Key header.
+  reference: IETF draft-ietf-httpapi-idempotency-key-header
+- topic: Dates
+  text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
+  reference: ISO 8601
+- topic: Times
+  text: Instants are RFC 3339 timestamps with an offset, stored in UTC; time zones are IANA names.
+  reference: RFC 3339
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
+- topic: Rate limits
+  text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
+  reference: RFC 6585, RFC 9110
+- topic: Versioning
+  text: Additive changes don't change the version. A breaking change ships as a new major version with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
+- topic: FHIR
+  text: Consents are exchanged as FHIR R5 Consent resources, with status, decision, provisions, grantor and verification.
+  reference: HL7 FHIR R5 Consent
+events:
+- name: consent.activated
+  description: A consent became active.
+  payload:
+  - consent_id
+  - patient_id
+  - kind
+  - decision
+  - revision
+- name: consent.revoked
+  description: A consent was revoked.
+  payload:
+  - consent_id
+  - patient_id
+  - kind
+  - revision
+- name: consent.expired
+  description: A consent reached its expiry.
+  payload:
+  - consent_id
+  - patient_id
+  - kind
+  - revision
+- name: consent.refused
+  description: The patient refused, or a restriction request was declined.
+  payload:
+  - consent_id
+  - patient_id
+  - kind
+  - revision
+- name: consent.entered_in_error
+  description: A consent was marked entered in error.
+  payload:
+  - consent_id
+  - patient_id
+  - kind
+  - revision
+- name: consent.restriction_decided
+  description: A restriction request was agreed or declined, or a restriction terminated.
+  payload:
+  - consent_id
+  - patient_id
+  - decision
+  - self_pay
+  - revision
+  jurisdiction: us
+- name: consent.notice_due
+  description: A notice is owed to a patient.
+  payload:
+  - notice_id
+  - patient_id
+  - kind
+  - due_by
+- name: consent.emergency_use_recorded
+  description: Restricted data was used or disclosed in an emergency.
+  payload:
+  - emergency_use_id
+  - patient_id
+  - used_at
+- name: consent.opt_out_changed
+  description: A patient opted out of, or back into, a contact channel or, in the EU, primary or secondary use.
+  payload:
+  - consent_id
+  - patient_id
+  - kind
+  - opted_out
+  - revision
+- name: consent.review_needed
+  description: Consents need a person to check them after a merge, an unmerge, a record entered in error or a representative's authority ending.
+  payload:
+  - patient_id
+  - consent_ids
+  - reason
+deliveryGuarantees:
+- id: DG-H1
+  text: Events are published at least once; consumers drop one with a source and id they have seen.
+  rationale: A relay can publish twice after a crash.
+- id: DG-H2
+  text: Events about one consent can arrive out of order; each carries its revision, and consumers ignore a lower one. Notice, emergency use and review events carry their time instead.
+  rationale: A revoked consent overtaken by an older activation would let a disclosure through.
+- id: DG-H3
+  text: Events carry ids, kinds and decisions, never the consent document, its provisions or the data it covers.
+  rationale: A Part 2 consent shows that a patient is in SUD treatment; events fan out widely.
+permissions:
+- name: consent.read
+  description: Read a patient's consents and notices.
+- name: consent.record
+  description: Record, change, refuse and mark consents and notices.
+- name: consent.decide
+  description: Decide and terminate restriction requests, and review emergency uses.
+- name: consent.self
+  description: Read, sign and revoke your own consents, and opt out.
+- name: consent.check
+  description: Ask whether a use or disclosure is allowed.
+- name: consent.emergency
+  description: Record an emergency use of restricted data.
+accessMatrix:
+- action: Record, change, refuse or mark a consent; record a notice acknowledgment
+  roles:
+    Registrar: any
+    Clinician: any
+    Privacy officer: any
+    Patient: none
+    System: none
+  permission: consent.record
+  note: Clinicians record informed consent and advance directives.
+- action: Read consents, notices and the consent summary
+  roles:
+    Registrar: any
+    Clinician: any
+    Privacy officer: any
+    Patient: own
+    System: none
+  permission: consent.read
+- action: Sign, revoke or opt out
+  roles:
+    Registrar: none
+    Clinician: none
+    Privacy officer: none
+    Patient: own
+    System: none
+  permission: consent.self
+  note: Staff record a paper signature or revocation on the patient's behalf with consent.record.
+- action: Decide or terminate a restriction
+  roles:
+    Registrar: none
+    Clinician: none
+    Privacy officer: any
+    Patient: none
+    System: none
+  permission: consent.decide
+- action: Check a use or disclosure; list contact opt-outs
+  roles:
+    Registrar: none
+    Clinician: none
+    Privacy officer: none
+    Patient: none
+    System: any
+  permission: consent.check
+- action: Record an emergency use
+  roles:
+    Registrar: none
+    Clinician: any
+    Privacy officer: any
+    Patient: none
+    System: none
+  permission: consent.emergency
+personalData:
+- field: consent.patient_id, consent.kind, consent.status, consent.decision, consent.provisions, consent.period, consent.statements, consent.conditioned, consent.request_decision, consent.status_reason, consent.revision
+  category: health data; a Part 2 consent reveals SUD treatment
+  purpose: Showing what the patient agreed to and deciding uses and disclosures
+  retention: consent_retention
+- field: consent.signatures, consent.document, consent.revocation
+  category: personal and health data, with signatures
+  purpose: Proving the consent and its revocation were valid
+  retention: consent_retention
+- field: consent.procedure, consent.channel
+  category: health data
+  purpose: Informed consent to care, and the patient's contact choices
+  retention: consent_retention
+- field: notice.id, notice.kind, notice.version, notice.given_at, notice.acknowledgment, notice.due_by
+  category: personal
+  purpose: Proving notices were given
+  retention: consent_retention
+- field: emergency_use.id, emergency_use.details
+  category: health data
+  purpose: Documenting emergency use of restricted data
+  retention: consent_retention
+- field: consent.id, check.id
+  category: health data; names the patient, data and recipient
+  purpose: Showing what each use or disclosure relied on
+  retention: consent_retention
+errors:
+- code: CONSENT_NOT_FOUND
+  http: 404
+  message: No consent or notice exists with that id.
+- code: CONSENT_FORBIDDEN
+  http: 403
+  message: Your role doesn't allow this.
+- code: CONSENT_INVALID_PATIENT
+  http: 422
+  message: That patient record doesn't exist or isn't in use.
+- code: CONSENT_INVALID_KIND
+  http: 422
+  message: That kind of consent isn't used here.
+- code: CONSENT_INCOMPLETE
+  http: 422
+  message: Required elements are missing; each is listed.
+- code: CONSENT_INVALID_CODE
+  http: 422
+  message: A purpose, action or label isn't a valid code.
+- code: CONSENT_COMPOUND_NOT_ALLOWED
+  http: 422
+  message: This authorization or consent can't be combined with the other one.
+- code: CONSENT_CONDITIONING_NOT_ALLOWED
+  http: 422
+  message: Care or payment can't be made conditional on this.
+- code: CONSENT_SIGNER_NOT_AUTHORIZED
+  http: 422
+  message: This person can't sign or revoke for the patient.
+- code: CONSENT_REVOCATION_EVIDENCE_REQUIRED
+  http: 422
+  message: This revocation must be in writing.
+- code: CONSENT_RESTRICTION_REQUIRED
+  http: 409
+  message: A self-pay restriction to a health plan must be agreed.
+- code: CONSENT_TERMINATION_NOT_ALLOWED
+  http: 409
+  message: This restriction can't be ended that way.
+- code: CONSENT_INVALID_STATUS
+  http: 409
+  message: The consent or notice isn't in a status that allows this.
+- code: CONSENT_REASON_REQUIRED
+  http: 422
+  message: This needs a reason.
+- code: CONSENT_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service.
+- code: CONSENT_REVISION_CONFLICT
+  http: 409
+  message: It changed since you read it. Read it again.
+- code: CONSENT_IDEMPOTENCY_KEY_REUSED
+  http: 422
+  message: That retry key was used with a different request.
+- code: CONSENT_DEPENDENCY_UNAVAILABLE
+  http: 503
+  message: The Patients module can't be reached. Try again.
+dependencies:
+- service: patient-service
+  direction: upstream
+  reason: owns patients and who may act for them
+  criticality: hard
+  contract:
+  - 'Asks: is this patient record in use, is the patient alive, and how old are they?'
+  - 'Asks: may this person act for this patient, with which scope?'
+  - 'Asks: is this patient under legal hold?'
+  - 'Receives: patient.registered (with informant), patient.merged, patient.unmerged, patient.deceased, patient.representative_changed and patient.entered_in_error'
+  - 'Answers: has the patient opted out of this contact channel?'
+- service: identity-service
+  direction: upstream
+  reason: authenticates callers
+  criticality: hard
+  contract:
+  - 'Asks: who is the caller, and do they hold this permission?'
+  - 'Receives: identity.break_glass_used, so emergency access to restricted data is recorded as an emergency use'
+- service: encounter-service
+  direction: upstream
+  reason: labels encounters
+  criticality: soft
+  contract:
+  - 'Asks: the sensitivity codes of an encounter'
+  - 'Receives: encounter.restriction_changed'
+- service: clinical-documentation-service
+  direction: upstream
+  reason: labels notes
+  criticality: soft
+  contract:
+  - 'Asks: the sensitivity codes of a note, and whether it is kept apart from the record'
+- service: organization-service
+  direction: upstream
+  reason: owns departments
+  criticality: soft
+  contract:
+  - 'Asks: which departments are Part 2 programs?'
+  - Departments are Organization's concern
+- service: terminology-service
+  direction: upstream
+  reason: validates codes
+  criticality: soft
+  contract:
+  - 'Asks: is this purpose, action or sensitivity code valid?'
+- service: clinical-modules
+  direction: downstream
+  reason: every module that uses or discloses patient data
+  criticality: hard
+  contract:
+  - 'Answers: may this data be used or disclosed, for this purpose, to this recipient, with which obligations?'
+  - 'Gives: consent.activated, consent.revoked, consent.expired, consent.refused and consent.entered_in_error'
+  - What each module does with an answer is its own concern
+- service: release-of-information-service
+  direction: downstream
+  reason: releases copies of records
+  criticality: soft
+  contract:
+  - 'Answers: disclosure checks, with the 42 CFR 2.32 statement to attach when Part 2 records go out'
+  - 'Gives: consent.emergency_use_recorded, for the accounting of disclosures'
+- service: billing-service
+  direction: downstream
+  reason: bills health plans
+  criticality: soft
+  contract:
+  - 'Gives: consent.restriction_decided, so services under a self-pay restriction aren''t billed to the health plan'
+- service: exchange-service
+  direction: downstream
+  reason: exchanges data with other organizations
+  criticality: soft
+  contract:
+  - 'Gives: consent.opt_out_changed and requests not to share, so exchange and secondary use honour them'
+- service: notification-service
+  direction: downstream
+  reason: sends messages
+  criticality: soft
+  contract:
+  - 'Gives: consent.notice_due, so notices are delivered'
+  - 'Gives: consent.review_needed, for privacy officers'
+  - 'Gives: a copy of each signed authorization for the patient'
+risks:
+- id: RISK-H1
+  risk: A disclosure relies on a consent that was already revoked.
+  impact: Unlawful disclosure of health data.
+  mitigation: Every disclosure is checked at the moment it happens, and events carry revisions (BR-H23, DG-H2).
+- id: RISK-H2
+  risk: Restricted data is withheld in an emergency.
+  impact: Harm to the patient.
+  mitigation: Emergency use is allowed and recorded (BR-H24), and treatment use continues during outages (BR-H31).
+- id: RISK-H3
+  risk: An EU restriction becomes visible through a hint such as "data hidden".
+  impact: Breach of EHDS Article 8 and of the patient's trust.
+  mitigation: Checks for health professionals answer as if restricted data weren't there (BR-H20).
+  jurisdiction: eu
+decisions:
+- id: ADR-H1
+  decision: Consent starts at the healthcare level, with an EHR layer for hospital consent rules.
+  rationale: Every kind of health application records consents and must answer disclosure questions; a core page waits until a second industry needs it.
+  date: '2026-10-10'
+- id: ADR-H2
+  decision: Modules ask disclosure questions; they never read consent forms.
+  rationale: One evaluation in one place gives the same answer everywhere and a log of what each disclosure relied on.
+  date: '2026-10-10'
+- id: ADR-H3
+  decision: The 2024 HIPAA reproductive health attestation (45 CFR 164.509) is not implemented, although eCFR still prints it.
+  rationale: It was vacated nationwide in Purl v. HHS on 18 June 2025, and the Fifth Circuit dismissed the appeal on 10 September 2025; reproductive health information is protected through 45 CFR 171.206 instead (BR-H16).
+  date: '2026-10-10'
+  jurisdiction: us
+openQuestions: []
+references:
+- id: REF-H1
+  title: 45 CFR 164.508, Uses and disclosures for which an authorization is required
+  url: https://www.ecfr.gov/current/title-45/section-164.508
+  note: Core elements, defects, compound authorizations, conditioning and revocation.
+- id: REF-H2
+  title: 45 CFR 164.522, Rights to request privacy protection
+  url: https://www.ecfr.gov/current/title-45/section-164.522
+  note: Restrictions, the self-pay restriction and termination.
+- id: REF-H3
+  title: 45 CFR 164.520, Notice of privacy practices
+  url: https://www.ecfr.gov/current/title-45/section-164.520
+  note: (c)(2), acknowledgment of the notice.
+- id: REF-H4
+  title: 42 CFR part 2, Confidentiality of substance use disorder patient records
+  url: https://www.ecfr.gov/current/title-42/part-2
+  note: 2.14 minors, 2.22 notice, 2.31 consent, 2.32 notice with disclosures, 2.33 redisclosure, 2.51 emergencies.
+- id: REF-H5
+  title: Confidentiality of Substance Use Disorder Patient Records, final rule (89 FR 12472)
+  url: https://www.federalregister.gov/documents/2024/02/16/2024-02544/confidentiality-of-substance-use-disorder-sud-patient-records
+  note: Compliance required by 16 February 2026.
+- id: REF-H6
+  title: 45 CFR 171.202 and 171.206, Privacy and Protecting Care Access exceptions
+  url: https://www.ecfr.gov/current/title-45/part-171
+  note: A patient's request not to share, and withholding to reduce exposure to legal action.
+- id: REF-H7
+  title: Fifth Circuit dismisses the appeal in Purl v. HHS (American Bar Association)
+  url: https://www.americanbar.org/groups/health_law/news/2025/signaling-end-purl-case/
+  note: The 2024 reproductive health privacy rule, including the attestation, stays vacated.
+- id: REF-H8
+  title: 42 CFR 482.13 and 489.102, Patient rights and advance directives
+  url: https://www.ecfr.gov/current/title-42/section-489.102
+  note: Informed decisions, advance directive information and documentation.
+- id: REF-H9
+  title: 47 CFR 64.1200, Delivery restrictions (TCPA)
+  url: https://www.ecfr.gov/current/title-47/section-64.1200
+  note: (a)(10), revoking consent by any reasonable means within ten business days.
+- id: REF-H10
+  title: 45 CFR 164.530, Administrative requirements
+  url: https://www.ecfr.gov/current/title-45/section-164.530
+  note: (j)(2), six-year retention of documentation.
+- id: REF-H11
+  title: Regulation (EU) 2016/679 (GDPR)
+  url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
+  note: Articles 7, 9(2), 13, 14 and 17(3).
+- id: REF-H12
+  title: Regulation (EU) 2025/327, European Health Data Space
+  url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
+  note: Articles 8, 10, 11(5), 71 and 105.
+- id: REF-H13
+  title: Regulation (EU) No 910/2014 (eIDAS)
+  url: https://eur-lex.europa.eu/eli/reg/2014/910/oj/eng
+  note: Article 25, legal effect of electronic signatures.
+- id: REF-H14
+  title: 15 U.S.C. 7001, Electronic Signatures in Global and National Commerce Act
+  url: https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section7001&num=0&edition=prelim
+  note: Legal effect of electronic signatures and records.
+- id: REF-H15
+  title: HL7 FHIR R5 Consent
+  url: https://hl7.org/fhir/R5/consent.html
+  note: Status, decision, provisions, grantor and verification.
+- id: REF-H16
+  title: HL7 Terminology, consent category codes
+  url: https://terminology.hl7.org/CodeSystem-consentcategorycodes.html
+  note: acd, dnr, emrgonly, hcd, npp, polst, research.
+changelog:
+- version: 0.1.0
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'First draft: consent to care and procedures, HIPAA authorizations, 42 CFR Part 2 consents, restrictions, requests not to share, Protecting Care Access, notices, GDPR consent, EHDS restrictions and opt-outs, advance directives, contact opt-outs, disclosure checks and emergency use.'
+acronyms:
+- term: EHI
+  definition: Electronic health information
+- term: NPP
+  definition: Notice of Privacy Practices
+- term: SUD
+  definition: Substance use disorder
+- term: TPO
+  definition: Treatment, payment and health care operations
+- term: TCPA
+  definition: Telephone Consumer Protection Act
+- term: POLST
+  definition: Physician orders for life-sustaining treatment
+tables:
+- name: consents
+  description: One row per consent, with its kind, status and decision.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: kind
+    type: text
+  - name: status
+    type: text
+    default: '''draft'''
+  - name: decision
+    type: text
+  - name: period
+    type: tstzrange
+    nullable: true
+  - name: expiry_event
+    type: text
+    nullable: true
+  - name: statements
+    type: text[]
+    default: '''{}'''
+  - name: conditioned
+    type: jsonb
+    nullable: true
+  - name: request_decision
+    type: jsonb
+    nullable: true
+  - name: revocation
+    type: jsonb
+    nullable: true
+  - name: procedure
+    type: jsonb
+    nullable: true
+  - name: channel
+    type: jsonb
+    nullable: true
+  - name: status_reason
+    type: text
+    nullable: true
+  - name: revision
+    type: integer
+    default: '0'
+  indexes:
+  - name: consents_patient
+    definition: CREATE INDEX ON consents (patient_id, status)
+  constraints:
+  - name: consents_pkey
+    definition: PRIMARY KEY (id)
+- name: consent_provisions
+  description: Provisions of a consent, nested by parent.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: consent_id
+    type: uuid
+  - name: parent_id
+    type: uuid
+    nullable: true
+  - name: decision
+    type: text
+    nullable: true
+  - name: purposes
+    type: text[]
+  - name: labels
+    type: text[]
+  - name: data_refs
+    type: text[]
+  - name: actors
+    type: jsonb
+  - name: period
+    type: tstzrange
+    nullable: true
+  indexes: []
+  constraints: []
+- name: consent_signatures
+  description: Signatures, with role, authority and method.
+  columns:
+  - name: consent_id
+    type: uuid
+  - name: signer
+    type: jsonb
+  - name: role
+    type: text
+  - name: authority
+    type: text
+    nullable: true
+  - name: method
+    type: text
+  - name: signed_at
+    type: timestamptz
+  indexes: []
+  constraints: []
+- name: consent_documents
+  description: Signed documents, stored unaltered with a digest.
+  columns:
+  - name: consent_id
+    type: uuid
+  - name: form_version
+    type: text
+  - name: content
+    type: bytea
+  - name: sha256
+    type: bytea
+  indexes: []
+  constraints: []
+- name: notices
+  description: Notices owed and given.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: kind
+    type: text
+  - name: version
+    type: text
+  - name: due_by
+    type: timestamptz
+    nullable: true
+  - name: given_at
+    type: timestamptz
+    nullable: true
+  - name: acknowledgment
+    type: jsonb
+    nullable: true
+  indexes: []
+  constraints:
+  - name: notices_pkey
+    definition: PRIMARY KEY (id)
+- name: emergency_uses
+  description: Emergency uses of restricted data.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: details
+    type: jsonb
+  - name: used_at
+    type: timestamptz
+  - name: review
+    type: jsonb
+    nullable: true
+  indexes: []
+  constraints:
+  - name: emergency_uses_pkey
+    definition: PRIMARY KEY (id)
+- name: disclosure_checks
+  description: Every check and its answer. Append-only.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: request
+    type: jsonb
+  - name: answer
+    type: text
+  - name: basis
+    type: jsonb
+  - name: obligations
+    type: jsonb
+  - name: at
+    type: timestamptz
+    default: now()
+  indexes:
+  - name: checks_patient
+    definition: CREATE INDEX ON disclosure_checks (patient_id, at)
+  constraints: []
+technicalNotes:
+- id: TN-H1
+  title: Evaluate deny first
+  text: Collect the active consents whose provisions match the patient, data labels, purpose and recipient; if any deny matches and no law requires the disclosure, answer deny; otherwise permit if a permit or the law allows it. Nested provisions are exceptions to their parent. Return every consent used, for the log.
+- id: TN-H2
+  title: Hide EU restrictions without a trace
+  text: For health professionals, filter restricted data before building any response, and never return a count, flag or empty section that reveals something was removed (EHDS Article 8).
+compliance:
+- id: CMP-H1
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.508
+  obligation: Valid authorizations with core elements and statements, no invalid compound or conditioned authorizations, and written revocation.
+  how: Validation of required elements and defects, and revocation.
+  status: met
+  covered_by:
+  - BR-H3
+  - BR-H4
+  - BR-H5
+  - BR-H11
+  jurisdiction: us
+- id: CMP-H2
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.506(b)
+  obligation: A consent for treatment, payment and operations never stands in for an authorization.
+  how: Consent to care and permission to disclose are separate.
+  status: met
+  covered_by:
+  - BR-H2
+  jurisdiction: us
+- id: CMP-H3
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.522(a)
+  obligation: Accept restriction requests, agree to self-pay restrictions, honour agreed ones, and terminate only as allowed.
+  how: Restriction requests, decisions and terminations.
+  status: met
+  covered_by:
+  - BR-H13
+  - BR-H14
+  jurisdiction: us
+- id: CMP-H4
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.520(c)(2)
+  obligation: Give the notice by first service and seek a written acknowledgment.
+  how: Notices with acknowledgments or documented attempts.
+  status: met
+  covered_by:
+  - BR-H17
+  jurisdiction: us
+- id: CMP-H5
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.530(j)
+  obligation: Keep documentation six years.
+  how: consent_retention.
+  status: met
+  covered_by:
+  - BR-H29
+  jurisdiction: us
+- id: CMP-H6
+  regulation: 42 CFR Part 2
+  provision: 42 CFR 2.14, 2.22, 2.31, 2.32, 2.33 and 2.51
+  obligation: Valid consents, minors' consent, patient notice, the statement with each disclosure, redisclosure limits and emergency disclosure records.
+  how: Part 2 consent validation, obligations in check answers, notices and emergency uses.
+  status: met
+  covered_by:
+  - BR-H6
+  - BR-H7
+  - BR-H8
+  - BR-H9
+  - BR-H17
+  - BR-H24
+  jurisdiction: us
+- id: CMP-H7
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.202(e) and 171.206
+  obligation: Honour a patient's request not to share, and withhold reproductive health information only under a tailored written policy the patient can override.
+  how: Requests not to share and care_access_policy.
+  status: met
+  covered_by:
+  - BR-H15
+  - BR-H16
+  jurisdiction: us
+- id: CMP-H8
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.13(b) and 489.102
+  obligation: Informed decisions about care, and advance directive information and documentation without conditioning care.
+  how: Informed consent and advance directives.
+  status: met
+  covered_by:
+  - BR-H25
+  - BR-H26
+  jurisdiction: us
+- id: CMP-H9
+  regulation: Telephone Consumer Protection Act
+  provision: 47 CFR 64.1200(a)(10)
+  obligation: Honour revocation of consent to calls and texts made by any reasonable means within ten business days.
+  how: Contact opt-outs.
+  status: met
+  covered_by:
+  - BR-H27
+  jurisdiction: us
+- id: CMP-H10
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 7 and 9(2)(a)
+  obligation: Demonstrable, distinguishable, explicit, freely given consent that can be withdrawn as easily.
+  how: GDPR consent records and withdrawal.
+  status: met
+  covered_by:
+  - BR-H19
+  - BR-H11
+  - BR-H2
+  jurisdiction: eu
+- id: CMP-H11
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 13 and 14
+  obligation: Give privacy information at collection, or within one month when data comes from someone else.
+  how: Privacy information notices.
+  status: met
+  covered_by:
+  - BR-H18
+  jurisdiction: eu
+- id: CMP-H12
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17
+  obligation: Erase on request except where 17(3) applies.
+  how: Erasure waits for retention.
+  status: met
+  covered_by:
+  - BR-H29
+  jurisdiction: eu
+- id: CMP-H13
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Articles 8, 10, 11(5) and 71
+  obligation: Restrictions invisible to providers, reversible opt-outs from primary and secondary use, and logged vital-interest access. Apply from 26 March 2029.
+  how: EHDS restrictions and opt-outs, and emergency uses.
+  status: met
+  covered_by:
+  - BR-H20
+  - BR-H21
+  - BR-H22
+  - BR-H24
+  jurisdiction: eu
+- id: CMP-H14
+  regulation: eIDAS Regulation (EU) No 910/2014
+  provision: Article 25
+  obligation: Accept electronic signatures.
+  how: signature_methods.
+  status: met
+  covered_by:
+  - BR-H10
+  jurisdiction: eu
+---
+
+Every time a module shares or shows a patient's data, there is a question
+behind it: may it? This module records what patients have agreed to, refused
+or restricted, proves each decision was made validly, and answers that
+question for every other module.
+
+## Consent to care isn't permission to share
+
+A patient who agrees to a colonoscopy hasn't agreed to their results going to
+an employer. The two are separate records, and one never stands in for the
+other (BR-H2).
+
+## Modules ask, they never read forms
+
+A module about to disclose data asks whether it may, for this purpose, to this
+recipient, and gets permit or deny with the reason and what must go with the
+data (BR-H23). One answer in one place means the same decision everywhere, and
+a log of what every disclosure relied on.
+
+## Emergencies override restrictions, on the record
+
+A restriction must never stop emergency care. Restricted data can be used in an
+emergency, and every such use is recorded and reviewed (BR-H24).
+
+## In the European Union, a restriction leaves no trace
+
+When a patient restricts health professionals' access, the restricted data
+simply isn't there for them, with no hint it was hidden (BR-H20).

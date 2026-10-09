@@ -1,0 +1,114 @@
+---
+title: Consent
+description: 'Hospital consent rules: informed consent in the chart before surgery, procedures the medical staff require written consent for, and advance directives at inpatient admission, built on the healthcare consent rules.'
+module: consent
+version: 0.1.0
+status: draft
+industry: healthcare
+domain: ehr
+extends: healthcare/consent
+purpose: 'Add what a hospital needs to the healthcare consent rules: consent before surgery, the medical staff''s list of procedures that need written consent, and advance directive information when a patient is admitted.'
+scope:
+- Informed consent in the chart before surgery
+- The medical staff's list of procedures needing written consent
+- Advance directive information at inpatient admission
+nonGoals:
+- Scheduling operations and the surgical checklist. A Theatre module owns them and asks this module whether consent is on file.
+businessRules:
+- id: BR-E1
+  text: In the United States, an operation doesn't start until a properly executed informed consent for it is in the patient's record, except in an emergency, where the clinician records why there was none.
+  rationale: Hospitals must have a properly executed informed consent form for the operation in the chart before surgery, except in emergencies (42 CFR 482.51(b)(2)).
+  jurisdiction: us
+- id: BR-E2
+  text: In the United States, the procedures and treatments that need written consent are those the medical staff specify, or federal or state law requires, and each one's properly executed form is kept in the record.
+  rationale: The medical record must contain properly executed informed consent forms for procedures and treatments the medical staff, or law, specify (42 CFR 482.24(c)(4)(v)).
+  jurisdiction: us
+- id: BR-E3
+  text: In the United States, an adult admitted as an inpatient is given advance directive information at admission, and whether they have executed one is recorded.
+  rationale: Hospitals furnish the information at the time of inpatient admission (42 CFR 489.102(b)(1)).
+  jurisdiction: us
+edgeCases:
+- id: EC-E1
+  situation: A patient signed consent for a left knee replacement and is scheduled for the right.
+  behaviour: No consent for the right knee is on file, so the operation waits until one is.
+  covers:
+  - BR-E1
+  - AC-E1
+  jurisdiction: us
+settings:
+- name: consent_required_procedures
+  type: code[]
+  description: The treatments and procedures that need written informed consent, as the medical staff specify in their rules and as federal or state law requires (42 CFR 482.24(c)(4)(v)).
+- name: advance_directive_information_at
+  type: code
+  description: Inpatient admission (42 CFR 489.102(b)(1)).
+acceptanceCriteria:
+- id: AC-E1
+  given: jurisdiction us and a patient booked for a cholecystectomy with no consent on file
+  when: the theatre asks whether consent is on file, then an emergency laparotomy is recorded without one
+  then: the answer is no, so the operation waits; the emergency is recorded with the clinician's reason
+  verifies:
+  - BR-E1
+  jurisdiction: us
+- id: AC-E2
+  given: jurisdiction us and consent_required_procedures from the medical staff rules including blood transfusion
+  when: a transfusion is consented with a signed form
+  then: the properly executed form is kept in the record with the consent
+  verifies:
+  - BR-E2
+  jurisdiction: us
+- id: AC-E3
+  given: jurisdiction us and an adult admitted as an inpatient
+  when: admission completes
+  then: advance directive information was given and whether they have one is recorded
+  verifies:
+  - BR-E3
+  jurisdiction: us
+dependencies:
+- service: theatre-service
+  direction: downstream
+  reason: schedules operations
+  criticality: soft
+  contract:
+  - 'Answers: is a properly executed informed consent for this operation, on this patient, on file?'
+decisions:
+- id: ADR-E1
+  decision: The theatre asks whether consent is on file; this module doesn't schedule or stop operations.
+  rationale: Consent is this module's fact; whether an operation starts is the theatre's decision, made from that fact.
+  date: '2026-10-10'
+references:
+- id: REF-E1
+  title: '42 CFR 482.51, Condition of participation: Surgical services'
+  url: https://www.ecfr.gov/current/title-42/section-482.51
+  note: (b)(2), informed consent in the chart before surgery.
+- id: REF-E2
+  title: '42 CFR 482.24, Condition of participation: Medical record services'
+  url: https://www.ecfr.gov/current/title-42/section-482.24
+  note: (c)(4)(v), properly executed informed consent forms.
+changelog:
+- version: 0.1.0
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'First draft: consent before surgery, the medical staff''s list of procedures needing written consent, and advance directives at inpatient admission.'
+compliance:
+- id: CMP-E1
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.51(b)(2), 482.24(c)(4)(v) and 489.102(b)(1)
+  obligation: Informed consent in the chart before surgery, consent forms for specified procedures, and advance directive information at inpatient admission.
+  how: Hospital consent rules.
+  status: met
+  covered_by:
+  - BR-E1
+  - BR-E2
+  - BR-E3
+  jurisdiction: us
+---
+
+Hospital consent builds on the [healthcare consent rules](/docs/healthcare/consent).
+This layer adds the rules a hospital's Conditions of Participation set.
+
+## No consent on file, no operation
+
+In the United States, an operation waits until a properly executed consent for
+it is in the record, unless it is an emergency (BR-E1).

@@ -155,10 +155,10 @@ Industries
      ├─ industry base         rules every healthcare app shares (privacy of health data, ...),
      │                        and shared modules: Patients, Appointments, Encounters,
      │                        Clinical documentation, Practitioners, Terminology,
-     │                        Identity and access
+     │                        Identity and access, Consent
      └─ domains
          └─ EHR               Patients · Appointments · Encounters · ADT · Clinical documentation · Terminology
-                              · Practitioners · Identity and access
+                              · Practitioners · Identity and access · Consent
                               · Orders and results · Medications and allergies
 ```
 
@@ -758,10 +758,10 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Identity and access (`healthcare/identity` 0.8.0, healthcare level, and `healthcare/ehr/identity` 0.2.1 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.3, healthcare level, and `healthcare/ehr/practitioner` 0.1.4 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.0, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.2 and `healthcare/ehr/clinical-documentation` 0.4.8; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.2, EHR-only), Encounters (`healthcare/encounter` 0.2.2 and `healthcare/ehr/encounter` 0.13.14), Patients (`healthcare/patient` 0.13.6, which has no core page by the
+  drafts: Consent (`healthcare/consent` 0.1.0, healthcare level, and `healthcare/ehr/consent` 0.1.0 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.1, healthcare level, and `healthcare/ehr/identity` 0.2.1 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.4, healthcare level, and `healthcare/ehr/practitioner` 0.1.4 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.1, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.2 and `healthcare/ehr/clinical-documentation` 0.4.8; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.2, EHR-only), Encounters (`healthcare/encounter` 0.2.2 and `healthcare/ehr/encounter` 0.13.14), Patients (`healthcare/patient` 0.13.6, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.4.6) and Appointments
   (`healthcare/appointment` 0.13.0, `healthcare/ehr/appointment` 0.11.8; `core/appointment` 0.12.4). All
-  support the US and EU through the `jurisdiction` setting. Next: Consent (added to the roadmap on 2026-10-09 with Practitioners), then Orders and results.
+  support the US and EU through the `jurisdiction` setting. Next: Organization, then Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like
   `healthcare/patient`) use `-H` ids and must be complete on their own: API

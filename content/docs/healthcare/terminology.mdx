@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.3.0
+version: 0.3.1
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -1247,6 +1247,9 @@ apiConventions:
 - topic: Rate limits
   text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
   reference: RFC 6585, RFC 9110
+- topic: Versioning
+  text: Additive changes don't change the version. A breaking change ships as a new major version with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
 events:
 - name: terminology.release_activated
   description: A release was activated, effective from its date.
@@ -1575,6 +1578,11 @@ references:
   url: https://loinc.org/kb/users-guide/editorial-policies-and-procedures/classification-of-loinc-term-status
   note: ACTIVE, TRIAL, DISCOURAGED and DEPRECATED.
 changelog:
+- version: 0.3.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - API convention for versioning, matching the other modules.
 - version: 0.3.0
   date: '2026-10-09'
   breaking: false

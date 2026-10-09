@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.3.3
+version: 0.3.4
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -975,6 +975,9 @@ apiConventions:
 - topic: Rate limits
   text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
   reference: RFC 6585, RFC 9110
+- topic: Versioning
+  text: Additive changes don't change the version. A breaking change ships as a new major version with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
 events:
 - name: practitioner.created
   description: A practitioner record was created.
@@ -1327,6 +1330,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.3.4
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - API convention for versioning, matching the other modules.
 - version: 0.3.3
   date: '2026-10-09'
   breaking: false

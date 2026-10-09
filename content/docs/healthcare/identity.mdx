@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.8.0
+version: 0.8.1
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -1553,6 +1553,9 @@ apiConventions:
 - topic: Rate limits
   text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
   reference: RFC 6585, RFC 9110
+- topic: Versioning
+  text: Additive changes don't change the version. A breaking change ships as a new major version with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
 events:
 - name: identity.account_created
   description: An account was created.
@@ -2032,6 +2035,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.210
   note: (a)(2), NIST-approved encryption algorithms.
 changelog:
+- version: 0.8.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - API convention for versioning, matching the other modules.
 - version: 0.8.0
   date: '2026-10-09'
   breaking: false
