@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.10
+version: 0.1.11
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.11
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Sensitivity codes include SEX (sexuality and reproductive health), and a US compliance entry for the Protecting Care Access exception (45 CFR 171.206), which Consent applies.
 - version: 0.1.10
   date: '2026-10-09'
   breaking: false
@@ -261,7 +266,7 @@ dataModel:
   type: code[]
   required: false
   description: Kinds of information needing extra protection, such as a substance use disorder program.
-  constraints: 'codes: HL7 v3 ActCode SUD, PSY, HIV, SDV'
+  constraints: 'codes: HL7 v3 ActCode SUD, PSY, HIV, SDV, SEX (sexuality and reproductive health)'
 - name: documentation_complete
   type: boolean
   required: false
@@ -2254,6 +2259,10 @@ references:
   title: Regulation (EU) 2025/327, European Health Data Space
   url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
   note: Article 11, access by health professionals.
+- id: REF-H28
+  title: 45 CFR 171.206, Protecting care access
+  url: https://www.ecfr.gov/current/title-45/section-171.206
+  note: Information blocking exception for reproductive health care information.
 acronyms:
 - term: AMB, EMER, IMP, OBSENC, VR
   definition: 'HL7 encounter classes: ambulatory, emergency, inpatient, observation, virtual'
@@ -2760,6 +2769,15 @@ compliance:
   covered_by:
   - BR-H51
   jurisdiction: eu
+- id: CMP-H30
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.206
+  obligation: A provider may limit access to, exchange of or use of reproductive health information to reduce the patient's or care providers' exposure to legal action, tailored, under a policy or case-by-case decision, and giving way to the patient's explicit request.
+  how: Records are labelled with the SEX sensitivity code and every event carries it; deciding what to withhold is Consent's.
+  status: other module
+  covered_by:
+  - BR-H14
+  jurisdiction: us
 ---
 
 Every note, order and result in the record belongs to an encounter. This

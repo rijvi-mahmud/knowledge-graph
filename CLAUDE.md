@@ -755,9 +755,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Practitioners (`healthcare/practitioner` 0.1.0, healthcare level, and `healthcare/ehr/practitioner` 0.1.1 for medical staff and privileges), Terminology (`healthcare/terminology` 0.1.4, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.5 and `healthcare/ehr/clinical-documentation` 0.4.6; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.5, EHR-only), Encounters (`healthcare/encounter` 0.1.10 and `healthcare/ehr/encounter` 0.13.10), Patients (`healthcare/patient` 0.12.4, which has no core page by the
+  drafts: Practitioners (`healthcare/practitioner` 0.1.0, healthcare level, and `healthcare/ehr/practitioner` 0.1.1 for medical staff and privileges), Terminology (`healthcare/terminology` 0.1.4, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.6 and `healthcare/ehr/clinical-documentation` 0.4.7; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.5, EHR-only), Encounters (`healthcare/encounter` 0.1.11 and `healthcare/ehr/encounter` 0.13.11), Patients (`healthcare/patient` 0.12.4, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.4.4) and Appointments
-  (`healthcare/appointment` 0.11.5, `healthcare/ehr/appointment` 0.11.5; `core/appointment` 0.12.4). All
+  (`healthcare/appointment` 0.11.6, `healthcare/ehr/appointment` 0.11.6; `core/appointment` 0.12.4). All
   support the US and EU through the `jurisdiction` setting. Next: Identity and access, then Consent (added to the roadmap on 2026-10-09 with Practitioners), then Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

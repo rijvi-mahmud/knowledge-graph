@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.11.5
+version: 0.11.6
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -204,7 +204,7 @@ dataModel:
   type: code[]
   required: false
   description: Kinds of information needing extra protection, from the department, such as SUD for a substance use disorder program.
-  constraints: 'set by the service from Organization; codes: HL7 v3 ActCode SUD, PSY, HIV, SDV'
+  constraints: 'set by the service from Organization; codes: HL7 v3 ActCode SUD, PSY, HIV, SDV, SEX (sexuality and reproductive health)'
 - name: order_ids
   type: string[]
   required: false
@@ -2118,7 +2118,16 @@ references:
   title: 45 CFR 92.201, Meaningful access for individuals with limited English proficiency
   url: https://www.ecfr.gov/current/title-45/section-92.201
   note: Language assistance services.
+- id: REF-H46
+  title: 45 CFR 171.206, Protecting care access
+  url: https://www.ecfr.gov/current/title-45/section-171.206
+  note: Information blocking exception for reproductive health care information.
 changelog:
+- version: 0.11.6
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Sensitivity codes include SEX (sexuality and reproductive health), and a US compliance entry for the Protecting Care Access exception (45 CFR 171.206), which Consent applies.
 - version: 0.11.5
   date: '2026-10-09'
   breaking: false
@@ -2591,6 +2600,15 @@ compliance:
   status: met
   covered_by:
   - BR-H8
+  jurisdiction: us
+- id: CMP-H25
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.206
+  obligation: A provider may limit access to, exchange of or use of reproductive health information to reduce the patient's or care providers' exposure to legal action, tailored, under a policy or case-by-case decision, and giving way to the patient's explicit request.
+  how: Records are labelled with the SEX sensitivity code and every event carries it; deciding what to withhold is Consent's.
+  status: other module
+  covered_by:
+  - BR-H39
   jurisdiction: us
 tables:
 - name: appointment_clinical
