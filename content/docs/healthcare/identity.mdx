@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.4.0
+version: 0.5.0
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -277,6 +277,21 @@ businessRules:
 - id: BR-H28
   text: A request to erase an account is met by disabling it and deleting its authenticators, contact details and identity evidence. The sign-in and access log is kept for audit_log_retention, then deleted. A patient or representative can close their own portal account at any time.
   rationale: The log is needed to meet legal obligations such as audit controls and to establish or defend legal claims, which GDPR Article 17(3)(b) and (e) exempt from erasure; the rest isn't needed once the account is closed.
+- id: BR-H29
+  text: Access tokens last at most access_token_lifetime, and at most 5 minutes for backend apps. A module that checks tokens itself, instead of by introspection, accepts none past its expiry, so a revocation takes effect within that lifetime.
+  rationale: A revoked grant only stops working when its tokens do; certified US health IT must revoke within 1 hour (45 CFR 170.315(g)(10)(vi)), and SMART Backend Services says backend access tokens should not exceed 300 seconds.
+- id: BR-H30
+  text: Authorization requests use PKCE with the S256 method, never plain, and a redirect URI that exactly matches one the app registered (only the port may vary for a native app's localhost address). Refresh tokens for apps that can't keep a secret are replaced at every use, and when an old one is presented again, the active one is revoked too.
+  rationale: SMART App Launch 2.0.0 requires S256 and forbids plain; the OAuth 2.0 Security Best Current Practice (RFC 9700) requires exact redirect matching and refresh token rotation or binding for public clients, so a stolen code or refresh token is useless or detected.
+- id: BR-H31
+  text: A client authenticating with a signed assertion, such as a backend app, sends one that expires no more than 5 minutes ahead, with a unique id that is refused if seen again within that time.
+  rationale: SMART asymmetric client authentication sets the 5 minute limit and the replay check, so a captured assertion can't be reused.
+- id: BR-H32
+  text: 'Nobody changes their own roles or access: an account administrator can''t assign roles to, unlock, re-enable or grant controlled substance prescribing to their own account, and a privacy officer can''t review their own emergency access.'
+  rationale: Separation of duties stops one person granting themselves access or clearing their own audit finding (NIST SP 800-53 Rev. 5, separation of duties).
+- id: BR-H33
+  text: A minor may hold their own patient account from minor_own_account_age. Because many minors have no identity documents, they can be proofed with a trusted referee or an applicant reference, such as a parent or clinician who knows them, at patient_identity_assurance.
+  rationale: Which minors may see their own record, and which parts, is set by state and member state law, so the age is a setting; NIST SP 800-63A-4 requires support for applicant references for people under 18 and names trusted referees for those without documents.
 validations:
 - field: account.subject
   rule: An existing practitioner, staff record, patient, representative relationship or registered system
@@ -302,6 +317,15 @@ validations:
 - field: account.status
   rule: Fields the service sets, such as status, last_sign_in_at, last_reviewed_at and revision, can't be written by clients
   error: IDENTITY_READ_ONLY_FIELD
+- field: authorization request
+  rule: PKCE with code_challenge_method S256, and a redirect URI exactly matching one registered (BR-H30)
+  error: IDENTITY_INVALID_REQUEST
+- field: client assertion
+  rule: Signed with a registered key, expiring no more than 5 minutes ahead, with an id not seen before (BR-H31)
+  error: IDENTITY_INVALID_CREDENTIAL
+- field: enrolment date of birth
+  rule: For a patient's own account, at least minor_own_account_age, or age_of_majority when unset (BR-H33)
+  error: IDENTITY_UNDER_ACCOUNT_AGE
 stateMachine:
   initial: pending
   states:
@@ -480,6 +504,29 @@ edgeCases:
   covers:
   - BR-H16
   - AC-H36
+- id: EC-H17
+  situation: A session started at 01:30 on the night clocks go back an hour.
+  behaviour: session_max_duration counts elapsed time, so a 12 hour session ends 12 real hours later, whatever the wall clock says.
+  covers:
+  - BR-H8
+- id: EC-H18
+  situation: An attacker steals a patient app's refresh token and uses it before the app does.
+  behaviour: When the app presents the old token, the reuse is detected and the active token is revoked; the patient signs in again.
+  covers:
+  - BR-H30
+  - AC-H40
+- id: EC-H19
+  situation: The national eIDAS node is down.
+  behaviour: Professionals can't reach the national access service, but local sign-in with the organization's own authenticators keeps working.
+  covers:
+  - BR-H13
+  - BR-H5
+  jurisdiction: eu
+- id: EC-H20
+  situation: A homeless patient has no identity documents and no credit history.
+  behaviour: They are proofed with a trusted referee, such as a social worker, as NIST allows.
+  covers:
+  - BR-H33
 functionalRequirements:
 - id: FR-H1
   text: The service must create, disable and lock accounts, one per person or system.
@@ -535,6 +582,10 @@ functionalRequirements:
   text: The service must approve backend apps before use, suspend and revoke apps, and erase accounts while keeping the audit log for its retention.
   priority: must
   verification: test
+- id: FR-H14
+  text: The service must enforce token lifetimes, PKCE, exact redirect matching, refresh token rotation and assertion replay checks.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Authenticators are verified with phishing-resistant protocols where the authenticator supports them, and secrets never leave the service.
@@ -586,6 +637,12 @@ settings:
 - name: dormant_account_period
   type: duration
   description: How long a staff or system account can go without a sign-in before it is disabled. Set by the organization, such as 90 days.
+- name: access_token_lifetime
+  type: duration
+  description: How long an access token lasts for people and patient apps. Default 1 hour, which keeps revocation within the US 1 hour limit; backend tokens last at most 5 minutes.
+- name: minor_own_account_age
+  type: integer
+  description: The age from which a minor may hold their own patient account. Set from state or member state law and organization policy; it varies by place and needs legal advice. Unset means only from age_of_majority, which the Patients module holds.
 performanceTargets:
 - id: PERF-H1
   indicator: Permission check latency
@@ -861,6 +918,37 @@ acceptanceCriteria:
   verifies:
   - BR-H28
   - FR-H13
+- id: AC-H39
+  given: access_token_lifetime of 1 hour, and a backend app
+  when: a patient app gets a token, and the backend app gets one
+  then: the first expires within 1 hour and the second within 5 minutes, and neither is accepted after
+  verifies:
+  - BR-H29
+- id: AC-H40
+  given: a registered app with redirect URI https://app.example/cb
+  when: it sends an authorization request with code_challenge_method plain, then one with https://app.example/cb2, then a valid one; later its old refresh token is replayed after rotation
+  then: the first two fail with IDENTITY_INVALID_REQUEST and HTTP 400; the third succeeds; the replay is refused and the active refresh token is revoked
+  verifies:
+  - BR-H30
+  - FR-H14
+- id: AC-H41
+  given: a backend app
+  when: it sends an assertion expiring 10 minutes ahead, then a valid one twice
+  then: the first and the repeat fail with IDENTITY_INVALID_CREDENTIAL and HTTP 401; the valid one gets a token
+  verifies:
+  - BR-H31
+- id: AC-H42
+  given: an account administrator, and a privacy officer who broke the glass
+  when: the administrator assigns a role to themselves, and the privacy officer reviews their own emergency access
+  then: both fail with IDENTITY_FORBIDDEN and HTTP 403
+  verifies:
+  - BR-H32
+- id: AC-H43
+  given: minor_own_account_age of 13, a 12-year-old and a 14-year-old with no identity documents
+  when: each enrols with a parent as applicant reference
+  then: the 12-year-old's enrolment fails with IDENTITY_UNDER_ACCOUNT_AGE and HTTP 422; the 14-year-old gets a pending account
+  verifies:
+  - BR-H33
 operations:
 - name: Create an account
   actor: Account administrator
@@ -938,6 +1026,7 @@ operations:
   output: a pending account, or the same neutral answer whether or not a record matched
   errors:
   - IDENTITY_NOT_MATCHED
+  - IDENTITY_UNDER_ACCOUNT_AGE
   - IDENTITY_AAL_TOO_LOW
   - IDENTITY_IDEMPOTENCY_KEY_REUSED
   - IDENTITY_DEPENDENCY_UNAVAILABLE
@@ -1197,6 +1286,7 @@ operations:
   input: client id, scopes, redirect URI, state and PKCE challenge
   output: a redirect to the app with an authorization code
   errors:
+  - IDENTITY_INVALID_REQUEST
   - IDENTITY_INVALID_SCOPE
   - IDENTITY_APP_REFUSED
 - name: Issue a token
@@ -1206,8 +1296,9 @@ operations:
   path: /oauth/token
   success: 200
   input: grant type and credentials
-  output: access token, scopes, and a refresh token where allowed
+  output: access token with its expiry, scopes, and a refresh token where allowed, replacing the one used
   errors:
+  - IDENTITY_INVALID_REQUEST
   - IDENTITY_INVALID_CREDENTIAL
   - IDENTITY_INVALID_SCOPE
   - IDENTITY_APP_REFUSED
@@ -1529,7 +1620,7 @@ errors:
   message: No account, session, app or emergency access exists with that id.
 - code: IDENTITY_FORBIDDEN
   http: 403
-  message: Your role doesn't allow this.
+  message: Your role doesn't allow this, or you can't do it to your own account.
 - code: IDENTITY_DUPLICATE
   http: 409
   message: That person or system already has an active account of this kind, or the username was used before.
@@ -1539,6 +1630,9 @@ errors:
 - code: IDENTITY_INVALID_CREDENTIAL
   http: 401
   message: The sign-in or token couldn't be verified.
+- code: IDENTITY_INVALID_REQUEST
+  http: 400
+  message: The authorization request is missing PKCE with S256, or its redirect URI isn't registered.
 - code: IDENTITY_ACCOUNT_LOCKED
   http: 403
   message: The account is locked; an administrator must verify you to unlock it.
@@ -1584,6 +1678,9 @@ errors:
 - code: IDENTITY_NOT_MATCHED
   http: 422
   message: We couldn't confirm your record. Contact the organization to finish enrolment.
+- code: IDENTITY_UNDER_ACCOUNT_AGE
+  http: 422
+  message: You can have your own account from a later age; a parent or guardian can ask for access for you.
 dependencies:
 - service: practitioner-service
   direction: upstream
@@ -1604,6 +1701,7 @@ dependencies:
   - 'Asks: who represents this patient, with what scope?'
   - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.representative_changed'
   - 'Receives: patient.death_retracted and patient.entered_in_error'
+  - 'Asks: what is age_of_majority here?'
 - service: organization-service
   direction: upstream
   reason: owns departments and job roles
@@ -1730,7 +1828,24 @@ references:
   title: Regulation (EU) 2016/679 (GDPR)
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Article 17(3), exemptions from erasure; Article 32, security of processing.
+- id: REF-H17
+  title: RFC 9700, Best Current Practice for OAuth 2.0 Security
+  url: https://www.rfc-editor.org/rfc/rfc9700
+  note: Exact redirect matching, refresh token rotation or binding for public clients.
+- id: REF-H18
+  title: HL7 SMART App Launch 2.0.0, Backend Services and asymmetric client authentication
+  url: https://hl7.org/fhir/smart-app-launch/STU2/backend-services.html
+  note: Backend tokens of at most 300 seconds; assertions at most 5 minutes ahead with unique ids.
 changelog:
+- version: 0.5.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - 'Breaking: authorization requests need PKCE S256 and exact redirect matching, and refresh tokens for public apps rotate (BR-H30, RFC 9700, IDENTITY_INVALID_REQUEST).'
+  - Access tokens last at most access_token_lifetime, 5 minutes for backend apps, so revocation lands within the US 1 hour limit (BR-H29).
+  - Assertion expiry and replay checks (BR-H31); separation of duties (BR-H32).
+  - Minors' own accounts from minor_own_account_age, with trusted referees and applicant references (BR-H33, NIST SP 800-63A-4).
+  - New error IDENTITY_UNDER_ACCOUNT_AGE for enrolment below minor_own_account_age.
 - version: 0.4.0
   date: '2026-10-09'
   breaking: true
@@ -1778,6 +1893,8 @@ acronyms:
   definition: OpenID Connect
 - term: SMART
   definition: Substitutable Medical Applications and Reusable Technologies, the HL7 app launch and authorization framework
+- term: PKCE
+  definition: Proof Key for Code Exchange (RFC 7636)
 tables:
 - name: accounts
   description: One row per account.
@@ -1994,6 +2111,19 @@ tables:
     default: now()
   indexes: []
   constraints: []
+- name: assertion_ids
+  description: Recently seen client assertion ids, kept 5 minutes, to refuse replays.
+  columns:
+  - name: client_id
+    type: text
+  - name: jti
+    type: text
+  - name: expires_at
+    type: timestamptz
+  indexes: []
+  constraints:
+  - name: assertion_ids_pkey
+    definition: PRIMARY KEY (client_id, jti)
 technicalNotes:
 - id: TN-H1
   title: Hash passwords properly
