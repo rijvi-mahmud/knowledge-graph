@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.0
+version: 0.1.1
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - FR-H3, the status field and BR-H16 no longer mention class changes, on_hold or leave, which only hospital stays have; the EHR layer keeps them. BR-H13 uses Terminology's code_date_rule instead of repeating it.
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false
@@ -101,7 +106,7 @@ dataModel:
   type: enum
   required: true
   description: Where the encounter is in its lifecycle.
-  constraints: 'planned | in_progress | on_hold | discharged | completed | cancelled | discontinued | entered_in_error; changed only through operations; codes: FHIR R5 EncounterStatus (in-progress, on-hold, entered-in-error)'
+  constraints: 'planned | in_progress | discharged | completed | cancelled | discontinued | entered_in_error; changed only through operations; codes: FHIR R5 EncounterStatus (in-progress, on-hold, entered-in-error)'
 - name: status_reason
   type: reason
   required: false
@@ -327,7 +332,7 @@ businessRules:
   text: An encounter can be marked entered in error only while no clinical data has been recorded against it (has_clinical_data unset). Otherwise its data is moved to the right encounter first.
   rationale: Discarding an encounter that holds notes or results would hide that care. Each clinical module moves its own entries.
 - id: BR-H13
-  text: 'Each diagnosis has a role and a rank, and a code valid in diagnosis_code_system on the right date: the discharge date for inpatient encounters, the encounter date otherwise. A completed encounter has at least one discharge or billing diagnosis.'
+  text: Each diagnosis has a role and a rank, and a code valid in diagnosis_code_system on the date Terminology's code_date_rule picks for diagnoses. A completed encounter has at least one discharge or billing diagnosis.
   rationale: CMS applies each fiscal year's ICD-10-CM codes to discharges and encounters from October 1 (the FY 2027 files to those from October 1, 2026). A code valid at admission may be retired by discharge.
 - id: BR-H14
   text: An encounter carries the sensitivity codes Organization gives for its department, such as SUD for a substance use disorder program. Data attached to it carries the same codes, and disclosure follows the Consent module.
@@ -337,7 +342,7 @@ businessRules:
   rationale: In the United States a practitioner must be licensed where the patient is, as the Clinical appointments rules state.
   variant: ambulatory
 - id: BR-H16
-  text: length is the time from actual_start to actual_end less time on leave.
+  text: length is the time from actual_start to actual_end.
   rationale: FHIR defines length as the time the encounter lasted, less time absent. Leave counts toward neither care nor billing time.
 - id: BR-H17
   text: When the Patients module merges two patients, their encounters move to the remaining record; when a merge is undone, encounters recorded since the merge are listed for review.
@@ -692,7 +697,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-H3
-  text: The service must record class changes, participants and locations with their periods.
+  text: The service must record participants and locations with their periods.
   priority: must
   verification: test
 - id: FR-H4
@@ -1932,6 +1937,7 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: is this code valid in this code system on this date?'
+  - 'Asks: which codes the value set bound to each coded setting allows on this date'
 - service: clinical-documentation-service
   direction: downstream
   reason: holds notes and reports when documentation is complete
@@ -1942,7 +1948,7 @@ dependencies:
   - 'Gives: encounter.started, encounter.discharged, encounter.completed, encounter.cancelled, encounter.entered_in_error and encounter.amended, so notes open, are required and lock with the encounter'
   - 'Gives: encounter.patient_review_needed after an undone patient merge'
   - 'Gives: encounter.record_overdue, for the responsible practitioner''s deficiency list'
-  - Discharge summaries and the EU discharge report are Clinical documentation's concern
+  - Discharge summaries and reports are Clinical documentation's concern
 - service: clinical-modules
   direction: downstream
   reason: orders, results, medications and conditions attach data to encounters

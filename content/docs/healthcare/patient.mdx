@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.11.0
+version: 0.11.1
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -2828,6 +2828,14 @@ dependencies:
   contract:
   - 'Gives: patient.restricted_access and patient.search_volume_alert, to deliver to the privacy officer'
   - Delivery channels and on-call rotas are Notification's concern
+- service: terminology-service
+  direction: upstream
+  reason: validates codes and units
+  criticality: soft
+  contract:
+  - 'Asks: is this code valid in this code system on this date?'
+  - 'Asks: which codes the value set bound to each coded setting allows on this date'
+  - 'Receives: terminology.release_activated and terminology.value_set_activated, to refresh cached code lists'
 risks:
 - id: RISK-H1
   risk: Duplicate records split one person's history.
@@ -3064,6 +3072,11 @@ references:
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
 changelog:
+- version: 0.11.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Asks Terminology to validate codes and expand the value sets bound to coded settings.
 - version: 0.11.0
   date: '2026-10-09'
   breaking: true

@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,13 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.2.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Observations the patient or their device reports from outside a visit, and patient-entered information, can stand without an encounter, as FHIR allows (BR-H1).
+  - Rationales rest on law that applies to every provider, with hospital law as an example; wording says organization, not hospital.
+  - Asks Terminology which codes a bound value set allows.
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false
@@ -104,13 +111,13 @@ dataModel:
 - name: note.patient_id
   type: string
   required: true
-  description: The patient, from the encounter.
-  constraints: set by the service from the encounter; follows encounter and patient merges
+  description: 'The patient: from the encounter, or given when there is none.'
+  constraints: set from the encounter when there is one; follows encounter and patient merges
 - name: note.encounter_id
   type: string
-  required: true
+  required: false
   description: The encounter the note documents.
-  constraints: an encounter of the patient that is not cancelled or entered in error
+  constraints: an encounter of the patient that is not cancelled or entered in error; required unless the note is patient-entered
 - name: note.type
   type: code
   required: true
@@ -284,13 +291,13 @@ dataModel:
 - name: observation.patient_id
   type: string
   required: true
-  description: The patient, from the encounter.
-  constraints: set by the service; follows encounter and patient merges
+  description: 'The patient: from the encounter, or given when there is none.'
+  constraints: set from the encounter when there is one; follows encounter and patient merges
 - name: observation.encounter_id
   type: string
-  required: true
+  required: false
   description: The encounter it was measured in.
-  constraints: an encounter of the patient that is not cancelled or entered in error
+  constraints: an encounter of the patient that is not cancelled or entered in error; required unless source is patient_reported, or device outside a visit
 - name: observation.category
   type: enum
   required: true
@@ -464,8 +471,8 @@ relationships:
   target: event:documentation.completed
 businessRules:
 - id: BR-H1
-  text: Every note and observation belongs to one encounter of one patient whose record is in use. The encounter must not be cancelled or entered in error. When Encounters reports an encounter cancelled or entered in error, drafts on it are listed for their authors to move or discard.
-  rationale: Every entry is found through its encounter (FHIR Composition.encounter, Observation.encounter). An entry on a cancelled encounter documents care that, by the record, never happened.
+  text: Every note and observation belongs to one patient whose record is in use. It is recorded against an encounter of that patient that is not cancelled or entered in error, except readings the patient or their device reports from outside a visit, such as remote monitoring, and patient-entered information, which can stand without an encounter.
+  rationale: FHIR makes the encounter optional on Composition and Observation (0..1). ONC describes patient-generated health data as recorded outside the clinical setting, and remote physiologic monitoring sends readings between visits. Everything recorded during care still belongs to its encounter.
 - id: BR-H2
   text: A draft note is seen and edited only by its author, and by the scribe or drafting tool that created it. It is not part of the record used for care, it is never released to the patient, and it can be edited freely.
   rationale: HL7 v2 allows editing a document in place only while it is unavailable for patient care (MDM T07). Until the author signs, nobody else should act on it.
@@ -474,7 +481,7 @@ businessRules:
   rationale: Others may already have acted on a signed note. HL7 v2 replaces an available document instead of editing it (MDM T09), Medicare wants every change clearly and permanently identified (Program Integrity Manual chapter 3, 3.3.2.5), and HIPAA requires protection against improper alteration (45 CFR 164.312(c)(1)).
 - id: BR-H4
   text: Only the responsible author signs a note, with their own credential confirmed again at signing. Nobody signs for someone else, signing can't be delegated or automatic, and a stamped or typed name isn't a signature. Signing records signed_at and needs every required section of the note type to have text.
-  rationale: Every entry must be dated, timed and authenticated by the person responsible for it, through an author identification system that protects the integrity of authentication (42 CFR 482.24(b) and (c)(1)). Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
+  rationale: Medicare reviewers need the person responsible for each entry identifiable by a handwritten or electronic signature (Program Integrity Manual chapter 3, 3.3.2.4), and HIPAA requires protecting information from improper alteration (45 CFR 164.312(c)(1)); US hospitals must also authenticate every entry (42 CFR 482.24(c)(1)). Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
 - id: BR-H5
   text: When cosign_rules say a note type written by an author's role needs a cosignature, the author names the cosigner when signing, signing makes it preliminary and opens an uncosigned deficiency for the cosigner. The cosigner signs it final, optionally with an attestation statement; they can't change the author's text. Changes they want are made by the author as a correction, or by the cosigner as an addendum.
   rationale: Supervising practitioners take responsibility for trainees' notes as medical staff bylaws require. The author's words stay theirs, so the record shows who said what. HL7 v2 marks such a note pre-authenticated until it is authenticated (Table 0271 PA, AU).
@@ -486,7 +493,7 @@ businessRules:
   rationale: Medicare requires the practitioner's concurrence when AI technology captures medical record entries (Program Integrity Manual chapter 3, 3.3.2.4). Drafting tools can invent or misattribute findings, so nothing they write reaches the record unreviewed.
 - id: BR-H8
   text: 'Every note and observation keeps two times: when the care or measurement happened (service_at, effective_at) and when it was recorded. Neither can be later than now plus clock_tolerance. An entry recorded more than late_entry_threshold after the care is a late entry: it needs a reason and is shown as late.'
-  rationale: Entries must be dated and timed (42 CFR 482.24(c)(1)), and a late entry must be identifiable as such (Medicare Program Integrity Manual chapter 3, 3.3.2.5). Showing both times stops a late entry passing as contemporaneous.
+  rationale: The date and author of any delayed entry must be identifiable, and a late entry must be identifiable as such (Medicare Program Integrity Manual chapter 3, 3.3.2.5). Showing both times stops a late entry passing as contemporaneous.
 - id: BR-H9
   text: 'Information found or remembered after a note is available goes in an addendum: a new note linked to it by parent_note_id, with its own author, times and signature. The parent doesn''t change. An addendum can''t be added to a draft, cancelled or entered-in-error note.'
   rationale: HL7 v2 gives an addendum its own document id linked to the parent (MDM T05). AHIMA guidance says an addendum bears the current date, its reason and its author.
@@ -507,10 +514,10 @@ businessRules:
   rationale: The Partnership for Health IT Patient Safety recommends making copied material easily identifiable and its source readily available, because copying spreads errors and puts documentation in the wrong patient's chart (Tsou and others, 2017).
 - id: BR-H15
   text: Each note type in note_types can be required for some encounter classes, with a deadline. When an encounter of that class starts, or an encounter's class changes to it, a missing_note deficiency is opened for the responsible practitioner, due at the deadline counted from the start or the change.
-  rationale: Hospitals must document certain notes for each patient, such as the discharge summary (42 CFR 482.24(c)(4)). Tracking them per encounter is what lets a record be completed on time. A patient admitted from observation becomes an inpatient at the class change, so the clock starts there.
+  rationale: Providers must document certain notes, such as discharge summaries, by law, payer rules or accreditation. Tracking them per encounter is what lets a record be completed on time. When a class changes, the deadline counts from the change.
 - id: BR-H20
   text: A deficiency is opened for each required note missing, each draft its author hasn't signed within signature_deadline of service_at, and each preliminary note not cosigned within cosign_deadline. It resolves itself when the note is signed or cosigned. It becomes delinquent delinquency_after past due_at, and the practitioner and HIM specialists are told. When Encounters reports encounter.record_overdue, the encounter's open deficiencies are marked delinquent. When it reports encounter.amended with a changed start or discharge time, due dates counted from them are recomputed.
-  rationale: Records must be promptly completed (42 CFR 482.24(b)), and medical staff bylaws define delinquency. A list per practitioner is how hospitals get records completed.
+  rationale: Records must be completed promptly, as provider policies, payers and, for US hospitals, 42 CFR 482.24(b) require, and medical staff bylaws define delinquency. A list per practitioner is how hospitals get records completed.
 - id: BR-H21
   text: When an encounter is discharged and it has no draft or preliminary note, no open deficiency, and every required note signed, documentation.completed is reported to Encounters. If, before Encounters completes the encounter, a required note is marked entered in error or a new deficiency opens, documentation.reopened is reported. A cancelled discharge also reports documentation.reopened when completion was already reported.
   rationale: Encounters completes an encounter only when this module reports its documentation complete. Reporting a reopen keeps the two from drifting apart.
@@ -555,9 +562,9 @@ businessRules:
   rationale: HIPAA requires audit controls (45 CFR 164.312(b)). Notes hold the most sensitive detail in the record.
 - id: BR-H34
   text: Notes and observations are kept as long as the Patients module's record_retention requires, and never erased before, even on request. Those of a patient under legal hold are never erased.
-  rationale: US hospitals must keep records at least 5 years, and state law often longer (42 CFR 482.24(b)(1)). GDPR doesn't require erasure of data needed for care or to meet a legal obligation (Article 17(3)(b) and (c)).
+  rationale: 'Retention periods come from state and national law, set as the Patients module''s record_retention (US hospitals: at least 5 years, 42 CFR 482.24(b)(1)). GDPR doesn''t require erasure of data needed for care or to meet a legal obligation (Article 17(3)(b) and (c)).'
 - id: BR-H35
-  text: When a note that was sent outside the hospital is corrected or marked entered in error, note.corrected or note.entered_in_error tells Release of information, which tells the recipients it sent it to.
+  text: When a note that was sent outside the organization is corrected or marked entered in error, note.corrected or note.entered_in_error tells Release of information, which tells the recipients it sent it to.
   rationale: HIPAA requires telling people the amended information was shared with (45 CFR 164.526(c)(3)). A recipient acting on a wrong note can harm the patient.
 - id: BR-H36
   text: Vital signs use the LOINC code and the UCUM units of the FHIR vital signs profiles, except that body weight is metric only (BR-H53), and the value is kept in the unit it was entered in. A blood pressure is recorded as one observation with systolic and diastolic components.
@@ -566,7 +573,7 @@ businessRules:
   text: A value outside the plausible limits in vital_sign_limits is refused. A value outside the normal range for the patient's age is accepted and flagged with an interpretation code.
   rationale: An impossible value is a typing or unit error, such as a temperature in Fahrenheit entered as Celsius. An abnormal one is clinical information that must be recorded.
 - id: BR-H38
-  text: When device_values_need_validation is set, readings from devices are preliminary until a nurse accepts them, which makes them final and records the nurse as performer. Rejected readings never enter the record and are kept only in the access log.
+  text: When device_values_need_validation is set, readings from devices are preliminary until a nurse, or the clinician monitoring the patient remotely, accepts them, which makes them final and records them as performer. Rejected readings never enter the record and are kept only in the access log.
   rationale: Monitors produce artifacts, such as a reading taken while a cuff was moving. Filing them unvalidated pollutes the record that early warning and research rely on.
 - id: BR-H39
   text: 'Derived values are computed by the service, never entered: BMI from a weight and a height measured within bmi_height_max_age. When a source value is corrected or entered in error, the derived value is recomputed or marked entered in error.'
@@ -593,7 +600,7 @@ businessRules:
   text: A draft not signed within draft_reminder_after is listed for its author. Drafts are never deleted automatically.
   rationale: Forgotten drafts are unwritten records. Deleting them would lose care documentation.
 - id: BR-H47
-  text: When the author can no longer sign, for example because they left the hospital, an HIM specialist can close the deficiency as unresolvable with a reason. A draft is then filed preliminary with unauthenticated set and shown as unsigned; it is never shown as signed.
+  text: When the author can no longer sign, for example because they left the organization, an HIM specialist can close the deficiency as unresolvable with a reason. A draft is then filed preliminary with unauthenticated set and shown as unsigned; it is never shown as signed.
   rationale: The content may be the only record of care, so it is kept. Medicare reviewers accept an attestation only from the author (Program Integrity Manual chapter 3, 3.3.2.4), so nobody else may sign it.
 - id: BR-H48
   text: Notes can be written after a patient's death, such as a death note or an autopsy addendum.
@@ -602,7 +609,7 @@ businessRules:
   text: A representative sees a note only within the authority the Patients module records for them, including its scope and exclusions. A note with withheld_from_representatives set is released to the patient but not to representatives. In the United States, the author sets it for care a minor consented to alone where the law lets them, or under a confidentiality agreement the parent agreed to.
   rationale: HIPAA doesn't treat a parent as the representative for such care (45 CFR 164.502(g)(3)), and rules on minors' confidentiality also vary by EU member state. A note reaching a parent's portal can harm the young person and deter them from care.
 - id: BR-H50
-  text: A drafting tool that records the conversation can start a draft only with recording_consent from every party that recording_consent requires where the care takes place, given before recording. This module never keeps the recording; deleting it is the tool's concern, within the period the hospital agreed with the vendor.
+  text: A drafting tool that records the conversation can start a draft only with recording_consent from every party that recording_consent requires where the care takes place, given before recording. This module never keeps the recording; deleting it is the tool's concern, within the period the organization agreed with the vendor.
   rationale: US federal law lets one party consent to recording (18 U.S.C. 2511(2)(d)), but states such as California and Florida require every party's consent (California Penal Code 632(a), Florida Statutes 934.03(2)(d)). GDPR requires telling people about processing (Article 13).
 - id: BR-H51
   text: In the European Union, a patient can see who accessed their notes and observations and when, through the access service, including by automatic notification where the member state provides it.
@@ -687,6 +694,9 @@ validations:
 - field: observation.weight_basis
   rule: Present for a body weight
   error: OBSERVATION_INVALID_UNIT
+- field: observation.patient_id
+  rule: Patients confirms a record in use; required when there is no encounter
+  error: OBSERVATION_INVALID_PATIENT
 workflows:
 - name: Write and sign a note
   trigger: A clinician documents care
@@ -1005,6 +1015,13 @@ edgeCases:
   covers:
   - BR-H20
   - AC-H57
+- id: EC-H47
+  situation: A patient's home blood pressure monitor sends readings every morning between visits.
+  behaviour: They are recorded against the patient with no encounter, preliminary until the monitoring clinician accepts them.
+  covers:
+  - BR-H1
+  - BR-H38
+  - AC-H61
 functionalRequirements:
 - id: FR-H1
   text: The service must let authors start, edit, sign and discard notes, and cosigners cosign them, following the note lifecycle.
@@ -1098,7 +1115,7 @@ constraints:
   rationale: GDPR Article 32 lists encryption as a security measure, and HIPAA treats it as an addressable safeguard (45 CFR 164.312(a)(2)(iv) and (e)).
 - id: CON-H2
   text: A signature is an electronic act of the signer, bound to their identity and the version signed. Stamped, typed or scanned names are never accepted as signatures.
-  rationale: Hospitals must protect the integrity of authentication (42 CFR 482.24(b)), and Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
+  rationale: HIPAA requires protecting information from improper alteration (45 CFR 164.312(c)(1)), and Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
 - id: CON-H3
   text: Stored content of a signed version is never rewritten, including by format conversion; views and exports are generated from it.
   rationale: What the author signed must be provable later (45 CFR 164.312(c)(1)).
@@ -1534,6 +1551,13 @@ acceptanceCriteria:
   then: the note keeps the marking with source ai_draft and drafting_tool
   verifies:
   - BR-H7
+- id: AC-H61
+  given: a patient on remote monitoring, and a patient record not in use
+  when: their home blood pressure monitor sends a reading with no encounter, a reading arrives for the record not in use, and a clinician starts a progress note with no encounter
+  then: the first is saved against the patient, preliminary until accepted; the second fails with OBSERVATION_INVALID_PATIENT and HTTP 422; the note fails with NOTE_INVALID_ENCOUNTER and HTTP 422
+  verifies:
+  - BR-H1
+  - BR-H38
 operations:
 - name: Start a note
   actor: Clinician
@@ -1781,7 +1805,7 @@ operations:
   method: POST
   path: /patient-entries
   success: 201
-  input: encounter, sections
+  input: sections, and optionally the encounter they relate to
   output: the entry, final
   errors:
   - NOTE_INVALID_ENCOUNTER
@@ -1913,10 +1937,11 @@ operations:
   method: POST
   path: /observations
   success: 201
-  input: 'encounter, and for each: code, value or data_absent_reason, unit, components, effective_at, source, device, method, weight_basis and late_entry_reason'
+  input: 'encounter, or the patient for readings from outside a visit, and for each: code, value or data_absent_reason, unit, components, effective_at, source, device, method, weight_basis and late_entry_reason'
   output: the observations, with interpretation and any derived values
   errors:
   - OBSERVATION_INVALID_ENCOUNTER
+  - OBSERVATION_INVALID_PATIENT
   - OBSERVATION_INVALID_CODE
   - OBSERVATION_INVALID_UNIT
   - OBSERVATION_IMPLAUSIBLE
@@ -2560,6 +2585,9 @@ errors:
 - code: OBSERVATION_INVALID_ENCOUNTER
   http: 422
   message: The encounter doesn't exist, is cancelled or entered in error, or its patient isn't in use.
+- code: OBSERVATION_INVALID_PATIENT
+  http: 422
+  message: The patient doesn't exist or the record isn't in use.
 - code: OBSERVATION_INVALID_CODE
   http: 422
   message: That code isn't a vital sign or assessment item in use here.
@@ -2637,6 +2665,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Asks: is this LOINC, SNOMED CT or UCUM code valid on this date?'
+  - 'Asks: which codes the value set bound to each coded setting allows on this date'
 - service: device-integration-service
   direction: upstream
   reason: delivers readings from monitors and other devices
@@ -2901,6 +2930,10 @@ references:
   title: Regulation (EU) 2026/1744, Digital Omnibus on AI
   url: https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng
   note: Adds the 2 December 2026 deadline for AI tools on the market before 2 August 2026.
+- id: REF-H39
+  title: ONC, Conceptualizing a data infrastructure for patient-generated health data
+  url: https://www.healthit.gov/sites/default/files/onc_pghd_final_white_paper.pdf
+  note: Patient-generated health data recorded outside the clinical setting.
 acronyms:
 - term: AI
   definition: Artificial intelligence
@@ -2931,6 +2964,7 @@ tables:
     type: uuid
   - name: encounter_id
     type: uuid
+    nullable: true
   - name: type
     type: text
   - name: title
@@ -3120,6 +3154,7 @@ tables:
     type: uuid
   - name: encounter_id
     type: uuid
+    nullable: true
   - name: category
     type: text
   - name: code

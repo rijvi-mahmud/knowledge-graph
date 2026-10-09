@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.8.0
+version: 0.8.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -2110,6 +2110,14 @@ dependencies:
   contract:
   - 'Gives: stay.admitted, stay.class_changed, stay.transferred and stay.discharged, so charges follow the stay'
   - Moving an account between stays (HL7 A44) is Billing's concern
+- service: terminology-service
+  direction: upstream
+  reason: validates codes and units
+  criticality: soft
+  contract:
+  - 'Asks: is this code valid in this code system on this date?'
+  - 'Asks: which codes the value set bound to each coded setting allows on this date'
+  - 'Receives: terminology.release_activated and terminology.value_set_activated, to refresh cached code lists'
 risks:
 - id: RISK-E1
   risk: Two patients are placed in one bed.
@@ -2475,6 +2483,11 @@ compliance:
   covered_by: []
   jurisdiction: us
 changelog:
+- version: 0.8.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Asks Terminology to validate codes and expand the value sets bound to coded settings.
 - version: 0.8.0
   date: '2026-10-09'
   breaking: true

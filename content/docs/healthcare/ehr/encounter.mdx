@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.0
+version: 0.13.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,11 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Keeps the hospital wording of FR-H3, the status field and BR-H16 (class changes, on_hold and leave) as overrides.
 - version: 0.13.0
   date: '2026-10-09'
   breaking: true
@@ -155,6 +160,11 @@ dataModel:
   description: Whether the patient is listed in the facility directory during the stay.
   constraints: 'not_asked | listed | opted_out; codes: none standard, local to this specification'
   variant: inpatient
+- name: status
+  type: enum
+  required: true
+  description: Where the encounter is in its lifecycle.
+  constraints: 'planned | in_progress | on_hold | discharged | completed | cancelled | discontinued | entered_in_error; changed only through operations; codes: FHIR R5 EncounterStatus (in-progress, on-hold, entered-in-error)'
 businessRules:
 - id: BR-E3
   text: An emergency encounter is opened, in progress with subject status arrived, when the Emergency department module registers an arrival. Its subject status follows triage, care and departure as that module reports them.
@@ -221,6 +231,9 @@ businessRules:
 - id: BR-H47
   text: An encounter recorded on the wrong patient is moved to the right patient by an HIM specialist, with a reason. It keeps its id and visit number; on a locked encounter the move is also recorded as an amendment. The move is refused if the right patient is not in use or would then have two inpatient or observation encounters open (BR-E21). An encounter that belongs to a stay moves only with its stay, through Admission, discharge and transfer.
   rationale: A visit with notes on the wrong person is a record overlay, which ONC SAFER Guide 6 counts among the most dangerous identification errors. Entered in error is refused once clinical data exists, so a move is the only fix. HL7 moves a visit between patients (A45). Clinical modules keep their entries on the encounter id, so they follow it.
+- id: BR-H16
+  text: length is the time from actual_start to actual_end less time on leave.
+  rationale: FHIR defines length as the time the encounter lasted, less time absent. Leave counts toward neither care nor billing time.
 validations:
 - field: admission
   rule: admit source and discharge disposition from their code lists; only for inpatient and observation
@@ -963,6 +976,11 @@ errors:
 - code: ENCOUNTER_CONCURRENT_STAY
   http: 409
   message: The patient already has a hospital stay in progress.
+functionalRequirements:
+- id: FR-H3
+  text: The service must record class changes, participants and locations with their periods.
+  priority: must
+  verification: test
 ---
 
 Hospital encounters build on the [clinical encounter rules](/docs/healthcare/encounter)

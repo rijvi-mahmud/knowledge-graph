@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.10.2
+version: 0.10.3
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -1213,6 +1213,11 @@ references:
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
 changelog:
+- version: 0.10.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Asks Terminology which codes a bound value set allows.
 - version: 0.10.2
   date: '2026-10-09'
   breaking: false
@@ -1327,6 +1332,7 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: is this code valid in this code system on this date?'
+  - 'Asks: which codes the value set bound to each coded setting allows on this date'
 - service: notification-service
   direction: downstream
   reason: delivers reminders and tells Schedulers what needs a decision
