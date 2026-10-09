@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.4.2
+version: 0.4.3
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.4.3
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H28: psychotherapy notes are released only as the Consent module permits, which includes the disclosures HIPAA allows or requires without an authorization; "never released" contradicted that.'
 - version: 0.4.2
   date: '2026-10-09'
   breaking: false
@@ -630,8 +635,8 @@ businessRules:
   text: A hold names its grounds, and the law when the grounds are that a law requires it, the sections it covers, the professional who decided and when, and a review date. It covers no more than the grounds require. The patient is told what is held and can ask for the decision to be reviewed by another licensed professional who didn't make it. A hold ends at its review date unless renewed.
   rationale: HIPAA allows denial of access only on narrow grounds, with a right to review by another licensed professional (45 CFR 164.524(a)(3) and (4)), and the information blocking exception for preventing harm requires an individual decision no broader than necessary (45 CFR 171.201).
 - id: BR-H28
-  text: 'In the United States, note types in psychotherapy_note_types are psychotherapy notes: kept apart from the rest of the record, read only by their author, never released, copied into other notes, exported or exchanged, and never required for documentation to be complete. Disclosing one needs a specific authorization, which is Consent''s concern. Medication monitoring, session times, test results and summaries of diagnosis, status, plan, symptoms and progress go in ordinary notes.'
-  rationale: HIPAA defines psychotherapy notes as session notes separated from the record, excluding those items (45 CFR 164.501), excludes them from the right of access (164.524(a)(1)(i)) and requires an authorization for most uses and disclosures (164.508(a)(2)).
+  text: 'In the United States, note types in psychotherapy_note_types are psychotherapy notes: kept apart from the rest of the record, used for treatment only by their author, and not shown, copied into other notes, exported, exchanged or released except as the Consent module permits, which covers a specific authorization and the uses and disclosures HIPAA allows or requires without one. They are never required for documentation to be complete. Medication monitoring, session times, test results and summaries of diagnosis, status, plan, symptoms and progress go in ordinary notes.'
+  rationale: HIPAA defines psychotherapy notes as session notes separated from the record, excluding those items (45 CFR 164.501), excludes them from the right of access (164.524(a)(1)(i)), and requires an authorization for most uses and disclosures while allowing or requiring a few without one, such as disclosures to HHS (164.508(a)(2)).
   jurisdiction: us
 - id: BR-H29
   text: A note carries the encounter's sensitivity codes plus any its author adds, and every event about it carries them. Disclosure decisions are Consent's concern.

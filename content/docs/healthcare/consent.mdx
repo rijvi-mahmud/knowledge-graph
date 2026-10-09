@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -213,8 +213,8 @@ businessRules:
   text: Consent to treatment is never used as permission to disclose, and permission to disclose is never used as consent to treatment. In the European Union, GDPR consent is recorded only for processing whose legal basis is consent, never for care itself.
   rationale: A HIPAA consent for treatment, payment and operations can't stand in for an authorization (45 CFR 164.506(b)(2)); in the EU, care data is processed under GDPR Article 9(2)(h), and calling it consent would let a withdrawal appear to stop care records.
 - id: BR-H3
-  text: 'In the United States, a HIPAA authorization is active only when it contains every core element: a specific description of the information, who may disclose it, who may receive it, each purpose (at the request of the individual is enough when the patient starts it), an expiration date or event, and the signature and date, with a representative''s authority described. It must also state the right to revoke in writing and how, whether care can be conditioned on signing, and that disclosed information may be redisclosed, all in plain language. A request missing any of them is refused, listing every missing one, and the patient gets a copy when the organization asked for the authorization.'
-  rationale: These are the core elements and required statements of a valid authorization (45 CFR 164.508(c)(1) to (4)).
+  text: 'In the United States, a HIPAA authorization is active only when it contains every core element: a specific description of the information, who may disclose it, who may receive it, each purpose (at the request of the individual is enough when the patient starts it), an expiration date or event, and the signature and date, with a representative''s authority described. It must also state the right to revoke in writing and how, whether care can be conditioned on signing, and that disclosed information may be redisclosed, all in plain language. An authorization for marketing that a third party pays the organization for says so, and one for a sale of health information says the organization will be paid. A request missing any of them is refused, listing every missing one, and the patient gets a copy when the organization asked for the authorization.'
+  rationale: These are the core elements and required statements of a valid authorization (45 CFR 164.508(a)(3)(ii), (a)(4)(ii) and (c)(1) to (4)).
   jurisdiction: us
 - id: BR-H4
   text: In the United States, a disclosure check never relies on an authorization that has expired, whose expiration event is known to have happened, that is incomplete, that is known to be revoked, that breaks the rules on combining or conditioning, or whose material information is known to be false.
@@ -225,7 +225,7 @@ businessRules:
   rationale: HIPAA limits compound authorizations and prohibits conditioning, with these exceptions (45 CFR 164.508(b)(3) and (4)).
   jurisdiction: us
 - id: BR-H6
-  text: In the United States, a Part 2 consent is active only with the patient's name; who may disclose; a specific description of the information; the recipients, which for a single consent for all future treatment, payment and operations can be described generally, and which name an intermediary and its participants; each purpose; the right to revoke in writing; an expiration date or event (end of the treatment or none is enough for treatment, payment and operations); the signature, of the minor or of a person authorized for a patient lacking capacity or deceased; the date; and, for treatment, payment and operations, the statements on redisclosure and on the consequences of refusing.
+  text: In the United States, a Part 2 consent is active only with the patient's name; who may disclose; a specific description of the information; the recipients, which for a single consent for all future treatment, payment and operations can be described generally, and which name an intermediary and its participants; each purpose; the right to revoke in writing; an expiration date or event (end of the treatment or none is enough for treatment, payment and operations); the signature, of the minor or of a person authorized for a patient lacking capacity or deceased; the date; for treatment, payment and operations, the statements on redisclosure and on the consequences of refusing; when a recipient is a covered entity or business associate, the statement that it may redisclose as HIPAA allows except in proceedings against the patient; and, if the program will fundraise with the records, the patient's right to opt out of fundraising.
   rationale: These are the required elements of a Part 2 consent; electronic signatures are allowed where law doesn't forbid them, and the rules apply from 16 February 2026 (42 CFR 2.31(a); 89 FR 12472).
   jurisdiction: us
 - id: BR-H7
@@ -290,14 +290,14 @@ businessRules:
   rationale: EHDS gives this reversible right and limits its effect to later permits (EHDS Article 71(1) and (3)); Chapter IV applies from 26 March 2029 (Article 105).
   jurisdiction: eu
 - id: BR-H23
-  text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure. A use the law allows without consent, such as treatment within the organization, is permitted with basis law. Every check and its answer is logged.
+  text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure. A use the law allows without consent, such as treatment within the organization, is permitted with basis law, unless a narrower rule applies to that data. Every check and its answer is logged.
   rationale: Modules need one consistent answer instead of reading forms; the log shows what each disclosure relied on, for audits and the accounting of disclosures.
 - id: BR-H24
   text: 'Restricted data can be used or disclosed in an emergency: under an agreed restriction for emergency treatment, with a request that the receiving provider not redisclose it; for Part 2 records to medical personnel in a bona fide emergency, documented at once with the personnel and their facility, who disclosed, when and the nature of the emergency; and in the EU to protect vital interests, logged for the patient. Each is recorded as an emergency use and reviewed by a privacy officer.'
   rationale: HIPAA, Part 2 and the EHDS each allow emergency use under these conditions (45 CFR 164.522(a)(1)(iii) and (iv); 42 CFR 2.51; EHDS Article 11(5)).
 - id: BR-H25
   text: Informed consent to a treatment or procedure records the procedure, the practitioner who obtained it, that risks, benefits and alternatives were discussed in a language the patient understands, and the signature where consent_required_procedures requires one. The patient can withdraw it until the procedure starts. In an emergency without consent, the clinician records why.
-  rationale: Patients have the right to make informed decisions, including to refuse treatment (42 CFR 482.13(b)(2)); which procedures need written consent is set by law and by the organization.
+  rationale: Patients have the right to make informed decisions, including to refuse treatment (42 CFR 482.13(b)(2)); consent obtained in a language the patient doesn't understand isn't informed, and US providers must offer language assistance (45 CFR 92.201); which procedures need written consent is set by law and by the organization.
 - id: BR-H26
   text: Whether an adult patient has executed an advance directive is recorded, with its kind and document, at the moment advance_directive_information_at sets for the organization, after giving written information on their rights. Care is never conditioned on whether they have one, and the orders a directive leads to are the Orders module's.
   rationale: Providers must document in a prominent part of the record whether the patient has an advance directive and must not condition care on it (42 CFR 489.102(a)(2) and (a)(3)); when depends on the kind of provider (489.102(b)).
@@ -314,11 +314,19 @@ businessRules:
   text: A consent recorded on the wrong patient or twice is marked entered in error with a reason; it no longer counts in disclosure checks, and it is kept.
   rationale: Deleting it would leave earlier disclosures unexplained; FHIR marks such a consent entered-in-error.
 - id: BR-H31
-  text: When this module can't be reached, modules allow use for treatment inside the organization and deny every other disclosure until it answers.
+  text: When this module can't be reached, modules allow use for treatment inside the organization of data whose treatment use needs no consent, and deny every other use and disclosure until it answers.
   rationale: Blocking care because a consent service is down harms the patient, while a disclosure outside the organization can't be undone.
 - id: BR-H32
   text: Every change sends the revision it read; a stale revision fails.
   rationale: Two staff recording on one consent must not overwrite each other.
+- id: BR-H33
+  text: In the United States, the law allows less without consent for three kinds of data. Psychotherapy notes are used without an authorization only by their author for treatment, for the organization's supervised training, to defend it in a legal action the patient brings, and for disclosures HIPAA requires or permits for them, such as to HHS, for oversight of the author, to a coroner or to avert a serious threat. SUD counseling notes follow the same pattern under Part 2. Other Part 2 records pass without consent only between staff of the Part 2 program, or of an entity with direct administrative control over it, who need them for diagnosis, treatment or referral, and under the other Part 2 exceptions, such as a medical emergency.
+  rationale: HIPAA and Part 2 require consent for these records even for treatment, with these exceptions (45 CFR 164.508(a)(2); 42 CFR 2.31(b), 2.12(c)(3), 2.51).
+  jurisdiction: us
+- id: BR-H34
+  text: In the European Union, when a GDPR consent is given through the portal or another online service by a child under gdpr_child_consent_age, a holder of parental responsibility gives or authorises it, and the organization makes reasonable efforts to check that they did.
+  rationale: For online services offered directly to a child, consent below 16, or the lower age a member state sets (not below 13), must come from a holder of parental responsibility (GDPR Article 8).
+  jurisdiction: eu
 validations:
 - field: consent.patient_id
   rule: A patient record in use, as the Patients module answers
@@ -500,6 +508,13 @@ edgeCases:
   behaviour: Staff record the event, and the authorization becomes inactive.
   covers:
   - BR-H12
+- id: EC-H13
+  situation: A psychiatrist's psychotherapy notes are requested by the patient's new therapist.
+  behaviour: Without a specific authorization the request is denied; the patient's own access doesn't include them, but ordinary notes do.
+  covers:
+  - BR-H33
+  - AC-H37
+  jurisdiction: us
 functionalRequirements:
 - id: FR-H1
   text: The service must record consents of every kind in consent_kinds, validate their required elements, and keep their documents unaltered.
@@ -604,6 +619,10 @@ settings:
 - name: consent_retention
   type: duration
   description: How long consent records are kept. At least six years from creation or last effective date in the United States (45 CFR 164.530(j)(2)); longer where state or member state law requires, which needs legal advice.
+- name: gdpr_child_consent_age
+  type: integer
+  description: 'In the EU, the age from which a child can give GDPR consent online alone: 16 unless the member state set a lower age, never below 13 (GDPR Article 8(1)).'
+  jurisdiction: eu
 performanceTargets:
 - id: PERF-H1
   indicator: Disclosure check latency
@@ -867,6 +886,29 @@ acceptanceCriteria:
   then: they match, and any change would show
   verifies:
   - CON-H2
+- id: AC-H37
+  given: jurisdiction us, a psychotherapy note, SUD counseling notes, and Part 2 records of a patient in a Part 2 unit the hospital has direct administrative control over, with no consents
+  when: another clinician's treatment use of the psychotherapy note, a hospitalist's treatment use of the counseling notes, the hospital's emergency physician's treatment use of the Part 2 records, and a request from a physician at an outside clinic are checked
+  then: the psychotherapy note and the counseling notes are deny; the emergency physician is permit with basis 42 CFR 2.12(c)(3); the outside physician is deny unless a Part 2 consent is active or an emergency use under 42 CFR 2.51 is recorded
+  verifies:
+  - BR-H33
+  - BR-H24
+  jurisdiction: us
+- id: AC-H38
+  given: jurisdiction eu, gdpr_child_consent_age 16, and a 14-year-old agreeing to research contact in the portal
+  when: they agree alone, then a parent authorises it
+  then: the first isn't recorded as consent; the second is, with the parent's authorisation and the check made
+  verifies:
+  - BR-H34
+  jurisdiction: eu
+- id: AC-H39
+  given: jurisdiction us, a marketing authorization paid for by a drug maker without the remuneration statement, and a Part 2 consent naming a hospital as recipient without the HIPAA redisclosure statement
+  when: each is signed
+  then: both fail with CONSENT_INCOMPLETE and HTTP 422, naming the missing statement
+  verifies:
+  - BR-H3
+  - BR-H6
+  jurisdiction: us
 operations:
 - name: Record a consent
   actor: Registrar
@@ -1517,7 +1559,18 @@ references:
   title: HL7 Terminology, consent category codes
   url: https://terminology.hl7.org/CodeSystem-consentcategorycodes.html
   note: acd, dnr, emrgonly, hcd, npp, polst, research.
+- id: REF-H17
+  title: 45 CFR 92.201, Meaningful access for individuals with limited English proficiency
+  url: https://www.ecfr.gov/current/title-45/section-92.201
+  note: Language assistance for informed consent.
 changelog:
+- version: 0.2.0
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H33: narrower law for psychotherapy notes, SUD counseling notes and Part 2 records (45 CFR 164.508(a)(2); 42 CFR 2.12(c)(3), 2.31(b)); BR-H23 and BR-H31 no longer permit their treatment use without it.'
+  - 'BR-H34: GDPR Article 8 for children consenting online, with gdpr_child_consent_age.'
+  - BR-H3 adds the marketing and sale statements, BR-H6 the HIPAA redisclosure and fundraising statements; informed consent cites language assistance (45 CFR 92.201).
 - version: 0.1.0
   date: '2026-10-10'
   breaking: false
@@ -1732,6 +1785,7 @@ compliance:
   - BR-H4
   - BR-H5
   - BR-H11
+  - BR-H33
   jurisdiction: us
 - id: CMP-H2
   regulation: HIPAA Privacy Rule
@@ -1772,7 +1826,7 @@ compliance:
   jurisdiction: us
 - id: CMP-H6
   regulation: 42 CFR Part 2
-  provision: 42 CFR 2.14, 2.22, 2.31, 2.32, 2.33 and 2.51
+  provision: 42 CFR 2.12(c)(3), 2.14, 2.22, 2.31, 2.32, 2.33 and 2.51
   obligation: Valid consents, minors' consent, patient notice, the statement with each disclosure, redisclosure limits and emergency disclosure records.
   how: Part 2 consent validation, obligations in check answers, notices and emergency uses.
   status: met
@@ -1783,6 +1837,7 @@ compliance:
   - BR-H9
   - BR-H17
   - BR-H24
+  - BR-H33
   jurisdiction: us
 - id: CMP-H7
   regulation: 21st Century Cures Act information blocking
@@ -1815,7 +1870,7 @@ compliance:
   jurisdiction: us
 - id: CMP-H10
   regulation: GDPR (EU) 2016/679
-  provision: Articles 7 and 9(2)(a)
+  provision: Articles 7, 8 and 9(2)(a)
   obligation: Demonstrable, distinguishable, explicit, freely given consent that can be withdrawn as easily.
   how: GDPR consent records and withdrawal.
   status: met
@@ -1823,6 +1878,7 @@ compliance:
   - BR-H19
   - BR-H11
   - BR-H2
+  - BR-H34
   jurisdiction: eu
 - id: CMP-H11
   regulation: GDPR (EU) 2016/679
