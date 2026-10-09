@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.3.0
+version: 0.4.0
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -163,7 +163,7 @@ dataModel:
   type: enum
   required: true
   description: Whether the app may be used.
-  constraints: 'registered | suspended | revoked; codes: none standard, local to this specification'
+  constraints: 'pending | registered | suspended | revoked; a backend app starts pending, a patient-facing app registered; codes: none standard, local to this specification'
 - name: grant.scopes
   type: string[]
   required: true
@@ -237,8 +237,8 @@ businessRules:
   text: A patient sees every app they have authorized and can revoke any grant at once; revoking ends its tokens immediately, and never later than 1 hour after the request.
   rationale: Patients must stay in control of who reads their data; certified US health IT must revoke an app at the patient's direction within 1 hour (45 CFR 170.315(g)(10)(vi)).
 - id: BR-H16
-  text: Backend systems, such as a population health platform using bulk export, authenticate with their own registered keys and system scopes, never with a person's account.
-  rationale: SMART Backend Services and Bulk Data use system scopes so a machine's access is separate from any person's and can be revoked on its own.
+  text: Backend systems, such as a population health platform using bulk export, authenticate with their own registered keys and system scopes, never with a person's account. A backend app stays pending until an account administrator approves it and the system scopes it may use, because system scopes reach many patients at once.
+  rationale: SMART Backend Services and Bulk Data use system scopes so a machine's access is separate from any person's and can be revoked on its own; SMART leaves backend registration to the organization, and a self-registered app reaching every patient would be a breach.
 - id: BR-H17
   text: Every sign-in, failed attempt, step-up, role change, emergency access, app registration and grant is logged with who, when, from where and the outcome. The log can't be changed and is kept for audit_log_retention.
   rationale: HIPAA requires audit controls that record and examine activity (45 CFR 164.312(b)).
@@ -271,6 +271,12 @@ businessRules:
 - id: BR-H26
   text: A person can enrol in the portal, and recover an account, without signing in. Neither response says whether a matching record or account exists, and both are throttled.
   rationale: Saying "no such patient" or "no such account" lets anyone test who is a patient here, which itself discloses health information; throttling stops guessing at scale (NIST SP 800-63B-4 rate limiting).
+- id: BR-H27
+  text: An account administrator can suspend or revoke an app, giving a reason, which ends its tokens; a patient-facing app is suspended or revoked only for a documented security risk. A backend app whose key is compromised is suspended until it registers a new key.
+  rationale: A compromised or misbehaving app must be stoppable at once; refusing a patient's chosen app for other reasons is likely information blocking in the United States (45 CFR 171.203).
+- id: BR-H28
+  text: A request to erase an account is met by disabling it and deleting its authenticators, contact details and identity evidence. The sign-in and access log is kept for audit_log_retention, then deleted. A patient or representative can close their own portal account at any time.
+  rationale: The log is needed to meet legal obligations such as audit controls and to establish or defend legal claims, which GDPR Article 17(3)(b) and (e) exempt from erasure; the rest isn't needed once the account is closed.
 validations:
 - field: account.subject
   rule: An existing practitioner, staff record, patient, representative relationship or registered system
@@ -463,6 +469,17 @@ edgeCases:
   covers:
   - BR-H26
   - AC-H32
+- id: EC-H15
+  situation: A nurse is also a patient at the same hospital.
+  behaviour: They have a staff account and a separate patient account; reading their own record through the staff account is governed by each module's own access rules.
+  covers:
+  - BR-H1
+- id: EC-H16
+  situation: A vendor registers a backend app and asks for every patient's data.
+  behaviour: It stays pending until an administrator approves it and its system scopes.
+  covers:
+  - BR-H16
+  - AC-H36
 functionalRequirements:
 - id: FR-H1
   text: The service must create, disable and lock accounts, one per person or system.
@@ -512,6 +529,10 @@ functionalRequirements:
   verification: test
 - id: FR-H12
   text: The service must let administrators change usernames and relink patient accounts after a confirmed match.
+  priority: must
+  verification: test
+- id: FR-H13
+  text: The service must approve backend apps before use, suspend and revoke apps, and erase accounts while keeping the audit log for its retention.
   priority: must
   verification: test
 nonFunctionalRequirements:
@@ -819,6 +840,27 @@ acceptanceCriteria:
   verifies:
   - BR-H8
   - BR-H5
+- id: AC-H36
+  given: a backend app that just registered with system/Patient.rs
+  when: it requests a token, then an administrator approves it, then a patient-facing app is suspended with no security reason
+  then: the first fails with IDENTITY_APP_REFUSED and HTTP 403; after approval it gets a token and identity.app_status_changed is emitted; the suspension fails with IDENTITY_APP_REFUSED and HTTP 403
+  verifies:
+  - BR-H16
+  - BR-H27
+  - FR-H13
+- id: AC-H37
+  given: a backend app whose private key leaked
+  when: an administrator suspends it with the reason
+  then: its tokens stop working and identity.app_status_changed is emitted; it works again only after a new key is registered and it is reinstated
+  verifies:
+  - BR-H27
+- id: AC-H38
+  given: a patient who closes their portal account and asks for erasure
+  when: the request is carried out
+  then: the account is disabled, authenticators, contact details and identity evidence are deleted, and the sign-in log stays until audit_log_retention ends
+  verifies:
+  - BR-H28
+  - FR-H13
 operations:
 - name: Create an account
   actor: Account administrator
@@ -1040,7 +1082,7 @@ operations:
   - IDENTITY_FORBIDDEN
 - name: Disable an account
   actor: Account administrator
-  description: Disable an account, ending its sessions and tokens.
+  description: Disable an account, ending its sessions and tokens. A patient or representative can close their own account this way.
   method: POST
   path: /accounts/{id}/disable
   success: 200
@@ -1130,6 +1172,22 @@ operations:
   - IDENTITY_INVALID_SCOPE
   - IDENTITY_APP_REFUSED
   jurisdiction: us
+- name: Change an app's status
+  actor: Account administrator
+  description: Approve a pending backend app and its system scopes, or suspend, reinstate or revoke an app, ending its tokens when it stops.
+  method: PATCH
+  path: /apps/{client_id}
+  success: 200
+  input: status, approved system scopes, reason and revision
+  output: the app
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_INVALID_STATUS
+  - IDENTITY_INVALID_SCOPE
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_APP_REFUSED
+  - IDENTITY_REVISION_CONFLICT
+  - IDENTITY_FORBIDDEN
 - name: Authorize an app
   actor: Patient
   description: 'The SMART App Launch authorization request: sign in and approve scopes.'
@@ -1152,6 +1210,7 @@ operations:
   errors:
   - IDENTITY_INVALID_CREDENTIAL
   - IDENTITY_INVALID_SCOPE
+  - IDENTITY_APP_REFUSED
 - name: Get the SMART configuration
   actor: App
   description: Publish the authorization endpoints and capabilities apps discover.
@@ -1318,6 +1377,13 @@ events:
   - granted
   - reason
   jurisdiction: us
+- name: identity.app_status_changed
+  description: An app was approved, suspended, reinstated or revoked.
+  payload:
+  - client_id
+  - revision
+  - status
+  - reason
 deliveryGuarantees:
 - id: DG-H1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -1337,7 +1403,7 @@ permissions:
 - name: identity.check
   description: Ask whether a caller holds a permission.
 accessMatrix:
-- action: Create, change, search, suspend, reinstate, re-enable, disable and unlock accounts, assign and define roles, run access reviews, grant and revoke controlled substance prescribing
+- action: Create, change, search, suspend, reinstate, re-enable, disable and unlock accounts, assign and define roles, run access reviews, grant and revoke controlled substance prescribing, approve, suspend and revoke apps
   roles:
     Account administrator: any
     Staff member: none
@@ -1346,7 +1412,7 @@ accessMatrix:
     App: none
     System: none
   permission: identity.admin
-- action: Register and remove own authenticators, sign in, step up, sign out, list and revoke own app grants
+- action: Register and remove own authenticators, sign in, step up, sign out, list and revoke own app grants, close own patient or representative account
   roles:
     Account administrator: own
     Staff member: own
@@ -1460,7 +1526,7 @@ personalData:
 errors:
 - code: IDENTITY_NOT_FOUND
   http: 404
-  message: No account, session or emergency access exists with that id.
+  message: No account, session, app or emergency access exists with that id.
 - code: IDENTITY_FORBIDDEN
   http: 403
   message: Your role doesn't allow this.
@@ -1490,7 +1556,7 @@ errors:
   message: A scope isn't valid SMART syntax or wasn't registered for this app.
 - code: IDENTITY_APP_REFUSED
   http: 403
-  message: The app was refused for a documented security risk.
+  message: The app was refused, suspended or revoked without a documented security risk, or is pending approval.
 - code: IDENTITY_GRANT_NOT_FOUND
   http: 404
   message: No grant exists with that id.
@@ -1561,6 +1627,7 @@ dependencies:
   - Which permission each action needs is each module's concern
   - 'Gives: identity.epcs_access_changed, so prescribing stops offering controlled substance signing at once'
   - 'Gives: token introspection, so a module can check a token it received'
+  - 'Gives: identity.app_status_changed, so modules stop serving a suspended or revoked app at once'
 - service: notification-service
   direction: downstream
   reason: alerts
@@ -1570,6 +1637,7 @@ dependencies:
   - 'Gives: identity.break_glass_reviewed, so the person who broke the glass learns the outcome'
   - 'Gives: identity.account_created, identity.account_disabled, identity.role_changed, identity.app_registered and identity.grant_revoked, so holders are told of changes'
   - 'Gives: identity.account_suspended, identity.account_reactivated and identity.epcs_access_changed, so holders are told of changes'
+  - 'Gives: identity.app_status_changed, so app owners and affected patients are told'
 risks:
 - id: RISK-H1
   risk: An account is taken over by phishing.
@@ -1591,6 +1659,10 @@ decisions:
 - id: ADR-H2
   decision: This module answers whether a caller holds a permission; each module decides patient-level access from its own care relationship rules.
   rationale: Care relationships live in the clinical modules; centralizing them here would copy their rules.
+  date: '2026-10-09'
+- id: ADR-H3
+  decision: Multi-factor authentication is required for every account that reaches patient data, in every jurisdiction.
+  rationale: NIST SP 800-63B-4 AAL2 and NIS2 already expect it, and the proposed HIPAA Security Rule update (published 6 January 2025, not final as of October 2026) would make it mandatory for US covered entities; building it in now avoids a rework.
   date: '2026-10-09'
 openQuestions: []
 references:
@@ -1650,7 +1722,23 @@ references:
   title: 45 CFR 164.502, Uses and disclosures of protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.502
   note: (g)(4), executors of a deceased individual as personal representatives.
+- id: REF-H15
+  title: HIPAA Security Rule To Strengthen the Cybersecurity of Electronic Protected Health Information (proposed rule)
+  url: https://www.federalregister.gov/documents/2025/01/06/2024-30983/hipaa-security-rule-to-strengthen-the-cybersecurity-of-electronic-protected-health-information
+  note: Proposed mandatory multi-factor authentication; not final.
+- id: REF-H16
+  title: Regulation (EU) 2016/679 (GDPR)
+  url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
+  note: Article 17(3), exemptions from erasure; Article 32, security of processing.
 changelog:
+- version: 0.4.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - 'Breaking: backend apps start pending and need an administrator''s approval before getting tokens (BR-H16); app.status gains pending.'
+  - Suspend, reinstate and revoke apps (BR-H27, PATCH /apps/{client_id}, identity.app_status_changed).
+  - Erasure keeps the log for audit_log_retention under GDPR Article 17(3) (BR-H28); patients can close their own account.
+  - 'ADR-H3: multi-factor authentication ahead of the proposed HIPAA Security Rule update.'
 - version: 0.3.0
   date: '2026-10-09'
   breaking: true
@@ -1819,6 +1907,8 @@ tables:
     type: text
   - name: status
     type: text
+    default: '''pending'''
+    note: registered for patient-facing apps
   - name: redirect_uris
     type: text[]
     default: '''{}'''
@@ -1827,6 +1917,9 @@ tables:
     nullable: true
   - name: allowed_scopes
     type: text[]
+  - name: revision
+    type: integer
+    default: '0'
   indexes: []
   constraints:
   - name: apps_pkey
@@ -2002,6 +2095,15 @@ compliance:
   - BR-H1
   - BR-H5
   - BR-H17
+  jurisdiction: eu
+- id: CMP-H10
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17
+  obligation: Erase personal data on request, except where 17(3) applies.
+  how: Authenticators, contact details and evidence are deleted; the log is kept for its retention.
+  status: met
+  covered_by:
+  - BR-H28
   jurisdiction: eu
 ---
 
