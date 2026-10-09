@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.4
+version: 0.2.5
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.2.5
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H56: EU access by professional category (EHDS Article 11(3)).'
 - version: 0.2.4
   date: '2026-10-09'
   breaking: false
@@ -651,6 +656,10 @@ businessRules:
 - id: BR-H55
   text: An author or cosigner can sign only while the Practitioners module reports them active. A suspended practitioner's drafts stay drafts until they are reinstated, or until an HIM specialist closes the deficiency as unresolvable; notes they signed before stay as they are.
   rationale: A signature attests responsibility for care, which a practitioner without a valid licence can't take on; what they signed earlier remains the record.
+- id: BR-H56
+  text: In the European Union, a health professional reads notes and observations only in the categories professional_access_rules allows for their professional category, under the rules of the member state where the care takes place. Entries outside them are not shown, and the access log records that they were withheld.
+  rationale: Member states must set rules on the categories of personal electronic health data accessible by different categories of health professionals or for different healthcare tasks, and the rules of the member state of treatment apply (EHDS Article 11(3) and (4)); these apply to discharge reports, results and imaging from 26 March 2031 and to patient summaries from 26 March 2029 (Article 105).
+  jurisdiction: eu
 validations:
 - field: note.encounter_id
   rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
@@ -1229,6 +1238,10 @@ settings:
 - name: growth_reference
   type: map
   description: 'Which growth reference computes percentiles at each age. Default in the United States: WHO growth standards from birth to 24 months and CDC growth charts from 2 to 19 years, as CDC recommends. Set per member state in the EU.'
+- name: professional_access_rules
+  type: map
+  description: Which categories of health data each category of health professional may read, such as physicians, nurses or physiotherapists, as the member state of treatment sets. Empty by default, meaning every professional caring for the patient may read everything their role allows.
+  jurisdiction: eu
 performanceTargets:
 - id: PERF-H1
   indicator: Notes signed on time
@@ -1629,6 +1642,13 @@ acceptanceCriteria:
   verifies:
   - BR-H55
   - BR-H5
+- id: AC-H65
+  given: professional_access_rules letting physiotherapists read progress notes but not psychiatric notes
+  when: a physiotherapist caring for the patient lists the patient's records, then opens a psychiatric note directly
+  then: the list omits the psychiatric note, and opening it fails with NOTE_FORBIDDEN and HTTP 403; the access log records the withheld read
+  verifies:
+  - BR-H56
+  jurisdiction: eu
 operations:
 - name: Start a note
   actor: Clinician
@@ -3759,6 +3779,15 @@ compliance:
   covered_by:
   - BR-H33
   - CON-H1
+  jurisdiction: eu
+- id: CMP-H43
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 11(3) and (4)
+  obligation: Health professionals access only the categories of health data member-state rules allow for their professional category, under the rules of the member state of treatment.
+  how: professional_access_rules applied to every read.
+  status: met
+  covered_by:
+  - BR-H56
   jurisdiction: eu
 ---
 
