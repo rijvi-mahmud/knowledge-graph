@@ -5,6 +5,8 @@
     "index",
     "patient",
     "appointment",
+    "encounter",
+    "clinical-documentation",
     "terminology",
     "ehr"
   ]

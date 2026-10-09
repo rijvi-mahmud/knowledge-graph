@@ -1,0 +1,2587 @@
+---
+title: Clinical encounters
+description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
+module: encounter
+version: 0.1.0
+status: draft
+industry: healthcare
+variants:
+- id: ambulatory
+  title: Ambulatory encounters
+  description: Clinic visits, day procedures and virtual visits, where the patient is not in a hospital stay.
+  summary: An ambulatory encounter (HL7 class AMB, or VR when virtual) is opened when Appointments reports a check-in or a walk-in. It starts when a practitioner begins care, not when the patient arrives, and ends when the visit ends.
+purpose: 'Keep the record of each interaction between a patient and a care provider: its class, status and period, the practitioners and locations involved, the reasons and diagnoses, and whether its record is complete. Every clinical module attaches its data to an encounter by id. Works in the United States and the European Union.'
+scope:
+- Opening encounters when the module where care happens reports a check-in, walk-in, arrival or admission
+- 'The encounter lifecycle: planned, in progress, discharged, completed, and cancelled, discontinued or entered in error'
+- The class of an encounter, and changes to it
+- Participants with their periods
+- Locations during the encounter, with their periods
+- Reasons for the encounter and its diagnoses, with their role and rank
+- Encounters grouped under another, such as consultations
+- Record completion and locking, and amendments after locking
+- Sensitive encounters, such as at a substance use disorder program
+- A department's and a practitioner's open and incomplete encounters
+- Links to episodes of care
+- Patients' own access to their encounters, and their correction requests
+- Restricting disclosure to a health plan for care paid in full
+- Moving an encounter recorded on the wrong patient, and merging duplicates
+nonGoals:
+- Booking. The Appointments module schedules visits; an encounter records what actually happened.
+- Clinical notes, assessments, the history and physical, and discharge summaries. Clinical documentation owns them, attached to the encounter by id.
+- Conditions and the problem list. The Conditions module owns them; an encounter refers to them, or carries a coded diagnosis.
+- Coding for claims, diagnosis-related groups and charges. Billing owns them, using the diagnoses and class history this module gives.
+- Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
+- Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
+changelog:
+- version: 0.1.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'Split from EHR Encounters 0.12.0: the rules every health application shares. Each item keeps its number with an H prefix, so BR-E7 is now BR-H7.'
+  - Hospital-only errors and events (concurrent stays, location corrections, leave, class changes and cancelled discharges) are in the EHR layer.
+actors:
+- name: Clinician
+  description: A practitioner who cares for the patient during the encounter, such as the attending.
+- name: Registrar
+  description: Staff who open and correct encounters at check-in and admission.
+- name: Health information management (HIM) specialist
+  description: Tracks record completion, and corrects or amends locked encounters.
+- name: Privacy officer
+  description: Reviews who accessed encounters.
+- name: System
+  description: Another module, such as Appointments, reporting an event.
+- name: Patient
+  description: The person the encounter is about, or their personal representative within the authority the Patients module records.
+assumptions:
+- id: AS-H1
+  text: The modules where care happens, such as Appointments, report check-ins, arrivals, admissions, transfers and discharges as they happen.
+  rationale: An encounter records what happened. The modules where it happens tell this one.
+- id: AS-H2
+  text: Clinical documentation reports when an encounter's documentation is complete.
+  rationale: Only the module holding the notes knows whether the record is complete (BR-H7).
+- id: AS-H3
+  text: The jurisdiction, record_completion_deadline and diagnosis_code_system settings are set with legal advice before go-live.
+  rationale: Completion deadlines and code systems differ by US state, by payer and by EU member state.
+glossary:
+- term: Encounter
+  definition: An interaction between a patient and healthcare providers to provide care or assess health (HL7 FHIR). An appointment records what is planned; an encounter records what happened.
+- term: Encounter class
+  definition: 'The setting: ambulatory (AMB), virtual (VR), emergency (EMER), observation (OBSENC) or inpatient (IMP).'
+- term: Subject status
+  definition: Where the patient is in the encounter, such as arrived, triaged or receiving care, separate from the encounter's own status.
+- term: Record completion
+  definition: The point where the encounter's documentation and final diagnosis are complete, after which it is locked.
+- term: Amendment
+  definition: A change to a locked encounter, recorded with who made it, when and why, keeping what it replaced.
+- term: Part 2 program
+  definition: A federally assisted substance use disorder program in the United States, whose records have extra protection (42 CFR Part 2).
+concepts:
+- name: Appointment, then encounter
+  description: The appointment is the plan. When the patient checks in, the appointment is fulfilled and linked to the encounter opened for it (FHIR).
+- name: Status is not the patient's position
+  description: status tracks the encounter; subject_status tracks the patient, such as arrived or triaged. A patient can arrive an hour before the encounter starts.
+dataModel:
+- name: id
+  type: string
+  required: true
+  description: The encounter id. Never changes or is reused.
+  constraints: set by the service
+- name: identifiers
+  type: identifier[]
+  required: true
+  description: Numbers other systems use for the encounter, such as the visit number (HL7 v2 PV1-19, FHIR Encounter.identifier).
+  constraints: 'a visit number from visit_number_system assigned when opened, never reused; a merged duplicate''s visit number stays on the remaining encounter as an old identifier; codes: identifier type from HL7 v2 Table 0203 (VN visit number, AN account number)'
+- name: patient_id
+  type: string
+  required: true
+  description: The patient, owned by the Patients module.
+  constraints: a record in use; follows replaced_by after a merge
+- name: status
+  type: enum
+  required: true
+  description: Where the encounter is in its lifecycle.
+  constraints: 'planned | in_progress | on_hold | discharged | completed | cancelled | discontinued | entered_in_error; changed only through operations; codes: FHIR R5 EncounterStatus (in-progress, on-hold, entered-in-error)'
+- name: status_reason
+  type: reason
+  required: false
+  description: 'Why a planned encounter was cancelled, or an encounter marked entered in error: a code and optional text. Separate from reasons, which say why the encounter takes place.'
+  constraints: 'required with status cancelled or entered_in_error; patient_deceased, patient_entered_in_error, check_in_undone, admission_cancelled and merged are set by the service; staff choose from cancel_reasons; codes: none standard, local to this specification (FHIR R5 Encounter has no status reason element)'
+- name: subject_status
+  type: enum
+  required: false
+  description: Where the patient is in the encounter.
+  constraints: 'arrived | triaged | receiving_care | on_leave | departed; codes: HL7 encounter-subject-status (receiving-care, on-leave)'
+- name: class
+  type: enum
+  required: true
+  description: The setting.
+  constraints: 'ambulatory | virtual | emergency | observation | inpatient; codes: HL7 v3 ActCode AMB, VR, EMER, OBSENC, IMP'
+- name: class_history
+  type: class change[]
+  required: false
+  description: Every class the encounter had, with the time each began, such as observation then inpatient (FHIR EncounterHistory).
+  constraints: append-only; set by the service
+- name: type
+  type: code
+  required: false
+  description: The specific kind of encounter, such as a follow-up or a day surgery.
+  constraints: 'codes: encounter_type_codes'
+- name: priority
+  type: code
+  required: false
+  description: How urgent the encounter is.
+  constraints: 'codes: HL7 v3 ActPriority, such as EM emergency, R routine, UR urgent'
+- name: department_id
+  type: string
+  required: true
+  description: The department responsible, owned by the Organization module (FHIR serviceProvider).
+- name: department_history
+  type: department stay[]
+  required: false
+  description: Every department responsible for the encounter, with the time each took over.
+  constraints: append-only; set by the service (BR-H25)
+- name: appointment_ids
+  type: string[]
+  required: false
+  description: The appointments this encounter fulfils, owned by Appointments (FHIR Encounter.appointment). One visit can cover several same-day appointments.
+  constraints: set from appointment.checked_in; each for the same patient
+- name: part_of
+  type: string
+  required: false
+  description: The encounter this one is part of, such as the stay a consultation happened in (FHIR partOf).
+  constraints: same patient, or the mother's encounter for a newborn (BR-H6); its period within the parent's
+- name: planned_start
+  type: instant
+  required: false
+  description: When the encounter is expected to start.
+- name: planned_end
+  type: instant
+  required: false
+  description: The expected discharge or end (FHIR plannedEndDate), such as from a pending discharge.
+- name: actual_start
+  type: instant
+  required: false
+  description: When care began.
+  constraints: set by Start
+- name: actual_end
+  type: instant
+  required: false
+  description: When care ended.
+  constraints: set by Discharge or End
+- name: length
+  type: duration
+  required: false
+  description: How long the encounter lasted, less time on leave (FHIR length).
+  constraints: derived
+- name: participants
+  type: participant[]
+  required: false
+  description: Practitioners involved, each with role and period.
+  constraints: 'codes: role from HL7 v3 ParticipationType: ATND attending, ADM admitter, CON consultant, DIS discharger, REF referrer, PPRF primary performer, SPRF secondary performer'
+- name: locations
+  type: location stay[]
+  required: false
+  description: Locations the patient has been in, each with an entry id, period and status, owned by the Organization module. The id lets a past movement be corrected.
+  constraints: 'status planned | active | reserved | completed (FHIR): planned for a pending transfer, reserved for a bed held while the patient is elsewhere; at most one active'
+- name: reasons
+  type: reason[]
+  required: false
+  description: Why the encounter takes place, coded or as a reference to a Condition.
+  constraints: 'codes: reason_code_system'
+- name: diagnoses
+  type: diagnosis[]
+  required: false
+  description: Diagnoses relevant to the encounter, each a code or a Condition reference, with role and rank.
+  constraints: 'codes: diagnosis_code_system for the code; role from HL7 diagnosis-role: AD admission, DD discharge, CC chief complaint, CM comorbidity, pre-op, post-op, billing'
+- name: virtual_service
+  type: connection details
+  required: false
+  description: How to join a virtual encounter.
+  constraints: an https URL
+- name: patient_location
+  type: string
+  required: false
+  description: 'Where the patient is during a virtual encounter: a US state or an EU member state.'
+  constraints: required for class virtual
+- name: sensitivity
+  type: code[]
+  required: false
+  description: Kinds of information needing extra protection, such as a substance use disorder program.
+  constraints: 'codes: HL7 v3 ActCode SUD, PSY, HIV, SDV'
+- name: documentation_complete
+  type: boolean
+  required: false
+  description: Set when Clinical documentation reports the documentation is complete, and cleared if it reports it reopened before the encounter completes.
+  constraints: set by the service
+- name: record_due_at
+  type: instant
+  required: false
+  description: 'When the record must be complete: actual_end plus record_completion_deadline.'
+  constraints: derived
+- name: locked_at
+  type: instant
+  required: false
+  description: When the encounter was completed and locked.
+  constraints: set by the service
+- name: amendments
+  type: amendment[]
+  required: false
+  description: Changes after locking, with who, when, why and the previous value.
+  constraints: append-only; set by the service
+- name: departure_reason
+  type: code
+  required: false
+  description: Why an encounter ended early, such as left without being seen or left against advice.
+  constraints: 'codes: local list departure_reasons, mapped to HL7 discharge-disposition aadvice where it applies'
+- name: has_clinical_data
+  type: boolean
+  required: false
+  description: Set when another module reports data recorded against the encounter.
+  constraints: set by the service
+- name: revision
+  type: integer
+  required: true
+  description: Increases with every change. A change sends the revision it read.
+  constraints: set by the service
+- name: episode_of_care_ids
+  type: string[]
+  required: false
+  description: Episodes of care this encounter belongs to, owned by the Episodes module (FHIR episodeOfCare).
+- name: based_on
+  type: string[]
+  required: false
+  description: Orders this encounter carries out, owned by Orders (FHIR Encounter.basedOn ServiceRequest).
+- name: account_ids
+  type: string[]
+  required: false
+  description: Billing accounts for the encounter, owned by Billing (FHIR Encounter.account).
+  constraints: set by the service from Billing
+- name: health_plan_restriction
+  type: boolean
+  required: false
+  description: Set when the patient paid in full for this encounter's services and asked that it not be disclosed to their health plan.
+  constraints: set by the service through its operation
+- name: access_denial
+  type: access denial
+  required: false
+  description: 'Where a licensed professional decided the patient''s access to part of this encounter is reasonably likely to endanger life or physical safety: what is withheld, who decided, why, and the review.'
+  constraints: set by the service through its operation
+- name: accuracy_contested
+  type: boolean
+  required: false
+  description: Set while the patient contests the accuracy of part of the encounter and asked for it to be restricted until the correction request is decided.
+  constraints: set by the service through correction requests
+- name: correction_requests
+  type: correction request[]
+  required: false
+  description: 'Requests to correct part of the encounter: what was asked and by whom, when, the deadline and any extension, the decision and its reason, any statement of disagreement and rebuttal, and who was told (BR-H44).'
+  constraints: set by the service through correction requests
+- name: merged_into
+  type: string
+  required: false
+  description: The encounter this duplicate was merged into (BR-H48).
+  constraints: set by the service; set only with status entered_in_error
+relationships:
+- type: belongs_to
+  target: patient
+  note: every encounter has one patient
+- type: belongs_to
+  target: appointment
+  note: optional; the appointment that scheduled it
+- type: has_many
+  target: encounter
+  note: encounters part of this one
+- type: exposes_to
+  target: clinical-documentation
+  note: notes and results attach by encounter id
+- type: can_trigger
+  target: event:encounter.completed
+- type: belongs_to
+  target: order
+  note: optional; the orders it carries out
+- type: belongs_to
+  target: account
+  note: billing accounts, owned by Billing
+businessRules:
+- id: BR-H1
+  text: Every encounter has one patient in use, one class and one responsible department.
+  rationale: Every clinical entry is found through its encounter. An encounter without a patient or department is care nobody can find or bill.
+- id: BR-H2
+  text: 'An ambulatory or virtual encounter is opened when Appointments reports a check-in or a walk-in, at the moment encounter_opens_at sets: at check-in, as planned with subject status arrived, or when a practitioner starts care, in progress. It records the appointment and reports its own id back.'
+  rationale: 'FHIR is not consistent on this: the Appointment page says the encounter "is typically created when the service starts, not when the patient arrives", and the Encounter page lets it start as arrived. Practice varies, so it is a setting; either way waiting time and care time stay separate.'
+  variant: ambulatory
+- id: BR-H6
+  text: An encounter part of another has the same patient, except that a newborn's encounter can be part of its mother's encounter. A part's period is within its parent's, and the parent cannot be completed while a part is still open.
+  rationale: FHIR groups encounters with partOf, such as a consultation during a stay, and says a child's encounter should reference the mother's encounter with partOf. A parent closed over an open part leaves care outside any complete record.
+- id: BR-H7
+  text: A discharged encounter becomes completed only when Clinical documentation reports its documentation complete and a final diagnosis is recorded. It must happen within record_completion_deadline of actual_end; encounters past that are listed as overdue. If Clinical documentation reports documentation reopened before then, documentation_complete is cleared.
+  rationale: US hospitals must record the final diagnosis and complete the medical record within 30 days after discharge (42 CFR 482.24(c)(4)(viii)). FHIR uses discharged for care that is over while the record is still being completed.
+- id: BR-H8
+  text: A completed encounter is locked. Any later change is an amendment that records who, when, why and the previous value, and emits encounter.amended.
+  rationale: Hospitals must keep record entries complete and protect their integrity (42 CFR 482.24(b)). Silent changes after completion would change a record others have relied on, including claims.
+- id: BR-H9
+  text: A planned encounter that never starts is cancelled. An encounter that started but ended early, such as the patient leaving against advice or without being seen, is discontinued with a departure reason.
+  rationale: FHIR separates encounters that never happened from those cut short. A patient who left is part of the record and of quality reporting, so nothing is deleted.
+- id: BR-H10
+  text: An encounter can be marked entered in error only while no clinical data has been recorded against it (has_clinical_data unset). Otherwise its data is moved to the right encounter first.
+  rationale: Discarding an encounter that holds notes or results would hide that care. Each clinical module moves its own entries.
+- id: BR-H13
+  text: 'Each diagnosis has a role and a rank, and a code valid in diagnosis_code_system on the right date: the discharge date for inpatient encounters, the encounter date otherwise. A completed encounter has at least one discharge or billing diagnosis.'
+  rationale: CMS applies each fiscal year's ICD-10-CM codes to discharges and encounters from October 1 (the FY 2027 files to those from October 1, 2026). A code valid at admission may be retired by discharge.
+- id: BR-H14
+  text: An encounter carries the sensitivity codes Organization gives for its department, such as SUD for a substance use disorder program. Data attached to it carries the same codes, and disclosure follows the Consent module.
+  rationale: Records from US federally assisted substance use disorder programs have extra protection under 42 CFR Part 2, revised with a compliance date of February 16, 2026. Marking the encounter is what lets every module apply it.
+- id: BR-H15
+  text: A virtual encounter records its connection details and where the patient is.
+  rationale: In the United States a practitioner must be licensed where the patient is, as the Clinical appointments rules state.
+  variant: ambulatory
+- id: BR-H16
+  text: length is the time from actual_start to actual_end less time on leave.
+  rationale: FHIR defines length as the time the encounter lasted, less time absent. Leave counts toward neither care nor billing time.
+- id: BR-H17
+  text: When the Patients module merges two patients, their encounters move to the remaining record; when a merge is undone, encounters recorded since the merge are listed for review.
+  rationale: An encounter on a retired record disappears from the patient's history. Only a person can tell whose care a post-merge encounter was.
+- id: BR-H18
+  text: Every view and change of an encounter is logged with who, when and what. Opening an encounter of a restricted patient needs a reason, as the Patients module requires.
+  rationale: HIPAA requires audit controls (45 CFR 164.312(b)). An encounter reveals why someone was seen.
+- id: BR-H19
+  text: Fields the service sets, such as status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data and revision, cannot be written by clients.
+  rationale: A client writing status skips the lifecycle and its guards; one writing locked_at changes what counts as the legal record.
+- id: BR-H20
+  text: Every change sends the revision it read, and a stale revision is rejected.
+  rationale: Registrars, clinicians and HIM staff change the same encounter; without this, one silently undoes another.
+- id: BR-H22
+  text: No encounter starts after the patient's recorded death.
+  rationale: An encounter after death almost always means the wrong patient. A death recorded in error is retracted in the Patients module first.
+- id: BR-H25
+  text: A change of responsible department keeps the encounter and adds the new department to department_history with the time it took over.
+  rationale: Who was responsible at each point matters for billing, quality reporting and accountability, the same as class history.
+- id: BR-H26
+  text: Encounters of a patient under legal hold are never erased or anonymised, even after the Patients module's retention ends.
+  rationale: The Patients module stops erasure during litigation, and the encounters are the record in question.
+- id: BR-H28
+  text: When the Patients module records a death, the patient's planned encounters are cancelled with the reason patient_deceased. Encounters in progress are ended by the module that manages them or by a clinician.
+  rationale: A planned stay or visit for someone who has died would stay on lists and schedules. Encounters in progress need a person to record what happened.
+- id: BR-H30
+  text: When Appointments undoes a check-in, the planned encounter opened for it is cancelled with the reason check_in_undone.
+  rationale: The check-in was a mistake, so the visit it opened never happened.
+- id: BR-H31
+  text: When the Patients module marks a patient entered in error, the patient's planned encounters are cancelled with the reason patient_entered_in_error.
+  rationale: The record was created by mistake, so a planned visit or stay for it will never happen. Leaving it planned keeps it on lists and schedules.
+- id: BR-H32
+  text: When the Patients module retracts a death, the encounters cancelled for it (BR-H28) are listed, and encounter.patient_review_needed is emitted for each so they can be planned again.
+  rationale: A death recorded for the wrong patient must not silently cost them a planned admission. A person decides whether each one still stands.
+- id: BR-H33
+  text: A check-in for a patient who already has an open ambulatory encounter in the same visit_grouping scope adds the appointment to that encounter instead of opening another.
+  rationale: FHIR lets one encounter fulfil several appointments. A morning of blood draw, X-ray and consultation is one visit to document and bill, not three.
+  variant: ambulatory
+- id: BR-H34
+  text: Every encounter gets a visit number from visit_number_system when it is opened. It is never reused, and stays with the encounter through merges and amendments.
+  rationale: Laboratory, radiology and billing systems match their data to a visit by its number (HL7 v2 PV1-19). A reused number would attach results to the wrong visit.
+- id: BR-H35
+  text: An encounter records the orders it carries out, and Orders confirms each one is for the same patient.
+  rationale: FHIR links an encounter to the request that initiated it (basedOn). Without the link nobody can tell whether an order was carried out.
+- id: BR-H39
+  text: A patient, or their representative within the authority the Patients module records, can read their own encounters electronically as soon as they are recorded. No policy holds them back for review. A patient can ask for their own access to be delayed. Part of an encounter can be withheld only where a licensed professional decides access is reasonably likely to endanger life or physical safety; the decision is recorded and the patient can have it reviewed.
+  rationale: HIPAA gives a right of access and allows denial on narrow reviewable grounds (45 CFR 164.524(a)(3)); a delay is likely information blocking (45 CFR 171.103); GDPR gives a right of access (Article 15), and the EHDS gives EU patients immediate access (Article 3).
+- id: BR-H40
+  text: A patient, or their representative, can ask for an encounter to be corrected. An HIM specialist decides within the Patients module's correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made as an amendment linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which goes with later disclosures.
+  rationale: HIPAA requires a decision within 60 days, with one 30-day extension, a written denial and a right to disagree (45 CFR 164.526). GDPR gives rights to rectification and to restriction while accuracy is checked (Articles 16 and 18).
+- id: BR-H41
+  text: When the patient, or someone other than the health plan, has paid in full for the encounter's services and asks that they not be disclosed to the health plan, health_plan_restriction is set. Billing must not disclose the encounter to that plan for payment or operations unless the law requires it. The restriction is never refused.
+  rationale: HIPAA requires a covered entity to agree to this restriction when the care was paid in full out of pocket and the disclosure is for payment or operations and not otherwise required by law (45 CFR 164.522(a)(1)(vi)).
+- id: BR-H42
+  text: When a patient who requests a correction asks for the data to be restricted meanwhile, accuracy_contested is set. Everyone reading the encounter sees the contested part marked, and it is cleared when the request is decided.
+  rationale: GDPR gives a right to restriction while the accuracy of personal data is checked (Article 18(1)(a)). Marking it, rather than hiding it, keeps the data available for care while warning everyone it is disputed.
+- id: BR-H44
+  text: Each correction request is kept and linked to the encounter it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the encounter, and in the United States for at least 6 years from its decision.
+  rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)).
+- id: BR-H47
+  text: An encounter recorded on the wrong patient is moved to the right patient by an HIM specialist, with a reason. It keeps its id and visit number; on a locked encounter the move is also recorded as an amendment. The move is refused if the right patient is not in use, or the move would break a rule of the module that manages a stay the encounter belongs to; such an encounter moves only with its stay.
+  rationale: A visit with notes on the wrong person is a record overlay, which ONC SAFER Guide 6 counts among the most dangerous identification errors. Entered in error is refused once clinical data exists, so a move is the only fix. HL7 moves a visit between patients (A45). Clinical modules keep their entries on the encounter id, so they follow it.
+- id: BR-H48
+  text: Two encounters of the same patient for one visit are merged by an HIM specialist, with a reason. The duplicate's appointments, locations, participants and diagnoses join the remaining encounter; the duplicate becomes entered in error with status_reason merged and merged_into set, and its visit number stays on the remaining encounter as an old identifier. encounter.merged tells clinical modules to move their entries. Encounters that belong to stays merge only when their stays merge.
+  rationale: Double check-ins and patient merges create two encounters for one visit. HL7 merges visits (A42). Keeping the old visit number lets laboratory and billing messages sent with it still find the visit (BR-H34).
+validations:
+- field: patient_id
+  rule: Patients confirms a record in use
+  error: ENCOUNTER_INVALID_PATIENT
+- field: class
+  rule: ambulatory, virtual, emergency, observation or inpatient
+  error: ENCOUNTER_INVALID_CODE
+- field: subject_status, priority, type, departure_reason, sensitivity
+  rule: values from their code lists
+  error: ENCOUNTER_INVALID_CODE
+- field: department_id
+  rule: Organization confirms the department exists
+  error: ENCOUNTER_INVALID_DEPARTMENT
+- field: appointment_ids
+  rule: Appointments confirms the appointment, for the same patient
+  error: ENCOUNTER_INVALID_REFERENCE
+- field: part_of
+  rule: an encounter for the same patient, or the mother's encounter for a newborn, whose period contains this one
+  error: ENCOUNTER_INVALID_PARENT
+- field: planned_start, actual_start, actual_end
+  rule: RFC 3339 instants; actual_end not before actual_start; actual times not in the future
+  error: ENCOUNTER_INVALID_PERIOD
+- field: participants
+  rule: a role code and a practitioner who holds a role in the department on the date; one attending at a time for inpatient and observation
+  error: ENCOUNTER_INVALID_PARTICIPANT
+- field: locations
+  rule: Organization confirms the location; at most one active; period within the encounter's
+  error: ENCOUNTER_INVALID_LOCATION
+- field: reasons, diagnoses
+  rule: a code valid in its code system on the right date (BR-H13), or a Condition reference; diagnoses have a role and a rank of 1 or more
+  error: ENCOUNTER_INVALID_DIAGNOSIS
+- field: virtual_service, patient_location
+  rule: an https URL, and a US state or EU member state; required for class virtual
+  error: ENCOUNTER_INVALID_VIRTUAL
+- field: id, status, class_history, length, documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, health_plan_restriction, access_denial, accuracy_contested, correction_requests, merged_into
+  rule: never sent by clients (BR-H19)
+  error: ENCOUNTER_READ_ONLY_FIELD
+- field: revision
+  rule: matches the current revision
+  error: ENCOUNTER_REVISION_CONFLICT
+- field: actual_start
+  rule: not after the patient's recorded death (BR-H22)
+  error: ENCOUNTER_PATIENT_DECEASED
+- field: episode_of_care_ids
+  rule: Episodes confirms each episode, for the same patient
+  error: ENCOUNTER_INVALID_REFERENCE
+- field: department_history
+  rule: never sent by clients (BR-H25)
+  error: ENCOUNTER_READ_ONLY_FIELD
+- field: identifiers
+  rule: a visit number in visit_number_system, unique and never reused
+  error: ENCOUNTER_READ_ONLY_FIELD
+- field: based_on
+  rule: Orders confirms each order, for the same patient
+  error: ENCOUNTER_INVALID_REFERENCE
+- field: planned_end
+  rule: an RFC 3339 instant not before actual_start or planned_start
+  error: ENCOUNTER_INVALID_PERIOD
+- field: account_ids
+  rule: set by the service from Billing, never sent by clients
+  error: ENCOUNTER_READ_ONLY_FIELD
+- field: status_reason
+  rule: required to cancel, mark entered in error, move or merge; a code from cancel_reasons, or a service-set code
+  error: ENCOUNTER_REASON_REQUIRED
+stateMachine:
+  initial: planned
+  states:
+  - planned
+  - in_progress
+  - discharged
+  - completed
+  - cancelled
+  - discontinued
+  - entered_in_error
+  transitions:
+  - from: planned
+    to: in_progress
+    trigger: 'start: a practitioner begins care'
+  - from: planned
+    to: cancelled
+    trigger: 'cancel: the encounter never happened'
+  - from: in_progress
+    to: discharged
+    trigger: discharge or end of visit
+  - from: in_progress
+    to: discontinued
+    trigger: the patient left before care was complete
+  - from: discharged
+    to: completed
+    trigger: complete
+    guard: documentation complete, a final diagnosis, and no open part (BR-H6, BR-H7)
+  - from: planned
+    to: entered_in_error
+    trigger: mark entered in error
+    guard: has_clinical_data unset
+  - from: in_progress
+    to: entered_in_error
+    trigger: mark entered in error
+    guard: has_clinical_data unset
+  - from: planned
+    to: entered_in_error
+    trigger: merged into another encounter (BR-H48)
+  - from: in_progress
+    to: entered_in_error
+    trigger: merged into another encounter (BR-H48)
+  - from: discharged
+    to: entered_in_error
+    trigger: merged into another encounter (BR-H48)
+  - from: completed
+    to: entered_in_error
+    trigger: merged into another encounter (BR-H48)
+workflows:
+- name: Open at check-in
+  trigger: Appointments reports appointment.checked_in
+  actor: System
+  variant: ambulatory
+  steps:
+  - Create the encounter as planned, subject status arrived, with the appointment id, class and department
+  - Report the encounter id to Appointments
+  - Emit encounter.created
+  outcome: The visit has a record before care starts, and the appointment points to it.
+- name: Start care
+  trigger: A practitioner begins seeing the patient
+  actor: Clinician
+  steps:
+  - Set actual_start, status in progress and subject status receiving care
+  - Add the practitioner as primary performer or attending
+  - Report care to the Patients module
+  - Emit encounter.started
+  outcome: Waiting and care time are recorded separately.
+- name: Complete the record
+  trigger: Clinical documentation reports the documentation complete
+  actor: Health information management (HIM) specialist
+  steps:
+  - Check a final diagnosis is recorded and no part is open
+  - Set completed and locked_at
+  - Emit encounter.completed with the diagnoses and class history for Billing
+  outcome: The record is complete and locked within the deadline.
+- name: Amend a locked encounter
+  trigger: A locked encounter needs a correction
+  actor: Health information management (HIM) specialist
+  steps:
+  - Record the new value, the previous value, who, when and why
+  - Emit encounter.amended
+  outcome: The record is corrected and its history kept.
+edgeCases:
+- id: EC-H1
+  situation: A patient checks in at 09:00 and is seen at 10:10.
+  behaviour: The encounter is planned with subject status arrived from 09:00, and actual_start is 10:10.
+  covers:
+  - BR-H2
+  - AC-H1
+  variant: ambulatory
+- id: EC-H6
+  situation: A discharged encounter has no final diagnosis 25 days after discharge.
+  behaviour: It cannot be completed, and it is listed as due in 5 days; after 30 days it is overdue.
+  covers:
+  - BR-H7
+  - AC-H8
+- id: EC-H7
+  situation: A coder finds a wrong discharge diagnosis after the encounter is locked.
+  behaviour: The HIM specialist amends it with a reason; the previous code is kept and encounter.amended is emitted.
+  covers:
+  - BR-H8
+  - AC-H9
+- id: EC-H8
+  situation: A consultation encounter part of a stay is still open when the stay is completed.
+  behaviour: Completing the stay fails with ENCOUNTER_OPEN_PARTS until the consultation is closed.
+  covers:
+  - BR-H6
+  - AC-H6
+- id: EC-H9
+  situation: An encounter is opened for the wrong patient and a nurse has already recorded vital signs.
+  behaviour: Marking it entered in error fails with ENCOUNTER_HAS_CLINICAL_DATA; the vital signs are moved first.
+  covers:
+  - BR-H10
+  - AC-H11
+- id: EC-H11
+  situation: A patient is seen at the hospital's substance use disorder program.
+  behaviour: The encounter carries SUD sensitivity, and its notes and results inherit it.
+  covers:
+  - BR-H14
+  - AC-H14
+- id: EC-H12
+  situation: The patient's record is merged into another while a stay is open.
+  behaviour: The stay moves to the remaining patient and keeps its id.
+  covers:
+  - BR-H17
+  - AC-H15
+- id: EC-H15
+  situation: A baby is born during the mother's stay.
+  behaviour: The baby's encounter is part of the mother's encounter, though the patients differ.
+  covers:
+  - BR-H6
+  - AC-H31
+- id: EC-H17
+  situation: A patient dies during a stay.
+  behaviour: ADT discharges the encounter with disposition expired; the Patients module records the death. A later encounter for that patient fails with ENCOUNTER_PATIENT_DECEASED.
+  covers:
+  - BR-H22
+  - AC-H33
+- id: EC-H20
+  situation: A patient moves from the medicine service to surgery.
+  behaviour: department_history records both, and encounter.department_changed is emitted.
+  covers:
+  - BR-H25
+  - AC-H36
+- id: EC-H21
+  situation: The patient's records are under legal hold when retention ends.
+  behaviour: The encounters are kept.
+  covers:
+  - BR-H26
+  - AC-H37
+- id: EC-H22
+  situation: A patient with a pre-admission for next week dies today.
+  behaviour: The planned encounter is cancelled with reason patient_deceased.
+  covers:
+  - BR-H28
+  - AC-H40
+- id: EC-H24
+  situation: The front desk undoes a wrong check-in.
+  behaviour: The planned encounter is cancelled and encounter.cancelled is emitted.
+  covers:
+  - BR-H30
+  - AC-H42
+- id: EC-H25
+  situation: A record created by mistake has a pre-admission next week.
+  behaviour: When Patients marks it entered in error, the planned encounter is cancelled with reason patient_entered_in_error.
+  covers:
+  - BR-H31
+  - AC-H43
+- id: EC-H26
+  situation: A death recorded for the wrong patient cancelled their pre-admission, and the death is retracted.
+  behaviour: The cancelled encounter is listed and encounter.patient_review_needed is emitted so it can be planned again.
+  covers:
+  - BR-H32
+  - AC-H44
+- id: EC-H27
+  situation: A patient has a 09:00 blood draw and a 10:30 consultation in the same department.
+  behaviour: With visit_grouping per_department_day, the consultation check-in joins the morning's encounter and encounter.appointment_added is emitted.
+  covers:
+  - BR-H33
+  - AC-H45
+- id: EC-H28
+  situation: An MRI order is carried out in an outpatient encounter.
+  behaviour: The encounter records the order, and Orders learns it was done from encounter.completed.
+  covers:
+  - BR-H35
+  - AC-H47
+- id: EC-H33
+  situation: A patient reads their encounter notes in the portal the evening after a clinic visit.
+  behaviour: They see them at once; nothing waits for clinician review.
+  covers:
+  - BR-H39
+  - AC-H53
+- id: EC-H34
+  situation: A patient pays cash for a sensitive test so their employer-sponsored plan won't learn of it.
+  behaviour: The restriction is set and Billing never sends that encounter to the plan.
+  covers:
+  - BR-H41
+  - AC-H55
+- id: EC-H35
+  situation: A patient disputes a mental health diagnosis on a past visit and asks that it be restricted while it is checked.
+  behaviour: The diagnosis stays available for care but is marked as disputed everywhere until the HIM specialist decides.
+  covers:
+  - BR-H42
+  - AC-H56
+- id: EC-H39
+  situation: A laboratory result arrives with the visit number of an encounter that was merged yesterday.
+  behaviour: The old visit number is found on the remaining encounter, so the result files to the right visit.
+  covers:
+  - BR-H48
+  - AC-H63
+- id: EC-H40
+  situation: A clinic visit with a signed note was registered on the patient's twin.
+  behaviour: The encounter is moved to the right twin; the note follows the encounter, and the move is an amendment because the encounter was locked.
+  covers:
+  - BR-H47
+  - AC-H62
+functionalRequirements:
+- id: FR-H1
+  text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
+  priority: must
+  verification: test
+- id: FR-H2
+  text: The service must move encounters through their lifecycle only by the transitions in the state machine.
+  priority: must
+  verification: test
+- id: FR-H3
+  text: The service must record class changes, participants and locations with their periods.
+  priority: must
+  verification: test
+- id: FR-H4
+  text: The service must record reasons and diagnoses, validating codes on the right date.
+  priority: must
+  verification: test
+- id: FR-H5
+  text: The service must complete and lock encounters only when their record is complete, and list encounters due and overdue.
+  priority: must
+  verification: test
+- id: FR-H6
+  text: The service must record amendments to locked encounters with their history.
+  priority: must
+  verification: test
+- id: FR-H7
+  text: The service must group encounters with part_of, and keep parts within their parent.
+  priority: should
+  verification: test
+- id: FR-H8
+  text: The service must flag sensitive encounters and give the flags to every module that attaches data.
+  priority: must
+  verification: test
+- id: FR-H9
+  text: The service must list encounters by patient, department, practitioner, status and date.
+  priority: must
+  verification: test
+- id: FR-H10
+  text: The service must log every view and change, and let a privacy officer read the log.
+  priority: must
+  verification: test
+- id: FR-H11
+  text: The service must export an encounter as an HL7 FHIR R5 Encounter resource.
+  priority: must
+  verification: test
+- id: FR-H12
+  text: The service must accept an Idempotency-Key on every change, so a retried event never opens a second encounter.
+  priority: must
+  verification: test
+- id: FR-H13
+  text: The service must fail fast with ENCOUNTER_DEPENDENCY_UNAVAILABLE when Patients or Organization cannot be reached.
+  priority: must
+  verification: test
+- id: FR-H14
+  text: The service must record why an encounter was cancelled or entered in error, separately from why it took place.
+  priority: must
+  verification: test
+- id: FR-H15
+  text: The service must move an encounter to another patient and merge duplicate encounters, keeping every visit number.
+  priority: must
+  verification: test
+nonFunctionalRequirements:
+- category: compatibility
+  text: 'Encounters map onto HL7 FHIR R5 Encounter: status to status, subject_status to subjectStatus, class to class, and class_history to EncounterHistory.'
+- category: security
+  text: Only people involved in the patient's care, or with a role that needs it, can read an encounter, and every read is logged.
+- category: reliability
+  text: An encounter change is acknowledged only after it is committed together with its events.
+- category: availability
+  text: Opening an encounter never waits on Billing, Consent or Clinical documentation.
+- category: portability
+  text: No requirement depends on a particular database, language or framework.
+constraints:
+- id: CON-H1
+  text: Encounter data is encrypted in transit and at rest.
+  rationale: GDPR Article 32 lists encryption as a security measure, and HIPAA treats it as an addressable safeguard (45 CFR 164.312).
+- id: CON-H2
+  text: Coded fields use the code systems named in the data model, and local codes are mapped to them before data leaves this module.
+  rationale: Billing, reporting and exchange all assume these code systems.
+- id: CON-H3
+  text: Times are RFC 3339 instants in UTC.
+  rationale: Stays cross daylight saving changes; instants keep length correct.
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. Required.
+- name: record_completion_deadline
+  type: duration
+  description: Time after actual_end to complete the record. 30 days for US hospitals (42 CFR 482.24(c)(4)(viii)); stricter where state law or medical staff bylaws require; set per member state in the EU. Required.
+- name: diagnosis_code_system
+  type: code system
+  description: ICD-10-CM in the United States, using the fiscal year release in effect on the date that applies (FY 2027 from October 1, 2026); ICD-10 or ICD-11 per EU member state. Required.
+- name: reason_code_system
+  type: code system
+  description: Code system for reasons, such as SNOMED CT or diagnosis_code_system. Required.
+- name: encounter_type_codes
+  type: code list
+  description: The deployment's encounter types, such as follow-up or day surgery. Required.
+- name: departure_reasons
+  type: code list
+  description: Reasons an encounter is discontinued, such as left without being seen or left against advice. Required.
+- name: encounter_opens_at
+  type: check_in | care_start
+  default: check_in
+  description: When an ambulatory or virtual encounter is opened (BR-H2). FHIR sources differ, so each hospital chooses.
+- name: visit_grouping
+  type: per_appointment | per_department_day | per_facility_day
+  default: per_department_day
+  description: Which same-day appointments share one encounter.
+- name: visit_number_system
+  type: identifier system
+  description: The system visit numbers are assigned in, and their format. Required.
+- name: cancel_reasons
+  type: code list
+  default: patient_request, scheduled_in_error, duplicate, other
+  description: Reasons staff can give when cancelling an encounter or marking it entered in error. other needs text.
+performanceTargets:
+- id: PERF-H1
+  indicator: Records completed on time
+  target: 100%
+  measurement: Share of discharged encounters completed before record_due_at, per month.
+- id: PERF-H2
+  indicator: Encounter opening delay
+  target: Set by each deployment as an SLO
+  measurement: 99th percentile time between a check-in, arrival or admission event and the encounter id being reported back.
+- id: PERF-H3
+  indicator: Read availability
+  target: Set by each deployment as an SLO
+  measurement: Share of encounter reads that succeed over a rolling 30 days.
+- id: PERF-H4
+  indicator: Duplicate encounters
+  target: '0'
+  measurement: Encounters opened twice for one check-in, arrival or admission. Any non-zero value is a defect (FR-H12).
+acceptanceCriteria:
+- id: AC-H1
+  given: appointment.checked_in at 09:00
+  when: Appointments reports it, and care starts at 10:10
+  then: the encounter is created planned with subject status arrived and the appointment id, its id is reported back, encounter.created is emitted, then actual_start is 10:10, it is in progress and encounter.started is emitted
+  verifies:
+  - BR-H2
+  - FR-H1
+  variant: ambulatory
+- id: AC-H6
+  given: a stay with an open consultation part
+  when: the stay is completed
+  then: the request fails with ENCOUNTER_OPEN_PARTS and HTTP 409; a part whose period is outside its parent fails with ENCOUNTER_INVALID_PARENT
+  verifies:
+  - BR-H6
+  - FR-H7
+- id: AC-H8
+  given: a discharged encounter without a final diagnosis
+  when: it is completed, then a discharge diagnosis is added and documentation reported complete, reopened and complete again
+  then: the first fails with ENCOUNTER_RECORD_INCOMPLETE and HTTP 409; the reopen clears documentation_complete; then it completes, is locked and encounter.completed is emitted; past record_due_at an incomplete one emits encounter.record_overdue
+  verifies:
+  - BR-H7
+  - FR-H5
+- id: AC-H9
+  given: a completed encounter
+  when: its discharge diagnosis is changed directly, then through an amendment with a reason
+  then: the direct change fails with ENCOUNTER_LOCKED and HTTP 409; the amendment keeps the previous value and emits encounter.amended
+  verifies:
+  - BR-H8
+  - FR-H6
+- id: AC-H11
+  given: an encounter with has_clinical_data set, and one without
+  when: each is marked entered in error
+  then: the first fails with ENCOUNTER_HAS_CLINICAL_DATA and HTTP 409; the second becomes entered in error and encounter.entered_in_error is emitted
+  verifies:
+  - BR-H10
+- id: AC-H14
+  given: Organization marks the addiction clinic SUD
+  when: an encounter opens there
+  then: its sensitivity is SUD and modules attaching data receive it
+  verifies:
+  - BR-H14
+  - FR-H8
+- id: AC-H15
+  given: patient S with an open stay
+  when: Patients merges S into T, and later undoes it
+  then: the stay moves to T with the same id; after the undo, encounters recorded since the merge are listed and encounter.patient_review_needed is emitted
+  verifies:
+  - BR-H17
+- id: AC-H17
+  given: a planned encounter
+  when: it is cancelled, and a completed one is cancelled
+  then: the first becomes cancelled with encounter.cancelled; the second fails with ENCOUNTER_INVALID_TRANSITION and HTTP 409
+  verifies:
+  - BR-H9
+  - FR-H2
+- id: AC-H18
+  given: no encounter E-404, and a patient that does not exist
+  when: E-404 is read, and an encounter is opened for the patient
+  then: they fail with ENCOUNTER_NOT_FOUND (404) and ENCOUNTER_INVALID_PATIENT (422)
+  verifies:
+  - BR-H1
+- id: AC-H19
+  given: an encounter for department D-999, an invalid class, and an appointment for another patient
+  when: each is sent
+  then: they fail with ENCOUNTER_INVALID_DEPARTMENT, ENCOUNTER_INVALID_CODE and ENCOUNTER_INVALID_REFERENCE, all HTTP 422
+  verifies:
+  - BR-H1
+- id: AC-H21
+  given: an encounter at revision 3
+  when: two changes send revision 3, and one sends status
+  then: one succeeds; the other fails with ENCOUNTER_REVISION_CONFLICT (409); the status change fails with ENCOUNTER_READ_ONLY_FIELD (422)
+  verifies:
+  - BR-H20
+  - BR-H19
+- id: AC-H22
+  given: an open encounter
+  when: its type is changed
+  then: encounter.updated is emitted naming the changed field
+  verifies:
+  - FR-H3
+- id: AC-H23
+  given: an encounter that opened successfully
+  when: the same event is retried with the same Idempotency-Key, and the key is reused with different details
+  then: the first returns the same encounter; the second fails with ENCOUNTER_IDEMPOTENCY_KEY_REUSED (422)
+  verifies:
+  - FR-H12
+- id: AC-H24
+  given: a privacy officer, and a restricted patient's encounter
+  when: the officer reads the access log, and a clinician opens the encounter without a reason
+  then: the log lists every view and change; the clinician fails with ENCOUNTER_REASON_REQUIRED (403)
+  verifies:
+  - BR-H18
+  - FR-H10
+- id: AC-H25
+  given: Organization unreachable
+  when: a transfer is reported
+  then: it fails with ENCOUNTER_DEPENDENCY_UNAVAILABLE (503)
+  verifies:
+  - FR-H13
+- id: AC-H26
+  given: any encounter
+  when: it is exported
+  then: the result is a valid FHIR R5 Encounter resource
+  verifies:
+  - FR-H11
+  - CON-H2
+- id: AC-H27
+  given: encounters across departments
+  when: a department's open encounters are listed for today
+  then: only that department's are returned, in time order
+  verifies:
+  - FR-H9
+- id: AC-H28
+  given: encounter data in storage and in transit, and times across a daylight saving change
+  when: they are inspected
+  then: data is encrypted and length is correct across the change
+  verifies:
+  - CON-H1
+  - CON-H3
+- id: AC-H29
+  given: a list request with no patient, department, practitioner or date
+  when: it is sent
+  then: it fails with ENCOUNTER_INVALID_QUERY and HTTP 422
+  verifies:
+  - FR-H9
+- id: AC-H30
+  given: an open encounter
+  when: an amendment is sent for it
+  then: it fails with ENCOUNTER_NOT_LOCKED and HTTP 409; the change is made with Update an encounter instead
+  verifies:
+  - BR-H8
+  - FR-H6
+- id: AC-H31
+  given: a mother's stay, and her newborn registered with mother_patient_id
+  when: the newborn's encounter is opened part of the mother's
+  then: it is accepted; part of an unrelated patient's encounter fails with ENCOUNTER_INVALID_PARENT
+  verifies:
+  - BR-H6
+- id: AC-H33
+  given: a patient who died yesterday
+  when: an encounter is opened for them starting today
+  then: it fails with ENCOUNTER_PATIENT_DECEASED and HTTP 409
+  verifies:
+  - BR-H22
+- id: AC-H36
+  given: an open encounter in medicine
+  when: its department changes to surgery
+  then: department_history holds both with their times, encounter.department_changed is emitted, and a client sending department_history fails with ENCOUNTER_READ_ONLY_FIELD
+  verifies:
+  - BR-H25
+- id: AC-H37
+  given: a patient under legal hold whose retention has ended
+  when: retention is applied
+  then: their encounters are kept unchanged
+  verifies:
+  - BR-H26
+- id: AC-H39
+  given: an encounter linked to an episode for another patient
+  when: it is saved
+  then: it fails with ENCOUNTER_INVALID_REFERENCE and HTTP 422
+  verifies:
+  - FR-H3
+- id: AC-H40
+  given: a patient with a planned encounter and one in progress
+  when: Patients reports their death
+  then: the planned one is cancelled with reason patient_deceased; the one in progress is unchanged
+  verifies:
+  - BR-H28
+- id: AC-H42
+  given: a planned encounter opened at check-in
+  when: Appointments reports appointment.check_in_undone
+  then: the encounter is cancelled and encounter.cancelled is emitted
+  verifies:
+  - BR-H30
+- id: AC-H43
+  given: a patient with a planned encounter
+  when: Patients marks the patient entered in error
+  then: the encounter is cancelled with reason patient_entered_in_error and encounter.cancelled is emitted
+  verifies:
+  - BR-H31
+- id: AC-H44
+  given: a planned encounter cancelled with reason patient_deceased
+  when: Patients retracts the death
+  then: encounter.patient_review_needed is emitted for it
+  verifies:
+  - BR-H32
+- id: AC-H45
+  given: visit_grouping per_department_day and an open encounter from a 09:00 check-in
+  when: the same patient checks in at 10:30 in that department
+  then: no new encounter opens; the appointment is added and encounter.appointment_added is emitted
+  verifies:
+  - BR-H33
+- id: AC-H46
+  given: any new encounter
+  when: it is opened
+  then: it has a visit number in visit_number_system that no other encounter has had; a client sending identifiers fails with ENCOUNTER_READ_ONLY_FIELD
+  verifies:
+  - BR-H34
+- id: AC-H47
+  given: an order for another patient
+  when: it is linked to an encounter
+  then: it fails with ENCOUNTER_INVALID_REFERENCE (422)
+  verifies:
+  - BR-H35
+- id: AC-H51
+  given: encounter_opens_at care_start
+  when: an outpatient checks in, then is seen
+  then: no encounter exists at check-in; it opens in progress when care starts
+  verifies:
+  - BR-H2
+- id: AC-H53
+  given: a patient, their representative, and another patient
+  when: each reads the patient's discharged encounter
+  then: the patient and representative see it at once; the other patient fails with ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT (403); a withheld part is not shown and the patient sees that it was withheld and how to have it reviewed
+  verifies:
+  - BR-H39
+- id: AC-H54
+  given: a correction request for a wrong discharge diagnosis
+  when: it is denied with a reason and the patient files a statement of disagreement; another is extended twice; an unknown request id is decided
+  then: the first is decided before its due date and encounter.correction_decided is emitted; the second extension fails with ENCOUNTER_EXTENSION_USED (409); deciding the first again fails with ENCOUNTER_CORRECTION_CLOSED (409); the unknown id fails with ENCOUNTER_CORRECTION_NOT_FOUND (404)
+  verifies:
+  - BR-H40
+- id: AC-H55
+  given: a patient who paid in full for a visit
+  when: they ask that it not go to their health plan
+  then: health_plan_restriction is set, encounter.restriction_changed is emitted, and Billing does not send the encounter to that plan
+  verifies:
+  - BR-H41
+- id: AC-H56
+  given: a patient contesting a discharge diagnosis
+  when: they request a correction and ask for restriction meanwhile, and the request is later decided
+  then: accuracy_contested is set and encounter.accuracy_contested is emitted; readers see the diagnosis marked as disputed; on the decision it is cleared and encounter.accuracy_contested is emitted again; a client sending accuracy_contested fails with ENCOUNTER_READ_ONLY_FIELD
+  verifies:
+  - BR-H42
+- id: AC-H57
+  given: a planned encounter, and a patient whose check-in is undone
+  when: a registrar cancels the first without a reason, then with scheduled_in_error, and Appointments undoes the check-in
+  then: the first attempt fails with ENCOUNTER_REASON_REQUIRED (422); the cancel records status_reason scheduled_in_error and leaves reasons unchanged; the second encounter is cancelled with check_in_undone; encounter.cancelled carries each status reason
+  verifies:
+  - BR-H30
+  - FR-H14
+- id: AC-H59
+  given: jurisdiction us and a correction request denied with a statement of disagreement
+  when: the encounter is read, and retention is applied 5 years after the decision
+  then: the request, denial and statement are linked to the encounter; the request is still kept
+  verifies:
+  - BR-H44
+  jurisdiction: us
+- id: AC-H62
+  given: a completed outpatient encounter with notes recorded on the wrong patient, and an inpatient encounter that belongs to a stay
+  when: an HIM specialist moves each with a reason
+  then: the first keeps its id and visit number, an amendment is recorded and encounter.moved is emitted; the second fails with ENCOUNTER_BELONGS_TO_STAY (409)
+  verifies:
+  - BR-H47
+  - FR-H15
+- id: AC-H63
+  given: two ambulatory encounters for the same patient from a double check-in, with visit numbers V100 and V101, and an encounter of another patient
+  when: V101 is merged into V100, and the other patient's encounter is merged into V100
+  then: V101 becomes entered in error with status_reason merged and merged_into, V100 lists V101 as an old identifier, and encounter.merged is emitted; the second fails with ENCOUNTER_INVALID_MERGE (409)
+  verifies:
+  - BR-H48
+  - FR-H15
+- id: AC-H64
+  given: an inpatient encounter
+  when: ADT reports stay.moved and, for another pair, stay.merged
+  then: the encounter is moved with the stay, and the two encounters are merged as BR-H48 describes
+  verifies:
+  - BR-H47
+  - BR-H48
+- id: AC-H65
+  given: an ambulatory encounter on 30 September and an ICD-10-CM code valid only from 1 October
+  when: the code is recorded as a diagnosis
+  then: it fails with ENCOUNTER_INVALID_CODE and HTTP 422, because the code is checked on the encounter date
+  verifies:
+  - BR-H13
+  - FR-H4
+  variant: ambulatory
+- id: AC-H66
+  given: a virtual encounter
+  when: it is opened without connection details or the patient's location, then with both
+  then: the first fails with ENCOUNTER_INVALID_VIRTUAL and HTTP 422; the second records both
+  verifies:
+  - BR-H15
+  variant: ambulatory
+- id: AC-H67
+  given: an ambulatory encounter from 09:10 to 09:40
+  when: it ends
+  then: length is 30 minutes
+  verifies:
+  - BR-H16
+  variant: ambulatory
+- id: AC-H68
+  given: an in-progress ambulatory encounter
+  when: a participant is added without a role, then with one; a location outside the encounter period is recorded, then a valid one
+  then: the participant fails with ENCOUNTER_INVALID_PARTICIPANT and HTTP 422, then is added and encounter.participant_changed is emitted; the location fails with ENCOUNTER_INVALID_LOCATION and HTTP 422, then is recorded and encounter.location_changed is emitted
+  verifies:
+  - FR-H3
+  - BR-H1
+  variant: ambulatory
+- id: AC-H69
+  given: an in-progress ambulatory encounter
+  when: it is ended with an end time before its start, then correctly, and another is discontinued because the patient left
+  then: the first fails with ENCOUNTER_INVALID_PERIOD and HTTP 422; then it is discharged and encounter.discharged is emitted with record_due_at; the other is discontinued with its departure reason and encounter.discontinued is emitted
+  verifies:
+  - BR-H9
+  - FR-H2
+  variant: ambulatory
+- id: AC-H70
+  given: an ambulatory encounter
+  when: a diagnosis is recorded without a role, then with a role, rank and valid code
+  then: the first fails with ENCOUNTER_INVALID_DIAGNOSIS and HTTP 422; the second is recorded
+  verifies:
+  - BR-H13
+  - FR-H4
+  variant: ambulatory
+operations:
+- name: Open an encounter
+  actor: System
+  description: Open an encounter from a check-in, walk-in, emergency arrival or admission. Accepts a retry key.
+  method: POST
+  path: /encounters
+  success: 201
+  input: patient, class, department, and optional appointments, orders, episodes, part_of, planned start, type, priority, reasons, location, virtual service and patient location
+  output: the encounter
+  errors:
+  - ENCOUNTER_INVALID_PATIENT
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_INVALID_DEPARTMENT
+  - ENCOUNTER_INVALID_REFERENCE
+  - ENCOUNTER_INVALID_PARENT
+  - ENCOUNTER_INVALID_PERIOD
+  - ENCOUNTER_INVALID_LOCATION
+  - ENCOUNTER_INVALID_VIRTUAL
+  - ENCOUNTER_READ_ONLY_FIELD
+  - ENCOUNTER_IDEMPOTENCY_KEY_REUSED
+  - ENCOUNTER_PATIENT_DECEASED
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Get an encounter
+  actor: Clinician
+  description: Read an encounter. A restricted patient's encounter needs a reason.
+  method: GET
+  path: /encounters/{id}
+  success: 200
+  input: encounter id; a reason where required
+  output: the encounter, as JSON or a FHIR Encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: List encounters
+  actor: Clinician
+  description: Encounters by patient, department, practitioner, status and date.
+  method: GET
+  path: /encounters
+  success: 200
+  input: filters; limit and cursor
+  output: encounters in time order
+  errors:
+  - ENCOUNTER_INVALID_QUERY
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Update an encounter
+  actor: Registrar
+  description: Change type, priority, reasons, episodes, department or virtual details of an open encounter. A department change is added to department_history.
+  method: PATCH
+  path: /encounters/{id}
+  success: 200
+  input: encounter id, revision, the fields to change
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_LOCKED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_INVALID_DEPARTMENT
+  - ENCOUNTER_INVALID_VIRTUAL
+  - ENCOUNTER_READ_ONLY_FIELD
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Start an encounter
+  actor: Clinician
+  description: Record that care began.
+  method: POST
+  path: /encounters/{id}/start
+  success: 200
+  input: encounter id, revision, start time
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_INVALID_PERIOD
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_PATIENT_DECEASED
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Record subject status
+  actor: System
+  description: Record where the patient is in the encounter, such as triaged.
+  method: POST
+  path: /encounters/{id}/subject-status
+  success: 200
+  input: encounter id, revision, subject status
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_LOCKED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Change participants
+  actor: Clinician
+  description: Add a participant, or end one's period.
+  method: POST
+  path: /encounters/{id}/participants
+  success: 200
+  input: encounter id, revision, practitioner, role, start or end
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_PARTICIPANT
+  - ENCOUNTER_LOCKED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Record a location
+  actor: System
+  description: Record the patient's new location, completing the previous one.
+  method: POST
+  path: /encounters/{id}/locations
+  success: 200
+  input: encounter id, revision, location, start
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_LOCATION
+  - ENCOUNTER_LOCKED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Record diagnoses
+  actor: Clinician
+  description: Add, rank or remove diagnoses.
+  method: PUT
+  path: /encounters/{id}/diagnoses
+  success: 200
+  input: encounter id, revision, diagnoses with role and rank
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_DIAGNOSIS
+  - ENCOUNTER_LOCKED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Discharge or end
+  actor: System
+  description: 'End care: discharge a stay or end a visit, with disposition and destination where they apply.'
+  method: POST
+  path: /encounters/{id}/discharge
+  success: 200
+  input: encounter id, revision, end time, disposition, destination
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_INVALID_PERIOD
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Discontinue
+  actor: System
+  description: End an encounter early with a departure reason.
+  method: POST
+  path: /encounters/{id}/discontinue
+  success: 200
+  input: encounter id, revision, departure reason, time
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Cancel
+  actor: Registrar
+  description: Cancel a planned encounter that never started.
+  method: POST
+  path: /encounters/{id}/cancel
+  success: 200
+  input: encounter id, revision, status reason (a code and optional text)
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Complete
+  actor: Health information management (HIM) specialist
+  description: Complete and lock an encounter whose record is complete.
+  method: POST
+  path: /encounters/{id}/complete
+  success: 200
+  input: encounter id, revision
+  output: the locked encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_RECORD_INCOMPLETE
+  - ENCOUNTER_OPEN_PARTS
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Amend
+  actor: Health information management (HIM) specialist
+  description: Change a locked encounter, keeping the previous value.
+  method: POST
+  path: /encounters/{id}/amendments
+  success: 201
+  input: encounter id, revision, field, new value, reason
+  output: the amendment
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_NOT_LOCKED
+  - ENCOUNTER_INVALID_DIAGNOSIS
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Mark entered in error
+  actor: Health information management (HIM) specialist
+  description: Retire an encounter opened by mistake with no clinical data.
+  method: POST
+  path: /encounters/{id}/entered-in-error
+  success: 200
+  input: encounter id, revision, status reason (a code and optional text)
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_HAS_CLINICAL_DATA
+  - ENCOUNTER_INVALID_TRANSITION
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_INVALID_CODE
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Move to another patient
+  actor: Health information management (HIM) specialist
+  description: Move an encounter recorded on the wrong patient to the right one.
+  method: POST
+  path: /encounters/{id}/move
+  success: 200
+  input: encounter id, revision, the right patient, reason
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_PATIENT
+  - ENCOUNTER_BELONGS_TO_STAY
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Merge duplicate encounters
+  actor: Health information management (HIM) specialist
+  description: Merge a duplicate encounter into the encounter that remains.
+  method: POST
+  path: /encounters/{id}/merge
+  success: 200
+  input: remaining encounter id and revision, duplicate encounter id and revision, reason
+  output: the remaining encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_MERGE
+  - ENCOUNTER_BELONGS_TO_STAY
+  - ENCOUNTER_REASON_REQUIRED
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Report clinical data
+  actor: System
+  description: Tell this module that data was recorded against the encounter, or that documentation is complete.
+  method: POST
+  path: /encounters/{id}/clinical-data
+  success: 202
+  input: encounter id, module, data recorded or documentation complete
+  output: accepted
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: List records due
+  actor: Health information management (HIM) specialist
+  description: Discharged encounters not yet completed, by due date.
+  method: GET
+  path: /encounters/records-due
+  success: 200
+  input: optional department, practitioner, overdue only; limit and cursor
+  output: encounters with record_due_at
+  errors:
+  - ENCOUNTER_INVALID_QUERY
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Read the access log
+  actor: Privacy officer
+  description: Every view and change of an encounter.
+  method: GET
+  path: /encounters/{id}/access-log
+  success: 200
+  input: encounter id; limit and cursor
+  output: entries with who, when, what and reason
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Request a correction
+  actor: Patient
+  description: Ask for an encounter to be corrected.
+  method: POST
+  path: /encounters/{id}/correction-requests
+  success: 201
+  input: encounter id, what is wrong, the correct value, whether to restrict meanwhile
+  output: the request with its due date
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Decide a correction
+  actor: Health information management (HIM) specialist
+  description: Accept, deny or extend a correction request, or add a statement of disagreement.
+  method: POST
+  path: /encounters/{id}/correction-requests/{requestId}/decision
+  success: 200
+  input: request id, decision (accept, deny or extend), reason, statement of disagreement
+  output: the request
+  errors:
+  - ENCOUNTER_CORRECTION_NOT_FOUND
+  - ENCOUNTER_CORRECTION_CLOSED
+  - ENCOUNTER_EXTENSION_USED
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Restrict disclosure to the health plan
+  actor: Registrar
+  description: Record that care was paid in full and the patient asked that it not be disclosed to their health plan.
+  method: POST
+  path: /encounters/{id}/health-plan-restriction
+  success: 200
+  input: encounter id, revision, who paid, confirmation of payment in full
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+- name: Withhold part of an encounter
+  actor: Clinician
+  description: Record a licensed professional's decision that access to part of the encounter is reasonably likely to endanger life or physical safety.
+  method: POST
+  path: /encounters/{id}/access-denial
+  success: 200
+  input: encounter id, revision, what is withheld, reason
+  output: the encounter
+  errors:
+  - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_REVISION_CONFLICT
+  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
+apiConventions:
+- topic: Authentication
+  text: Every request carries the caller's identity from Identity. Permissions are checked against it (Permission matrix).
+- topic: Errors
+  text: Errors use problem details (application/problem+json) with a code member, such as ENCOUNTER_LOCKED.
+  reference: RFC 9457
+- topic: Pagination
+  text: 'Lists are cursor-based: limit and an optional cursor in, next_cursor out.'
+- topic: Concurrency
+  text: Every change sends the revision it read. A stale revision fails with ENCOUNTER_REVISION_CONFLICT (BR-H20).
+- topic: Retries
+  text: Every change accepts an Idempotency-Key header; a retry returns the original result (FR-H12).
+  reference: IETF draft-ietf-httpapi-idempotency-key-header
+- topic: Times
+  text: Instants are RFC 3339 timestamps in UTC (CON-H3).
+  reference: RFC 3339
+- topic: FHIR
+  text: GET /encounters/{id} returns an HL7 FHIR R5 Encounter when the request asks for application/fhir+json (FR-H11).
+- topic: Versioning
+  text: Additive changes don't change the version. A breaking change ships as a new major version with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
+events:
+- name: encounter.created
+  description: An encounter was opened.
+  payload:
+  - encounter_id
+  - patient_id
+  - class
+  - appointment_ids
+  - revision
+- name: encounter.started
+  description: Care began.
+  payload:
+  - encounter_id
+  - actual_start
+  - revision
+- name: encounter.updated
+  description: Details changed; names the fields, not their values.
+  payload:
+  - encounter_id
+  - changed_fields
+  - revision
+- name: encounter.participant_changed
+  description: A participant was added or ended.
+  payload:
+  - encounter_id
+  - revision
+- name: encounter.location_changed
+  description: The patient moved.
+  payload:
+  - encounter_id
+  - location_id
+  - revision
+- name: encounter.discharged
+  description: Care ended; the record is being completed.
+  payload:
+  - encounter_id
+  - actual_end
+  - record_due_at
+  - revision
+- name: encounter.discontinued
+  description: The encounter ended early.
+  payload:
+  - encounter_id
+  - departure_reason
+  - revision
+- name: encounter.cancelled
+  description: A planned encounter never happened.
+  payload:
+  - encounter_id
+  - status_reason
+  - revision
+- name: encounter.completed
+  description: The record is complete and locked.
+  payload:
+  - encounter_id
+  - revision
+- name: encounter.amended
+  description: A locked encounter was changed.
+  payload:
+  - encounter_id
+  - changed_fields
+  - revision
+- name: encounter.entered_in_error
+  description: The encounter was opened by mistake.
+  payload:
+  - encounter_id
+  - status_reason
+  - revision
+- name: encounter.record_overdue
+  description: The record passed record_due_at.
+  payload:
+  - encounter_id
+  - record_due_at
+  - revision
+- name: encounter.patient_review_needed
+  description: 'Someone must check this encounter: after a patient merge was undone, or after a death that cancelled it was retracted.'
+  payload:
+  - encounter_id
+  - revision
+- name: encounter.department_changed
+  description: Another department took over responsibility.
+  payload:
+  - encounter_id
+  - department_id
+  - effective_at
+  - revision
+- name: encounter.appointment_added
+  description: Another same-day appointment was added to the encounter.
+  payload:
+  - encounter_id
+  - appointment_id
+  - revision
+- name: encounter.correction_decided
+  description: A correction request was accepted or denied, with any statement of disagreement.
+  payload:
+  - encounter_id
+  - request_id
+  - decision
+  - revision
+- name: encounter.restriction_changed
+  description: The paid-in-full health plan restriction was set.
+  payload:
+  - encounter_id
+  - health_plan_restriction
+  - revision
+- name: encounter.accuracy_contested
+  description: The patient contests part of the encounter, or the contest was resolved.
+  payload:
+  - encounter_id
+  - accuracy_contested
+  - revision
+- name: encounter.moved
+  description: An encounter was moved to the right patient.
+  payload:
+  - encounter_id
+  - patient_id
+  - previous_patient_id
+  - revision
+- name: encounter.merged
+  description: A duplicate encounter was merged into this one; clinical modules move their entries.
+  payload:
+  - encounter_id
+  - merged_encounter_id
+  - revision
+deliveryGuarantees:
+- id: DG-H1
+  text: Events are published at least once; consumers drop one with a source and id they have seen.
+  rationale: A relay can publish twice after a crash. CloudEvents defines source plus id as the duplicate check.
+- id: DG-H2
+  text: Events for one encounter can arrive out of order; each carries the revision, and consumers ignore a lower one.
+  rationale: Brokers and retries don't guarantee order.
+- id: DG-H3
+  text: Events carry ids, codes and changed field names, never diagnoses text, notes or the patient's details. Consumers read the encounter.
+  rationale: Events fan out widely. This follows the minimum necessary standard (45 CFR 164.502(b)) and keeps sensitive encounters out of logs.
+- id: DG-H4
+  text: Every event carries a unique id, its type, the encounter it is about, when the change happened, and the revision.
+  rationale: Consumers order and deduplicate by these, and need the time of the change rather than the time they received it. CloudEvents defines id, type and time for every event.
+permissions:
+- name: encounter.read
+  description: Read encounters.
+- name: encounter.write
+  description: Open, start, update and end encounters, and change participants, locations and diagnoses.
+- name: encounter.complete
+  description: Complete, amend and mark encounters entered in error.
+- name: encounter.audit
+  description: Read the access log.
+accessMatrix:
+- action: Get or list encounters
+  roles:
+    Clinician: own
+    Registrar: any
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: any
+    Patient: own
+  permission: encounter.read
+  note: 'own: encounters of patients in their care. Restricted patients need a reason (BR-H18). Patients and their representatives read their own encounters, except parts withheld under BR-H39.'
+- action: Open an encounter
+  roles:
+    Clinician: any
+    Registrar: any
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: any
+    Patient: none
+  permission: encounter.write
+- action: Start, update, change participants, record diagnoses
+  roles:
+    Clinician: own
+    Registrar: any
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.write
+- action: Record subject status, a location, a class change, hold, discharge or discontinue
+  roles:
+    Clinician: own
+    Registrar: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: any
+    Patient: none
+  permission: encounter.write
+  note: Usually reported by the module where care happens, such as Appointments.
+- action: Cancel, or cancel a discharge
+  roles:
+    Clinician: none
+    Registrar: any
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: any
+    Patient: none
+  permission: encounter.write
+- action: Complete, amend, mark entered in error, move or merge
+  roles:
+    Clinician: none
+    Registrar: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.complete
+- action: Report clinical data
+  roles:
+    Clinician: none
+    Registrar: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: any
+    Patient: none
+  permission: encounter.write
+  note: Only modules that record clinical data.
+- action: List records due
+  roles:
+    Clinician: own
+    Registrar: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.read
+- action: Read the access log
+  roles:
+    Clinician: none
+    Registrar: none
+    Health information management (HIM) specialist: none
+    Privacy officer: any
+    System: none
+    Patient: none
+  permission: encounter.audit
+- action: Request a correction
+  roles:
+    Clinician: none
+    Registrar: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: own
+  permission: encounter.read
+- action: Decide a correction
+  roles:
+    Clinician: none
+    Registrar: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.complete
+- action: Restrict disclosure to the health plan
+  roles:
+    Clinician: none
+    Registrar: any
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.write
+  note: Recorded at the patient's request.
+- action: Withhold part of an encounter
+  roles:
+    Clinician: own
+    Registrar: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: encounter.write
+  note: Only a licensed professional caring for the patient.
+personalData:
+- field: patient_id, class, class_history, type, priority, department_id, department_history, appointment_ids, part_of, episode_of_care_ids, identifiers, based_on, account_ids, planned_end
+  category: health data; shows the person received care, where and of what kind
+  purpose: The record of care
+  retention: record_retention of the Patients module
+- field: planned_start, actual_start, actual_end, length, status, subject_status
+  category: health data
+  purpose: When care happened
+  retention: record_retention of the Patients module
+- field: reasons, diagnoses
+  category: health data
+  purpose: Care, quality reporting and billing
+  retention: record_retention of the Patients module
+- field: departure_reason
+  category: health data; reveals origin, destination and outcome
+  purpose: The stay's admission and discharge
+  retention: record_retention of the Patients module
+- field: participants, locations
+  category: personal and health data
+  purpose: Who was responsible, and where the patient was
+  retention: record_retention of the Patients module
+- field: sensitivity
+  category: special category; reveals the kind of care
+  purpose: Applying extra protection
+  retention: record_retention of the Patients module
+- field: virtual_service, patient_location
+  category: personal
+  purpose: Joining and licensing a virtual encounter
+  retention: record_retention of the Patients module
+- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, status_reason, merged_into
+  category: record metadata about the patient's care
+  purpose: Record completion and integrity
+  retention: record_retention of the Patients module
+- field: access log
+  category: personal
+  purpose: Access review
+  retention: access_log_retention of the Patients module
+- field: health_plan_restriction, access_denial, correction_requests, accuracy_contested
+  category: health data
+  purpose: Honouring the patient's rights over the encounter
+  retention: record_retention of the Patients module; correction requests, in the United States, at least 6 years from their decision (BR-H44)
+errors:
+- code: ENCOUNTER_NOT_FOUND
+  http: 404
+  message: No encounter exists with that id.
+- code: ENCOUNTER_INVALID_QUERY
+  http: 422
+  message: Filter by at least a patient, department, practitioner or date.
+- code: ENCOUNTER_INVALID_PATIENT
+  http: 422
+  message: The patient doesn't exist or the record isn't in use.
+- code: ENCOUNTER_INVALID_CODE
+  http: 422
+  message: A code isn't in the allowed list for its field.
+- code: ENCOUNTER_INVALID_DEPARTMENT
+  http: 422
+  message: That department doesn't exist.
+- code: ENCOUNTER_INVALID_REFERENCE
+  http: 422
+  message: The appointment doesn't exist or is for another patient.
+- code: ENCOUNTER_INVALID_PARENT
+  http: 422
+  message: The parent encounter must be for the same patient and contain this period.
+- code: ENCOUNTER_INVALID_PERIOD
+  http: 422
+  message: The end must not be before the start, and actual times must not be in the future.
+- code: ENCOUNTER_INVALID_PARTICIPANT
+  http: 422
+  message: The participant needs a role and a role in the department, and only one attending at a time.
+- code: ENCOUNTER_INVALID_LOCATION
+  http: 422
+  message: The location doesn't exist, or its period is outside the encounter's.
+- code: ENCOUNTER_INVALID_DIAGNOSIS
+  http: 422
+  message: The code isn't valid on the date that applies, or a role or rank is missing.
+- code: ENCOUNTER_INVALID_VIRTUAL
+  http: 422
+  message: A virtual encounter needs an https URL and where the patient is.
+- code: ENCOUNTER_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service and can't be written.
+- code: ENCOUNTER_REVISION_CONFLICT
+  http: 409
+  message: The encounter changed since you read it. Read it again and retry.
+- code: ENCOUNTER_IDEMPOTENCY_KEY_REUSED
+  http: 422
+  message: That Idempotency-Key was used for a different request.
+- code: ENCOUNTER_INVALID_TRANSITION
+  http: 409
+  message: The encounter's status doesn't allow that change.
+- code: ENCOUNTER_LOCKED
+  http: 409
+  message: The encounter is completed and locked. Amend it instead.
+- code: ENCOUNTER_NOT_LOCKED
+  http: 409
+  message: Only a completed encounter is amended; change an open one directly.
+- code: ENCOUNTER_RECORD_INCOMPLETE
+  http: 409
+  message: Documentation must be complete and a final diagnosis recorded.
+- code: ENCOUNTER_OPEN_PARTS
+  http: 409
+  message: Close the encounters that are part of this one first.
+- code: ENCOUNTER_HAS_CLINICAL_DATA
+  http: 409
+  message: Clinical data is recorded against this encounter. Move it first.
+- code: ENCOUNTER_REASON_REQUIRED
+  http: 403
+  message: This patient is restricted. Give a reason to open the encounter.
+- code: ENCOUNTER_DEPENDENCY_UNAVAILABLE
+  http: 503
+  message: A service this request needs is unavailable. Retry later.
+- code: ENCOUNTER_PATIENT_DECEASED
+  http: 409
+  message: The encounter can't start after the patient's recorded death.
+- code: ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT
+  http: 403
+  message: Only the patient or their personal representative can request this.
+- code: ENCOUNTER_CORRECTION_NOT_FOUND
+  http: 404
+  message: No such correction request.
+- code: ENCOUNTER_CORRECTION_CLOSED
+  http: 409
+  message: This correction request was already decided.
+- code: ENCOUNTER_EXTENSION_USED
+  http: 409
+  message: The one allowed extension was already used.
+- code: ENCOUNTER_REASON_REQUIRED
+  http: 422
+  message: Give a reason for cancelling or marking entered in error.
+- code: ENCOUNTER_BELONGS_TO_STAY
+  http: 409
+  message: This encounter belongs to a stay. Move or merge the stay in the module that manages it.
+- code: ENCOUNTER_INVALID_MERGE
+  http: 409
+  message: Only two encounters of the same patient can be merged.
+dependencies:
+- service: patient-service
+  direction: upstream
+  reason: owns patients
+  criticality: hard
+  contract:
+  - 'Asks: does this patient exist and is the record in use, following replaced_by?'
+  - 'Asks: may this person act for this patient, and is the patient''s own access delayed at their request?'
+  - 'Asks: correction_deadline and correction_extension for this jurisdiction'
+  - 'Asks: is the patient deceased, and since when?'
+  - 'Asks: is this newborn''s mother this patient? (for part_of)'
+  - 'Asks: is the patient restricted, so opening needs a reason?'
+  - 'Gives: care reported when an encounter starts'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error and patient.legal_hold_changed'
+- service: appointment-service
+  direction: upstream
+  reason: reports check-ins and walk-ins
+  criticality: soft
+  contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
+  - 'Receives: appointment.checked_in'
+  - 'Receives: appointment.check_in_undone'
+  - 'Gives: encounter.appointment_added, when a check-in joins an open encounter'
+  - 'Gives: encounter.started, encounter.discontinued, encounter.cancelled and encounter.entered_in_error, so the appointment follows its encounter'
+  - 'Gives: the id of the encounter it opened'
+  - 'Gives: encounter.created, so Appointments links the encounter'
+  - Booking and the appointment lifecycle are Appointments' concern
+- service: organization-service
+  direction: upstream
+  reason: owns departments, locations and practitioner roles
+  criticality: hard
+  contract:
+  - 'Asks: does this department or location exist?'
+  - 'Asks: does this practitioner hold a role in this department on this date?'
+  - 'Asks: which sensitivity codes apply to this department?'
+- service: terminology-service
+  direction: upstream
+  reason: validates diagnosis and reason codes
+  criticality: hard
+  contract:
+  - 'Asks: is this code valid in this code system on this date?'
+- service: clinical-documentation-service
+  direction: downstream
+  reason: holds notes and reports when documentation is complete
+  criticality: soft
+  contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
+  - 'Receives: documentation.completed, documentation.reopened and documentation.data_recorded'
+  - 'Gives: encounter.started, encounter.discharged, encounter.completed, encounter.cancelled, encounter.entered_in_error and encounter.amended, so notes open, are required and lock with the encounter'
+  - 'Gives: encounter.patient_review_needed after an undone patient merge'
+  - 'Gives: encounter.record_overdue, for the responsible practitioner''s deficiency list'
+  - Discharge summaries and the EU discharge report are Clinical documentation's concern
+- service: clinical-modules
+  direction: downstream
+  reason: orders, results, medications and conditions attach data to encounters
+  criticality: soft
+  contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
+  - 'Gives: encounter.location_changed, so entries record where care happened'
+  - 'Gives: encounter.created, encounter.updated, encounter.participant_changed and encounter.entered_in_error, and the sensitivity codes to carry'
+  - 'Receives: data recorded against the encounter'
+  - 'Gives: encounter.patient_review_needed after an undone patient merge'
+  - 'Gives: encounter.accuracy_contested, so modules showing encounter data mark it as disputed'
+  - Moving entries to another encounter is each module's concern
+- service: billing-service
+  direction: downstream
+  reason: codes and charges encounters
+  criticality: soft
+  contract:
+  - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
+  - 'Asks: which account does this encounter belong to? (account_ids)'
+  - 'Gives: encounter.completed with diagnoses, class history and length'
+  - 'Gives: encounter.amended, encounter.cancelled, encounter.discontinued, encounter.department_changed'
+  - 'Gives: encounter.restriction_changed; a restricted encounter is never disclosed to that health plan for payment or operations (45 CFR 164.522(a)(1)(vi))'
+  - Coding for claims and diagnosis-related groups is Billing's concern
+- service: consent-service
+  direction: downstream
+  reason: decides disclosure of sensitive encounters
+  criticality: soft
+  contract:
+  - 'Gives: the sensitivity codes of each encounter'
+  - 'Gives: encounter.restriction_changed, so other disclosures honour it'
+  - Disclosure decisions, including under 42 CFR Part 2, are Consent's concern
+- service: identity-service
+  direction: upstream
+  reason: authenticates callers
+  criticality: hard
+  contract:
+  - 'Asks: who is the caller, and do they hold this permission?'
+- service: episode-service
+  direction: upstream
+  reason: owns episodes of care
+  criticality: soft
+  contract:
+  - 'Asks: does this episode exist for this patient?'
+  - Managing episodes is the Episodes module's concern
+- service: orders-service
+  direction: upstream
+  reason: owns orders an encounter carries out
+  criticality: soft
+  contract:
+  - 'Asks: does this order exist for this patient?'
+  - 'Gives: encounter.started, encounter.completed and encounter.cancelled with the orders they carry out'
+  - Order status is Orders' concern
+- service: release-of-information-service
+  direction: downstream
+  reason: handles disclosures, copies and accounting of disclosures
+  criticality: soft
+  contract:
+  - 'Gives: this module''s part of a copy request (45 CFR 164.524, GDPR Article 15)'
+  - 'Gives: this module''s data for a single-patient electronic health information export (45 CFR 170.315(b)(10)); producing the export is Release of information''s concern'
+  - 'Gives: encounter.correction_decided, with any statement of disagreement, to include with later disclosures (45 CFR 164.526(d)(5))'
+  - Accounting of disclosures (45 CFR 164.528) and copies in other forms are Release of information's concern
+risks:
+- id: RISK-H1
+  risk: Records stay incomplete past the deadline.
+  impact: Survey findings under the Medicare conditions of participation, and claims that cannot be coded.
+  mitigation: record_due_at, the records-due list and encounter.record_overdue (BR-H7, PERF-H1).
+- id: RISK-H2
+  risk: A retried check-in opens a second encounter.
+  impact: Care split across two records.
+  mitigation: Idempotency keys (FR-H12, PERF-H4).
+- id: RISK-H3
+  risk: Sensitive encounter data is disclosed without the required consent.
+  impact: A Part 2 violation and harm to the patient.
+  mitigation: Sensitivity codes propagate to every attached entry (BR-H14), and Consent decides disclosure.
+- id: RISK-H4
+  risk: A locked record is changed silently.
+  impact: The legal record and claims no longer match.
+  mitigation: Locking and amendments with history (BR-H8).
+decisions:
+- id: ADR-H1
+  decision: Clinical encounters are specified at the healthcare level, with an EHR layer for hospital stays and emergency visits.
+  rationale: Clinics, telehealth and other health applications have encounters too; only inpatient stays and emergency flow are hospital work.
+  date: '2026-10-09'
+- id: ADR-H2
+  decision: A class change keeps the same encounter, with class history.
+  rationale: FHIR R5 keeps class history in EncounterHistory, and one record keeps notes and results together across the change.
+  alternatives: A new encounter per class. Rejected because it splits one stay's care across records.
+  date: '2026-10-07'
+- id: ADR-H3
+  decision: One encounter per visit or stay, with part_of for consultations and sub-stays where a hospital wants them.
+  rationale: FHIR notes aggregation varies between organisations and countries. A single stay record with optional parts fits both practices.
+  date: '2026-10-07'
+- id: ADR-H5
+  decision: When an ambulatory encounter opens is a setting (encounter_opens_at).
+  rationale: FHIR's Appointment and Encounter pages describe different moments, and hospitals differ. A setting keeps both correct.
+  date: '2026-10-08'
+references:
+- id: REF-H1
+  title: HL7 FHIR R5, Encounter
+  url: https://hl7.org/fhir/R5/encounter.html
+  note: Statuses, subject status, the admission component, partOf, and the boundary with Appointment.
+- id: REF-H2
+  title: HL7 FHIR R5, EncounterHistory
+  url: https://hl7.org/fhir/R5/encounterhistory.html
+- id: REF-H3
+  title: 'HL7 terminology: encounter-status, encounter-subject-status, diagnosis-role, admit-source, discharge-disposition, v3 ParticipationType, v3 ActCode, v2 Table 0003'
+  url: https://terminology.hl7.org/
+- id: REF-H5
+  title: CMS ICD-10 code files, FY 2027
+  url: https://www.cms.gov/medicare/coding-billing/icd-10-codes
+  note: For discharges and encounters from October 1, 2026 to September 30, 2027.
+- id: REF-H6
+  title: HHS fact sheet, 42 CFR Part 2 final rule
+  url: https://www.hhs.gov/hipaa/for-professionals/regulatory-initiatives/fact-sheet-42-cfr-part-2-final-rule/index.html
+  note: Compliance date February 16, 2026.
+- id: REF-H7
+  title: 45 CFR 164.312, technical safeguards (audit controls)
+  url: https://www.ecfr.gov/current/title-45/section-164.312
+- id: REF-H9
+  title: RFC 9457, problem details for HTTP APIs
+  url: https://www.rfc-editor.org/rfc/rfc9457
+- id: REF-H11
+  title: HL7 FHIR R5, EpisodeOfCare
+  url: https://hl7.org/fhir/R5/episodeofcare.html
+- id: REF-H12
+  title: HL7 FHIR R5, Patient (mother and newborn relationships)
+  url: https://hl7.org/fhir/R5/patient.html
+- id: REF-H15
+  title: HL7 FHIR R5, Appointment (appointment statuses and encounters)
+  url: https://hl7.org/fhir/R5/appointment.html
+- id: REF-H17
+  title: 45 CFR 164.522, rights to request privacy protection
+  url: https://www.ecfr.gov/current/title-45/section-164.522
+- id: REF-H18
+  title: 45 CFR 164.524 and 164.526, access and amendment
+  url: https://www.ecfr.gov/current/title-45/section-164.524
+- id: REF-H19
+  title: 45 CFR 164.530(j), documentation and retention
+  url: https://www.ecfr.gov/current/title-45/section-164.530
+- id: REF-H20
+  title: 45 CFR 170.315(b)(10), electronic health information export
+  url: https://www.ecfr.gov/current/title-45/section-170.315
+- id: REF-H21
+  title: HL7 v2 Table 0003, event types (A42 merge visit, A45 move visit)
+  url: https://terminology.hl7.org/CodeSystem-v2-0003.html
+acronyms:
+- term: AMB, EMER, IMP, OBSENC, VR
+  definition: 'HL7 encounter classes: ambulatory, emergency, inpatient, observation, virtual'
+- term: FHIR
+  definition: Fast Healthcare Interoperability Resources
+- term: HIM
+  definition: Health information management
+- term: ICD-10-CM
+  definition: International Classification of Diseases, 10th Revision, Clinical Modification (US)
+- term: SUD
+  definition: Substance use disorder
+tables:
+- name: encounters
+  description: One row per encounter.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: status
+    type: text
+  - name: status_reason
+    type: jsonb
+    nullable: true
+    note: code and text
+  - name: subject_status
+    type: text
+    nullable: true
+  - name: class
+    type: text
+  - name: department_id
+    type: uuid
+  - name: part_of
+    type: uuid
+    nullable: true
+  - name: actual_period
+    type: tstzrange
+    nullable: true
+    note: actual_start and actual_end; length is derived from it, less time on leave
+  - name: details
+    type: jsonb
+    note: type, priority, reasons, departure_reason, virtual_service, patient_location, sensitivity
+  - name: documentation_complete
+    type: boolean
+    default: 'false'
+  - name: has_clinical_data
+    type: boolean
+    default: 'false'
+  - name: record_due_at
+    type: timestamptz
+    nullable: true
+  - name: locked_at
+    type: timestamptz
+    nullable: true
+  - name: revision
+    type: integer
+    default: '0'
+  - name: visit_number
+    type: text
+    note: The visit number; other identifiers go in identifiers
+  - name: planned_start
+    type: timestamptz
+    nullable: true
+  - name: planned_end
+    type: timestamptz
+    nullable: true
+  - name: based_on
+    type: uuid[]
+    default: '''{}'''
+  - name: account_ids
+    type: uuid[]
+    default: '''{}'''
+  - name: identifiers
+    type: jsonb
+    default: '''[]'''
+    note: system and value of each other identifier
+  - name: episode_of_care_ids
+    type: uuid[]
+    default: '''{}'''
+  - name: health_plan_restriction
+    type: boolean
+    default: '''false'''
+  - name: access_denial
+    type: jsonb
+    nullable: true
+  - name: accuracy_contested
+    type: boolean
+    default: '''false'''
+  - name: merged_into
+    type: uuid
+    nullable: true
+    note: Set only when status is entered_in_error (BR-H48)
+  indexes:
+  - name: encounters_by_patient
+    definition: (patient_id, lower(actual_period))
+  - name: records_due
+    definition: (record_due_at) WHERE status = 'discharged'
+  constraints:
+  - name: unique_visit_number
+    definition: UNIQUE (visit_number)
+    note: BR-H34
+  - name: encounters_merged_into
+    definition: CHECK (merged_into IS NULL OR status = 'entered_in_error')
+- name: encounter_class_history
+  description: Every class, with when it began.
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: class
+    type: text
+  - name: from
+    type: timestamptz
+- name: encounter_departments
+  description: 'department_history: one row each time a department takes over the encounter. Append-only (BR-H25).'
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: department_id
+    type: uuid
+  - name: from
+    type: timestamptz
+  indexes: []
+  constraints:
+  - name: encounter_departments_pkey
+    definition: PRIMARY KEY (encounter_id, "from")
+- name: encounter_participants
+  description: Practitioners with role and period.
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: practitioner_id
+    type: uuid
+  - name: role
+    type: text
+  - name: period
+    type: tstzrange
+  constraints: []
+- name: encounter_locations
+  description: Locations with period and status.
+  columns:
+  - name: id
+    type: uuid
+    note: entry id, so a movement can be corrected
+  - name: encounter_id
+    type: uuid
+  - name: location_id
+    type: uuid
+  - name: status
+    type: text
+  - name: period
+    type: tstzrange
+  constraints:
+  - name: one_active_location
+    definition: UNIQUE (encounter_id) WHERE status = 'active'
+- name: encounter_diagnoses
+  description: Diagnoses with role and rank.
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: code
+    type: text
+    nullable: true
+  - name: condition_id
+    type: uuid
+    nullable: true
+  - name: role
+    type: text
+  - name: rank
+    type: integer
+- name: encounter_amendments
+  description: Changes after locking (BR-H8).
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: field
+    type: text
+  - name: previous
+    type: jsonb
+  - name: new
+    type: jsonb
+  - name: by
+    type: text
+  - name: reason
+    type: text
+  - name: at
+    type: timestamptz
+- name: encounter_appointments
+  description: 'appointment_ids: the appointments each encounter fulfils.'
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: appointment_id
+    type: uuid
+  constraints:
+  - name: one_encounter_per_appointment
+    definition: UNIQUE (appointment_id)
+    note: FR-H12
+- name: encounter_correction_requests
+  description: Correction requests and their outcome (BR-H44).
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: encounter_id
+    type: uuid
+  - name: requested_by
+    type: text
+  - name: requested_at
+    type: timestamptz
+  - name: request
+    type: jsonb
+    note: what is wrong, the correct value, restriction asked for
+  - name: due_at
+    type: timestamptz
+  - name: extension_reason
+    type: text
+    nullable: true
+  - name: decision
+    type: text
+    nullable: true
+    note: accepted or denied
+  - name: decision_reason
+    type: text
+    nullable: true
+  - name: decided_at
+    type: timestamptz
+    nullable: true
+  - name: disagreement
+    type: text
+    nullable: true
+  - name: rebuttal
+    type: text
+    nullable: true
+  - name: recipients_told
+    type: jsonb
+    default: '''[]'''
+- name: encounter_access_log
+  description: Every view and change of an encounter, with the reason where one was required. Append-only; nobody it records can change it.
+  columns:
+  - name: id
+    type: bigint
+    note: generated identity
+  - name: encounter_id
+    type: uuid
+  - name: actor
+    type: text
+  - name: action
+    type: text
+  - name: reason
+    type: text
+    nullable: true
+  - name: at
+    type: timestamptz
+  indexes:
+  - name: by_encounter
+    definition: (encounter_id, at)
+technicalNotes:
+- id: TN-H1
+  title: Pick the code release by date
+  text: Load each fiscal year's ICD-10-CM release with its effective dates, and validate a diagnosis against the release in effect on the discharge date for inpatient encounters, or the encounter date otherwise.
+- id: TN-H2
+  title: Make event consumers idempotent
+  text: Key encounter creation on the source event (appointment id, emergency arrival id or admission id) as well as the Idempotency-Key, so a replayed event from Appointments or ADT returns the existing encounter.
+compliance:
+- id: CMP-H2
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Use and disclose only the minimum necessary.
+  how: Events carry ids, codes and changed field names only.
+  status: met
+  covered_by:
+  - DG-H3
+  jurisdiction: us
+- id: CMP-H3
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(b)
+  obligation: Audit controls.
+  how: Every view and change is logged and readable by a privacy officer.
+  status: met
+  covered_by:
+  - BR-H18
+  - FR-H10
+  jurisdiction: us
+- id: CMP-H4
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(2)(iv) and (e)
+  obligation: Encryption at rest and in transit.
+  how: Encounter data is encrypted in transit and at rest.
+  status: met
+  covered_by:
+  - CON-H1
+  jurisdiction: us
+- id: CMP-H5
+  regulation: 42 CFR Part 2
+  provision: 42 CFR 2.13 and 2.31
+  obligation: Protect substance use disorder program records and disclose them only with the required consent.
+  how: Sensitivity codes from Organization travel with every attached entry; Consent decides disclosure.
+  status: met
+  covered_by:
+  - BR-H14
+  jurisdiction: us
+- id: CMP-H8
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(c)
+  obligation: Data minimisation.
+  how: Events carry no diagnoses text, notes or patient details.
+  status: met
+  covered_by:
+  - DG-H3
+  jurisdiction: eu
+- id: CMP-H9
+  regulation: GDPR (EU) 2016/679
+  provision: Article 9(2)(h) and 17(3)(c)
+  obligation: Process and keep health data for care.
+  how: Retention and legal holds follow the Patients module.
+  status: met
+  covered_by:
+  - BR-H26
+  jurisdiction: eu
+- id: CMP-H10
+  regulation: GDPR (EU) 2016/679
+  provision: Article 32
+  obligation: Security appropriate to the risk.
+  how: Encryption, access logging and reasons for restricted patients.
+  status: met
+  covered_by:
+  - CON-H1
+  - BR-H18
+  jurisdiction: eu
+- id: CMP-H11
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 30, 33 to 35 and 37
+  obligation: Records of processing, breach notification, impact assessment and a data protection officer.
+  how: Organisational duties of the deployment.
+  status: deployment
+  covered_by: []
+  jurisdiction: eu
+- id: CMP-H12
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.524
+  obligation: Give patients access to their information, denying only on narrow reviewable grounds.
+  how: Immediate electronic access for the patient and representatives; withheld parts recorded and reviewable.
+  status: met
+  covered_by:
+  - BR-H39
+  jurisdiction: us
+- id: CMP-H13
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.103
+  obligation: Don't interfere with access to electronic health information.
+  how: No review delay; delays only at the patient's request.
+  status: met
+  covered_by:
+  - BR-H39
+  jurisdiction: us
+- id: CMP-H14
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.526
+  obligation: Decide amendment requests within 60 days, with written denials and statements of disagreement.
+  how: Correction requests decided within the Patients module's deadlines; disagreements go with later disclosures. Requests are kept linked to the encounter with any denial, disagreement and rebuttal.
+  status: met
+  covered_by:
+  - BR-H40
+  - BR-H44
+  jurisdiction: us
+- id: CMP-H15
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.522(a)(1)(vi)
+  obligation: Agree to restrict disclosure to a health plan for care paid in full out of pocket.
+  how: health_plan_restriction, honoured by Billing.
+  status: met
+  covered_by:
+  - BR-H41
+  jurisdiction: us
+- id: CMP-H16
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.528
+  obligation: Give an accounting of disclosures for six years.
+  how: The Release of information module.
+  status: other module
+  covered_by: []
+  jurisdiction: us
+- id: CMP-H17
+  regulation: HIPAA Breach Notification Rule
+  provision: 45 CFR 164.404
+  obligation: Notify individuals of a breach within 60 calendar days.
+  how: The Security module.
+  status: other module
+  covered_by: []
+  jurisdiction: us
+- id: CMP-H18
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 12(3) and 15
+  obligation: Give access within one month.
+  how: Immediate electronic access.
+  status: met
+  covered_by:
+  - BR-H39
+  jurisdiction: eu
+- id: CMP-H19
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 16 and 18
+  obligation: Rectification, and restriction while accuracy is checked.
+  how: Correction requests, and accuracy_contested while accuracy is checked.
+  status: met
+  covered_by:
+  - BR-H40
+  - BR-H42
+  jurisdiction: eu
+- id: CMP-H20
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17
+  obligation: Erasure, except where data is needed for care (Article 17(3)(c)).
+  how: Erasure follows the Patients module's retention and legal holds.
+  status: met
+  covered_by:
+  - BR-H26
+  jurisdiction: eu
+- id: CMP-H21
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 3
+  obligation: Immediate access to health data through national access services.
+  how: Immediate access here; delivery to the national service is the Exchange module's.
+  status: partly met
+  covered_by:
+  - BR-H39
+  jurisdiction: eu
+- id: CMP-H22
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.530(j)
+  obligation: Keep required documentation for 6 years from its creation or when it was last in effect, whichever is later.
+  how: Correction requests are kept with the encounter, and at least 6 years from their decision in the US.
+  status: met
+  covered_by:
+  - BR-H44
+  jurisdiction: us
+- id: CMP-H23
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(b)(10)
+  obligation: Certified health IT lets a user export all of one patient's electronic health information at any time.
+  how: This module gives its data for the export; Release of information produces it.
+  status: other module
+  covered_by: []
+  jurisdiction: us
+- id: CMP-H24
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(c)(1)
+  obligation: Protect electronic health information from improper alteration or destruction.
+  how: Completed encounters are locked; later changes, moves and merges are amendments or recorded events, never silent edits.
+  status: met
+  covered_by:
+  - BR-H8
+  - BR-H47
+  - BR-H48
+  jurisdiction: us
+- id: CMP-H25
+  regulation: GDPR (EU) 2016/679
+  provision: Article 6(1)
+  obligation: Processing health data needs a lawful basis under Article 6 as well as an exception under Article 9.
+  how: 'The deployment states its basis with Article 9(2)(h): usually a legal obligation (6(1)(c)) or a public task (6(1)(e)) for public hospitals, or a contract (6(1)(b)) for private care.'
+  status: deployment
+  covered_by: []
+  jurisdiction: eu
+- id: CMP-H26
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 44 to 49
+  obligation: Transfers of personal data outside the EU need an adequacy decision or appropriate safeguards.
+  how: Where data is stored and who processes it is a deployment choice.
+  status: deployment
+  covered_by: []
+  jurisdiction: eu
+---
+
+Every note, order and result in the record belongs to an encounter. This
+module keeps that record of each interaction between a patient and a care
+provider: when it happened, who was responsible, where the patient was, why
+they came and what was found.
+
+## The appointment is the plan, the encounter is what happened
+
+Checking in opens the encounter, but arrival is not care. The encounter waits,
+planned, until a practitioner starts (BR-H2), so the record shows both how long
+the patient waited and how long they were seen.
+
+## Discharged is not done
+
+Care can be over while the record isn't. An encounter stays discharged until
+its documentation and final diagnosis are complete, within the deadline the
+law or the provider sets (BR-H7). Then it locks, and later changes are
+amendments that keep what they replaced (BR-H8).
+
+## Codes are checked against the right day
+
+ICD-10-CM changes every 1 October. Diagnoses are checked against the release
+in effect on the right date, so a stay that crosses the change isn't rejected
+for a code that was valid when it ended (BR-H13).

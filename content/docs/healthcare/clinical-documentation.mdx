@@ -1,0 +1,3643 @@
+---
+title: Clinical notes and observations
+description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
+module: clinical-documentation
+version: 0.1.0
+status: draft
+industry: healthcare
+purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
+scope:
+- Writing, signing and cosigning notes, such as progress notes, consult notes and discharge summaries
+- Notes entered by scribes, dictated, or drafted by speech recognition or AI tools, and the author's review before signing
+- Addenda, late entries, corrections, discarded drafts and notes entered in error, keeping every version once a note is available for care
+- Moving notes to the right encounter, and following encounter and patient merges
+- Copied text and its source
+- Required notes for each encounter, documentation deficiencies and their deadlines, and reporting to Encounters when documentation is complete
+- Releasing notes to patients, holding them back only on the grounds the law allows, and psychotherapy notes in the United States
+- Patient-entered information, kept distinguishable from professional entries
+- Requests to correct a note, and statements of disagreement
+- 'Vital signs: recording, units, plausibility checks, device readings that need validation, derived values and corrections'
+- 'Assessments: scored instruments such as pain scores, with the score computed by the service'
+nonGoals:
+- Orders, including verbal orders and order sets. Orders and results owns them, including their authentication.
+- Laboratory, imaging and pathology results and their reports. Orders and results owns them.
+- Medication administration records and allergy lists. Medications and allergies owns them.
+- Problem lists and diagnoses. Encounters records encounter diagnoses; a problem list is a later module.
+- Early warning scores, alerts and escalation such as rapid response calls. Clinical decision support reads the observations this module records.
+- Connecting to monitors and other devices. Device integration delivers readings; this module records and validates them.
+- Scanned paper and documents from outside the hospital. Document imaging owns them.
+- Consent forms and disclosure decisions, including authorizations for psychotherapy notes and 42 CFR Part 2 records. Consent owns them.
+- Copies of the record, the accounting of disclosures and the US single-patient export. Release of information owns them.
+- Coding notes for claims. Billing owns coding.
+- Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
+changelog:
+- version: 0.1.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'Split from EHR Clinical documentation 0.3.1: the rules every health application shares. Each item keeps its number with an H prefix, so BR-E7 is now BR-H7.'
+  - Class changes and cancelled discharges, which only hospital stays have, are handled in the EHR layer.
+actors:
+- name: Clinician
+  description: A licensed practitioner who writes and signs notes, such as a physician, advanced practice provider or therapist.
+- name: Nurse
+  description: A nurse who records vital signs and assessments, validates device readings and writes nursing notes.
+- name: Trainee
+  description: A resident or student whose notes need a supervising practitioner's cosignature where the deployment requires it.
+- name: Scribe
+  description: A person who enters documentation for a named practitioner. A scribe never signs for them.
+- name: Health information management (HIM) specialist
+  description: Tracks deficiencies, moves misfiled notes, marks entries in error and decides correction requests.
+- name: Privacy officer
+  description: Reviews the access log and holds placed on releases.
+- name: Patient
+  description: The patient, or a representative within the authority the Patients module records. Reads their notes and adds patient-entered information.
+- name: System
+  description: 'Other modules and tools: Encounters, Device integration, and drafting tools such as speech recognition or AI scribes.'
+assumptions:
+- id: AS-H1
+  text: Encounters reports when encounters start, are discharged, complete, move to another patient, merge, or are cancelled.
+  rationale: Notes open and lock with their encounter. Encounters owns its lifecycle.
+- id: AS-H2
+  text: Identity can confirm, at the moment of signing, that the person signing is the signed-in user, by asking for a credential again.
+  rationale: A signature attests authorship. Hospitals must use an author identification system that protects the integrity of authentication (42 CFR 482.24(b)).
+- id: AS-H3
+  text: Organization knows each practitioner's roles on a date, which roles may write which note types, and who may supervise whom.
+  rationale: Scope of practice and supervision come from state law, licences and medical staff bylaws, which Organization holds.
+- id: AS-H4
+  text: Medical staff bylaws or hospital policy set the deadlines for signing, cosigning and completing notes, within any limit the law sets.
+  rationale: The law sets outer limits, such as 30 days to complete a US hospital record; hospitals set shorter ones in their bylaws.
+glossary:
+- term: Note
+  definition: A clinical document written about a patient for an encounter, such as a progress note or discharge summary (FHIR Composition, HL7 v2 MDM document).
+- term: Authentication
+  definition: The author's signature on an entry, which identifies them and attests that it is accurate (42 CFR 482.24(c)(1)).
+- term: Cosignature
+  definition: A supervising practitioner's authentication of a note written by someone who needs supervision, such as a resident.
+- term: Addendum
+  definition: A new entry linked to an earlier note, adding information that wasn't available or was omitted. The earlier note is unchanged.
+- term: Late entry
+  definition: An entry recorded well after the care it describes. It shows both times.
+- term: Correction
+  definition: A new version of a note fixing an error, with a reason. The previous version is kept.
+- term: Deficiency
+  definition: Something a practitioner still owes the record, such as a missing, unsigned or uncosigned note.
+- term: Delinquent record
+  definition: A record with a deficiency past the deadline the medical staff bylaws set.
+- term: Psychotherapy notes
+  definition: In the United States, a mental health professional's notes of a counseling session, kept apart from the rest of the record (45 CFR 164.501).
+- term: Vital signs
+  definition: Heart rate, respiratory rate, blood pressure, temperature, oxygen saturation, height, weight, head circumference and BMI, as in the FHIR vital signs profiles.
+- term: Assessment
+  definition: A structured evaluation with defined items and, often, a score, such as a pain score.
+concepts:
+- name: Available for care
+  description: A note becomes available for care when it is signed. Before that it is a draft only its author works on; after it, others may have acted on it, so it never changes in place (HL7 v2 document availability status).
+- name: Documentation complete
+  description: An encounter's documentation is complete when every required note is signed and cosigned and no deficiency is open. This module reports it; Encounters decides when the encounter completes.
+dataModel:
+- name: note.id
+  type: string
+  required: true
+  description: The note id. Never changes or is reused.
+  constraints: set by the service
+- name: note.patient_id
+  type: string
+  required: true
+  description: The patient, from the encounter.
+  constraints: set by the service from the encounter; follows encounter and patient merges
+- name: note.encounter_id
+  type: string
+  required: true
+  description: The encounter the note documents.
+  constraints: an encounter of the patient that is not cancelled or entered in error
+- name: note.type
+  type: code
+  required: true
+  description: The kind of note, such as a progress note or discharge summary.
+  constraints: 'one of note_types; codes: LOINC document types, such as 11506-3 progress note, 34117-2 history and physical note, 11488-4 consult note, 28570-0 procedure note, 11504-8 surgical operation note, 18842-5 discharge summary, 34111-5 emergency department note, 34746-8 nurse note; mapped to HL7 v2 Table 0270 (PR, HP, CN, PN, OP, DS, ED)'
+- name: note.title
+  type: string
+  required: false
+  description: A short title, such as "Cardiology consult".
+  constraints: 1 to 200 characters; defaults to the type's name
+- name: note.status
+  type: enum
+  required: true
+  description: Where the note is in its lifecycle.
+  constraints: 'draft | preliminary | final | corrected | cancelled | entered_in_error; changed only through operations; codes: FHIR R5 CompositionStatus partial, preliminary, final, corrected, cancelled, entered-in-error; HL7 v2 Table 0271 IP, PA, AU or LA, and Table 0273 UN, AV, OB, CA'
+- name: note.sections
+  type: section[]
+  required: true
+  description: 'The content: each section has a title, an optional code and text.'
+  constraints: 'at least one section with text before signing; required_sections of the note type must have text; codes: LOINC section codes where they exist, such as 10164-2 history of present illness'
+- name: note.service_at
+  type: instant
+  required: true
+  description: When the care the note describes happened.
+  constraints: not later than recorded_at plus clock_tolerance; defaults to recorded_at
+- name: note.recorded_at
+  type: instant
+  required: true
+  description: When the note was first saved.
+  constraints: set by the service
+- name: note.authors
+  type: author[]
+  required: true
+  description: Who wrote the note, each with their role. The first is the responsible author, who signs.
+  constraints: each a practitioner Organization confirms holds a role allowed to write this type on service_at
+- name: note.data_enterer
+  type: string
+  required: false
+  description: The scribe who entered the note for the author, if one did.
+  constraints: set when a scribe creates the note; never the author
+- name: note.source
+  type: enum
+  required: true
+  description: How the content was produced.
+  constraints: 'typed | dictated | speech_recognition | ai_draft | template | patient_entered | downtime_back_entry; set when the note is started; codes: none standard, local to this specification'
+- name: note.drafting_tool
+  type: string
+  required: false
+  description: The tool and version that drafted the content, for speech_recognition and ai_draft.
+  constraints: required when source is speech_recognition or ai_draft
+- name: note.review_attested
+  type: boolean
+  required: false
+  description: Whether the author confirmed, when signing, that they reviewed drafted or scribed content.
+  constraints: set by the service when signing
+- name: note.recording_consent
+  type: consent record
+  required: false
+  description: 'For a drafting tool that records the conversation: who agreed to the recording, when and how.'
+  constraints: required when the tool records audio, from every party recording_consent requires
+- name: note.signed_at
+  type: instant
+  required: false
+  description: When the responsible author signed.
+  constraints: set by the service
+- name: note.cosigner_id
+  type: string
+  required: false
+  description: The practitioner who must cosign, when the note type and author role need one.
+  constraints: a practitioner Organization confirms may supervise the author on service_at
+- name: note.cosigned_at
+  type: instant
+  required: false
+  description: When the cosigner signed.
+  constraints: set by the service
+- name: note.attestation
+  type: text
+  required: false
+  description: The cosigner's attestation statement, such as what they saw and agreed with.
+  constraints: up to 10000 characters
+- name: note.parent_note_id
+  type: string
+  required: false
+  description: For an addendum, the note it adds to.
+  constraints: a preliminary, final or corrected note of the same patient
+- name: note.version
+  type: integer
+  required: true
+  description: The content version. Starts at 1 and goes up with each correction.
+  constraints: set by the service
+- name: note.versions
+  type: version[]
+  required: true
+  description: Every earlier version of a corrected note, with who changed it, when and why.
+  constraints: append-only; set by the service
+- name: note.copied_text
+  type: copy[]
+  required: false
+  description: 'Text copied from another note: where it sits in this note, and the source note, author and date.'
+  constraints: set by the service when its copy feature is used; never from another patient
+- name: note.template_id
+  type: string
+  required: false
+  description: The template the note started from, if any.
+- name: note.sensitivity
+  type: code[]
+  required: false
+  description: Kinds of information needing extra protection.
+  constraints: 'the encounter''s codes plus any the author adds; codes: HL7 v3 ActCode SUD, PSY, HIV, SDV'
+- name: note.psychotherapy
+  type: boolean
+  required: false
+  description: Whether the note is a psychotherapy note kept apart from the rest of the record.
+  constraints: set by the service from psychotherapy_note_types; United States only
+  jurisdiction: us
+- name: note.late_entry_reason
+  type: text
+  required: false
+  description: Why the note was recorded late.
+  constraints: required when recorded_at is more than late_entry_threshold after service_at
+- name: note.release_status
+  type: enum
+  required: true
+  description: Whether the patient can read the note.
+  constraints: 'not_released | released | held; set by the service; codes: none standard, local to this specification'
+- name: note.release_hold
+  type: release hold
+  required: false
+  description: 'Why the note, or part of it, is held back from the patient: the grounds, the sections, who decided, when, and when it is reviewed.'
+  constraints: set only through the hold operation
+- name: note.withheld_from_representatives
+  type: boolean
+  required: false
+  description: Set when the note is released to the patient but not to their representatives, such as care a minor consented to alone where the law lets them.
+  constraints: set by the author on a draft or through the hold operation
+- name: note.entered_in_error_reason
+  type: code and text
+  required: false
+  description: Why the note was marked entered in error.
+  constraints: 'set with status entered_in_error; codes: local list wrong_patient, wrong_encounter, duplicate, other'
+- name: note.moved_from
+  type: string[]
+  required: false
+  description: Encounters the note was earlier filed under.
+  constraints: append-only; set by the service
+- name: note.unauthenticated
+  type: boolean
+  required: false
+  description: Set when the author can no longer sign, so the note is filed unsigned and shown as such.
+  constraints: set only by closing a deficiency as unresolvable
+- name: note.accuracy_contested
+  type: boolean
+  required: false
+  description: Set while a correction request with a restriction is open.
+  constraints: set by the service through correction requests
+- name: note.correction_requests
+  type: correction request[]
+  required: false
+  description: Requests to correct the note, with their decision, any statement of disagreement and any rebuttal.
+  constraints: append-only
+- name: note.revision
+  type: integer
+  required: true
+  description: Goes up with every change, for optimistic concurrency.
+  constraints: set by the service
+- name: observation.id
+  type: string
+  required: true
+  description: The observation id.
+  constraints: set by the service
+- name: observation.patient_id
+  type: string
+  required: true
+  description: The patient, from the encounter.
+  constraints: set by the service; follows encounter and patient merges
+- name: observation.encounter_id
+  type: string
+  required: true
+  description: The encounter it was measured in.
+  constraints: an encounter of the patient that is not cancelled or entered in error
+- name: observation.category
+  type: enum
+  required: true
+  description: Vital sign or assessment.
+  constraints: 'vital_signs | assessment; codes: FHIR observation-category vital-signs, survey'
+- name: observation.code
+  type: code
+  required: true
+  description: What was measured.
+  constraints: 'codes: LOINC; vital signs as the FHIR vital signs profiles: 8867-4 heart rate, 9279-1 respiratory rate, 85354-9 blood pressure panel with 8480-6 systolic and 8462-4 diastolic, 8310-5 body temperature, 2708-6 or 59408-5 oxygen saturation, 8302-2 body height, 29463-7 body weight, 9843-4 head circumference, 39156-5 BMI; assessments from assessment_instruments, such as 72514-3 pain severity 0 to 10'
+- name: observation.value
+  type: quantity, code or integer
+  required: false
+  description: The result.
+  constraints: a quantity for vital signs; required unless data_absent_reason is set
+- name: observation.unit
+  type: code
+  required: false
+  description: The unit of a quantity.
+  constraints: 'codes: UCUM, limited per code as the FHIR vital signs profiles: /min, mm[Hg], Cel or [degF], %, cm or [in_i], kg/m2; body weight only kg or g (BR-H53)'
+- name: observation.components
+  type: component[]
+  required: false
+  description: Parts recorded together, such as systolic and diastolic pressure, or an assessment's item answers.
+  constraints: required for panels; each has a code and a value
+- name: observation.data_absent_reason
+  type: code
+  required: false
+  description: Why there is no value, such as the patient refused.
+  constraints: 'codes: HL7 FHIR data-absent-reason, such as asked-declined, not-performed, error'
+- name: observation.effective_at
+  type: instant
+  required: true
+  description: When it was measured.
+  constraints: not later than recorded_at plus clock_tolerance
+- name: observation.recorded_at
+  type: instant
+  required: true
+  description: When it was recorded.
+  constraints: set by the service
+- name: observation.performer_id
+  type: string
+  required: true
+  description: Who measured it, or validated a device reading.
+  constraints: a practitioner; set to the validating nurse for device readings
+- name: observation.source
+  type: enum
+  required: true
+  description: Where the value came from.
+  constraints: 'manual | device | patient_reported | derived; codes: none standard, local to this specification'
+- name: observation.device_id
+  type: string
+  required: false
+  description: The device that measured it.
+  constraints: required when source is device
+- name: observation.method
+  type: code
+  required: false
+  description: Method, body site and position where they matter, such as an oral temperature or a standing blood pressure.
+  constraints: 'codes: SNOMED CT body site and method, as the deployment lists'
+- name: observation.weight_basis
+  type: enum
+  required: false
+  description: For a body weight, whether it was measured, stated by the patient or estimated.
+  constraints: 'required for body weight; measured | stated | estimated; codes: none standard, local to this specification'
+- name: observation.status
+  type: enum
+  required: true
+  description: Where the observation is in its lifecycle.
+  constraints: 'preliminary | final | amended | entered_in_error; codes: FHIR R5 ObservationStatus preliminary, final, amended, entered-in-error'
+- name: observation.interpretation
+  type: code
+  required: false
+  description: Whether the value is outside the normal range for the patient.
+  constraints: 'set by the service from vital_sign_limits; codes: HL7 v3 ObservationInterpretation N, L, H, LL, HH'
+- name: observation.derived_from
+  type: string[]
+  required: false
+  description: The observations a derived value was computed from, such as the weight and height behind a BMI.
+  constraints: set by the service when source is derived
+- name: observation.instrument
+  type: string
+  required: false
+  description: For an assessment, the instrument and its version.
+  constraints: required when category is assessment; one of assessment_instruments
+- name: observation.score
+  type: number
+  required: false
+  description: For a scored assessment, the total the service computed.
+  constraints: set by the service
+- name: observation.order_id
+  type: string
+  required: false
+  description: The order the measurement carries out, if any, owned by Orders.
+- name: observation.late_entry_reason
+  type: text
+  required: false
+  description: Why it was recorded late.
+  constraints: required when recorded_at is more than late_entry_threshold after effective_at
+- name: observation.history
+  type: change[]
+  required: true
+  description: Every earlier value, with who changed it, when and why.
+  constraints: append-only; set by the service
+- name: observation.revision
+  type: integer
+  required: true
+  description: Goes up with every change.
+  constraints: set by the service
+- name: deficiency.id
+  type: string
+  required: true
+  description: The deficiency id.
+  constraints: set by the service
+- name: deficiency.encounter_id
+  type: string
+  required: true
+  description: The encounter whose record is missing something.
+- name: deficiency.practitioner_id
+  type: string
+  required: true
+  description: Who owes it.
+- name: deficiency.kind
+  type: enum
+  required: true
+  description: What is owed.
+  constraints: 'missing_note | unsigned | uncosigned; codes: none standard, local to this specification'
+- name: deficiency.note_type
+  type: code
+  required: false
+  description: For a missing note, the type needed.
+  constraints: 'one of note_types; codes: LOINC document types, as note.type'
+- name: deficiency.note_id
+  type: string
+  required: false
+  description: For an unsigned or uncosigned note, the note.
+- name: deficiency.due_at
+  type: instant
+  required: true
+  description: When it must be resolved.
+  constraints: set by the service from the note type's deadline
+- name: deficiency.status
+  type: enum
+  required: true
+  description: Whether it is still owed.
+  constraints: 'open | resolved | closed_unresolvable; set by the service, or closed by an HIM specialist with a reason; codes: none standard, local to this specification'
+- name: deficiency.delinquent
+  type: boolean
+  required: true
+  description: Set when it is still open delinquency_after past due_at.
+  constraints: set by the service
+- name: deficiency.closed_reason
+  type: text
+  required: false
+  description: Why an HIM specialist closed it as unresolvable.
+  constraints: required with status closed_unresolvable
+relationships:
+- type: belongs_to
+  target: encounter
+  note: every note and observation documents one encounter
+- type: belongs_to
+  target: patient
+  note: through the encounter
+- type: has_many
+  target: note
+  note: addenda of a note, through parent_note_id
+- type: belongs_to
+  target: order
+  note: optional; the order a measurement carries out
+- type: can_trigger
+  target: event:documentation.completed
+businessRules:
+- id: BR-H1
+  text: Every note and observation belongs to one encounter of one patient whose record is in use. The encounter must not be cancelled or entered in error. When Encounters reports an encounter cancelled or entered in error, drafts on it are listed for their authors to move or discard.
+  rationale: Every entry is found through its encounter (FHIR Composition.encounter, Observation.encounter). An entry on a cancelled encounter documents care that, by the record, never happened.
+- id: BR-H2
+  text: A draft note is seen and edited only by its author, and by the scribe or drafting tool that created it. It is not part of the record used for care, it is never released to the patient, and it can be edited freely.
+  rationale: HL7 v2 allows editing a document in place only while it is unavailable for patient care (MDM T07). Until the author signs, nobody else should act on it.
+- id: BR-H3
+  text: 'Signing makes a note available for care. From then on its content never changes in place: a change is a correction (BR-H10) or an addendum (BR-H9), and the previous version stays readable.'
+  rationale: Others may already have acted on a signed note. HL7 v2 replaces an available document instead of editing it (MDM T09), Medicare wants every change clearly and permanently identified (Program Integrity Manual chapter 3, 3.3.2.5), and HIPAA requires protection against improper alteration (45 CFR 164.312(c)(1)).
+- id: BR-H4
+  text: Only the responsible author signs a note, with their own credential confirmed again at signing. Nobody signs for someone else, signing can't be delegated or automatic, and a stamped or typed name isn't a signature. Signing records signed_at and needs every required section of the note type to have text.
+  rationale: Every entry must be dated, timed and authenticated by the person responsible for it, through an author identification system that protects the integrity of authentication (42 CFR 482.24(b) and (c)(1)). Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
+- id: BR-H5
+  text: When cosign_rules say a note type written by an author's role needs a cosignature, the author names the cosigner when signing, signing makes it preliminary and opens an uncosigned deficiency for the cosigner. The cosigner signs it final, optionally with an attestation statement; they can't change the author's text. Changes they want are made by the author as a correction, or by the cosigner as an addendum.
+  rationale: Supervising practitioners take responsibility for trainees' notes as medical staff bylaws require. The author's words stay theirs, so the record shows who said what. HL7 v2 marks such a note pre-authenticated until it is authenticated (Table 0271 PA, AU).
+- id: BR-H6
+  text: A scribe enters a note for a named practitioner. The note records the scribe as data_enterer and the practitioner as author. Only the practitioner signs it, with their own date and time, and the scribe can never sign or cosign.
+  rationale: The practitioner's signature affirms that the note documents the care (Medicare Program Integrity Manual chapter 3, 3.3.2.4). The Joint Commission expects the scribe to be identifiable and the practitioner to authenticate the entry.
+- id: BR-H7
+  text: Content drafted by speech recognition or an AI tool starts as a draft with source and drafting_tool recorded. The author can sign it only by confirming they reviewed it, which sets review_attested, and the provenance stays with the note, including any marking the tool adds to show content is AI-generated.
+  rationale: Medicare requires the practitioner's concurrence when AI technology captures medical record entries (Program Integrity Manual chapter 3, 3.3.2.4). Drafting tools can invent or misattribute findings, so nothing they write reaches the record unreviewed.
+- id: BR-H8
+  text: 'Every note and observation keeps two times: when the care or measurement happened (service_at, effective_at) and when it was recorded. Neither can be later than now plus clock_tolerance. An entry recorded more than late_entry_threshold after the care is a late entry: it needs a reason and is shown as late.'
+  rationale: Entries must be dated and timed (42 CFR 482.24(c)(1)), and a late entry must be identifiable as such (Medicare Program Integrity Manual chapter 3, 3.3.2.5). Showing both times stops a late entry passing as contemporaneous.
+- id: BR-H9
+  text: 'Information found or remembered after a note is available goes in an addendum: a new note linked to it by parent_note_id, with its own author, times and signature. The parent doesn''t change. An addendum can''t be added to a draft, cancelled or entered-in-error note.'
+  rationale: HL7 v2 gives an addendum its own document id linked to the parent (MDM T05). AHIMA guidance says an addendum bears the current date, its reason and its author.
+- id: BR-H10
+  text: 'Only the responsible author corrects a signed note, with a reason. The correction is a new version: status becomes corrected, the previous version stays in versions and stays readable, and the correction is signed like the original. If a cosignature was needed, the corrected version needs it again.'
+  rationale: A correction must keep the original and show who changed what, when and why (AHIMA amendment guidance; Medicare Program Integrity Manual chapter 3, 3.3.2.5). Only the author can say what they meant.
+- id: BR-H11
+  text: A draft can be discarded by its author, which cancels it. A note that has been signed can never be cancelled or deleted.
+  rationale: HL7 v2 cancels only documents never made available for care (MDM T11); an available one is replaced, so the record shows what others saw.
+- id: BR-H12
+  text: A signed note created in error, such as on the wrong patient or twice, is marked entered in error by its author or an HIM specialist with a reason. It disappears from views used for care and from the patient's view, but is kept, with its content, for HIM specialists and privacy officers.
+  rationale: FHIR marks such a document entered-in-error rather than deleting it. A note shown on the wrong patient may have been read, so what was shown must stay provable.
+- id: BR-H13
+  text: 'An HIM specialist moves a note or observation filed under the wrong encounter of the same patient, with a reason; the earlier encounter is kept in moved_from. An entry on the wrong patient is never moved: it is marked entered in error (BR-H12) and a copy is started as a draft on the right encounter, keeping service_at and the original author, who must sign it again.'
+  rationale: A signature attests content about a particular patient. HL7 v2 removes a document from the wrong patient's record rather than re-pointing it (MDM T11 scenario).
+- id: BR-H14
+  text: Text copied through the service's copy feature keeps its source note, author and date in copied_text, and is shown as copied. Copying from another patient's record is refused, and copy_paste_policy can block copying into some note types.
+  rationale: The Partnership for Health IT Patient Safety recommends making copied material easily identifiable and its source readily available, because copying spreads errors and puts documentation in the wrong patient's chart (Tsou and others, 2017).
+- id: BR-H15
+  text: Each note type in note_types can be required for some encounter classes, with a deadline. When an encounter of that class starts, or an encounter's class changes to it, a missing_note deficiency is opened for the responsible practitioner, due at the deadline counted from the start or the change.
+  rationale: Hospitals must document certain notes for each patient, such as the discharge summary (42 CFR 482.24(c)(4)). Tracking them per encounter is what lets a record be completed on time. A patient admitted from observation becomes an inpatient at the class change, so the clock starts there.
+- id: BR-H20
+  text: A deficiency is opened for each required note missing, each draft its author hasn't signed within signature_deadline of service_at, and each preliminary note not cosigned within cosign_deadline. It resolves itself when the note is signed or cosigned. It becomes delinquent delinquency_after past due_at, and the practitioner and HIM specialists are told. When Encounters reports encounter.record_overdue, the encounter's open deficiencies are marked delinquent. When it reports encounter.amended with a changed start or discharge time, due dates counted from them are recomputed.
+  rationale: Records must be promptly completed (42 CFR 482.24(b)), and medical staff bylaws define delinquency. A list per practitioner is how hospitals get records completed.
+- id: BR-H21
+  text: When an encounter is discharged and it has no draft or preliminary note, no open deficiency, and every required note signed, documentation.completed is reported to Encounters. If, before Encounters completes the encounter, a required note is marked entered in error or a new deficiency opens, documentation.reopened is reported. A cancelled discharge also reports documentation.reopened when completion was already reported.
+  rationale: Encounters completes an encounter only when this module reports its documentation complete. Reporting a reopen keeps the two from drifting apart.
+- id: BR-H22
+  text: After an encounter is completed, new notes on it are addenda, corrections or late entries with a reason, and they never reopen its documentation.
+  rationale: Encounters locks a completed encounter and records later changes as amendments. Notes added later are recorded as late, not as part of the original record.
+- id: BR-H23
+  text: When Encounters reports an encounter moved to another patient, its notes and observations follow it and their patient_id changes. When it reports two encounters merged, the duplicate's entries move to the remaining one and the old encounter id is kept in moved_from.
+  rationale: Encounters gives encounter.moved and encounter.merged so linked entries follow it. An entry left on the old encounter would be filed under the wrong patient or a dead record.
+- id: BR-H24
+  text: Patient merges reach this module through the encounters they move. When Encounters reports encounter.patient_review_needed after the Patients module undoes a merge, the notes and observations on that encounter recorded since the merge are listed for an HIM specialist to check they are on the right patient.
+  rationale: After a merge, care for either person was recorded on one record. Undoing it can't tell automatically whose care each new entry described.
+- id: BR-H25
+  text: In the United States, a signed note is released to the patient's electronic access as soon as it is signed. It is held back only when a licensed professional decides the release is reasonably likely to cause harm (BR-H27), when a law requires a delay, named in the hold, when the patient asked for their own access to be delayed (the Patients module's patient_requested_delay), or when it is a psychotherapy note or was prepared for a legal proceeding. Drafts are not released.
+  rationale: A delay for review is likely information blocking unless a law requires it (45 CFR 171.103(a)) or an exception applies, such as preventing harm (171.201) or the patient's own request (171.202(e)). The right of access excludes psychotherapy notes and information compiled for legal proceedings (164.524(a)(1)). Notes not yet finalized need not be released unless used to make decisions (ONC information blocking FAQ).
+  jurisdiction: us
+- id: BR-H26
+  text: In the European Union, a signed note is released to the patient's access as soon as it is signed. A delay is allowed only where the member state's law provides one, until a health professional can explain the information (eu_release_delay).
+  rationale: Patients have the right to access their priority-category data immediately after it is registered (EHDS Article 3(1)); member states may restrict it by delaying access until a professional can explain it (Article 3(3)), and GDPR gives a right of access (Article 15).
+  jurisdiction: eu
+- id: BR-H27
+  text: A hold names its grounds, and the law when the grounds are that a law requires it, the sections it covers, the professional who decided and when, and a review date. It covers no more than the grounds require. The patient is told what is held and can ask for the decision to be reviewed by another licensed professional who didn't make it. A hold ends at its review date unless renewed.
+  rationale: HIPAA allows denial of access only on narrow grounds, with a right to review by another licensed professional (45 CFR 164.524(a)(3) and (4)), and the information blocking exception for preventing harm requires an individual decision no broader than necessary (45 CFR 171.201).
+- id: BR-H28
+  text: 'In the United States, note types in psychotherapy_note_types are psychotherapy notes: kept apart from the rest of the record, read only by their author, never released, copied into other notes, exported or exchanged, and never required for documentation to be complete. Disclosing one needs a specific authorization, which is Consent''s concern. Medication monitoring, session times, test results and summaries of diagnosis, status, plan, symptoms and progress go in ordinary notes.'
+  rationale: HIPAA defines psychotherapy notes as session notes separated from the record, excluding those items (45 CFR 164.501), excludes them from the right of access (164.524(a)(1)(i)) and requires an authorization for most uses and disclosures (164.508(a)(2)).
+  jurisdiction: us
+- id: BR-H29
+  text: A note carries the encounter's sensitivity codes plus any its author adds, and every event about it carries them. Disclosure decisions are Consent's concern.
+  rationale: Substance use, mental health and HIV information has extra legal protection, such as 42 CFR Part 2 in the United States and GDPR Article 9. Consumers can only protect what is labelled.
+- id: BR-H30
+  text: A patient, or their representative, can add patient-entered information to their record. It is labelled as patient-entered, it can't change any professional's entry, and professionals can't edit it; they can respond in their own note.
+  rationale: The EHDS gives patients a right to insert information that is clearly distinguishable, without altering professionals' entries (Article 5). The same separation keeps the record honest anywhere.
+- id: BR-H31
+  text: A patient, or their representative, can ask for a note to be corrected. An HIM specialist decides within the Patients module's correction_deadline, extendable once by correction_extension with a written reason, after checking with the author or another health professional. An accepted request is made as a correction or addendum by the author, linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which goes with later disclosures.
+  rationale: HIPAA requires a decision within 60 days, one 30-day extension, a written denial and a right to disagree (45 CFR 164.526). GDPR gives a right to rectification (Article 16), and the EHDS has the controller verify accuracy with a health professional (Article 6).
+- id: BR-H32
+  text: When a patient who asks for a correction also asks for the data to be restricted meanwhile, accuracy_contested is set; everyone reading the note sees it marked until the request is decided.
+  rationale: GDPR gives a right to restriction while accuracy is checked (Article 18(1)(a)). Marking rather than hiding keeps the note available for care.
+- id: BR-H33
+  text: Every read and change of a note or observation is logged with who, when and what. Reading entries of a restricted patient needs a reason, as the Patients module requires.
+  rationale: HIPAA requires audit controls (45 CFR 164.312(b)). Notes hold the most sensitive detail in the record.
+- id: BR-H34
+  text: Notes and observations are kept as long as the Patients module's record_retention requires, and never erased before, even on request. Those of a patient under legal hold are never erased.
+  rationale: US hospitals must keep records at least 5 years, and state law often longer (42 CFR 482.24(b)(1)). GDPR doesn't require erasure of data needed for care or to meet a legal obligation (Article 17(3)(b) and (c)).
+- id: BR-H35
+  text: When a note that was sent outside the hospital is corrected or marked entered in error, note.corrected or note.entered_in_error tells Release of information, which tells the recipients it sent it to.
+  rationale: HIPAA requires telling people the amended information was shared with (45 CFR 164.526(c)(3)). A recipient acting on a wrong note can harm the patient.
+- id: BR-H36
+  text: Vital signs use the LOINC code and the UCUM units of the FHIR vital signs profiles, except that body weight is metric only (BR-H53), and the value is kept in the unit it was entered in. A blood pressure is recorded as one observation with systolic and diastolic components.
+  rationale: The FHIR vital signs profiles fix the codes and units every exchange partner expects. Converting on entry loses precision and hides what the nurse saw.
+- id: BR-H37
+  text: A value outside the plausible limits in vital_sign_limits is refused. A value outside the normal range for the patient's age is accepted and flagged with an interpretation code.
+  rationale: An impossible value is a typing or unit error, such as a temperature in Fahrenheit entered as Celsius. An abnormal one is clinical information that must be recorded.
+- id: BR-H38
+  text: When device_values_need_validation is set, readings from devices are preliminary until a nurse accepts them, which makes them final and records the nurse as performer. Rejected readings never enter the record and are kept only in the access log.
+  rationale: Monitors produce artifacts, such as a reading taken while a cuff was moving. Filing them unvalidated pollutes the record that early warning and research rely on.
+- id: BR-H39
+  text: 'Derived values are computed by the service, never entered: BMI from a weight and a height measured within bmi_height_max_age. When a source value is corrected or entered in error, the derived value is recomputed or marked entered in error.'
+  rationale: A BMI typed by hand can disagree with the weight and height beside it. Keeping derived_from lets a correction reach every value built on it.
+- id: BR-H40
+  text: A final observation is corrected by its performer or a nurse with a reason, which makes it amended and keeps the previous value in history. One recorded in error is marked entered in error with a reason, and is kept.
+  rationale: FHIR marks a changed observation amended and keeps the record of what was seen before. Clinical decisions may have been made on the old value.
+- id: BR-H41
+  text: An assessment records its instrument and version and each item's answer, and the service computes the score. An assessment missing a required item is saved without a score.
+  rationale: A score computed by hand can disagree with its items. Instruments change between versions, so the version says how to read the score.
+- id: BR-H42
+  text: The first signed note or final observation on an encounter tells Encounters that clinical data is recorded against it.
+  rationale: Encounters refuses to mark an encounter entered in error once it holds clinical data.
+- id: BR-H43
+  text: Drafts and observations are still saved when Terminology or Organization can't be reached, using the last loaded code lists, and they are checked again when it returns. Signing needs Identity and fails with an error when it is down.
+  rationale: Losing a note or vital sign because a code service was slow is worse than checking it later. A signature without confirmed identity isn't a signature.
+- id: BR-H44
+  text: Entries written on paper during an EHR downtime are entered afterwards with source downtime_back_entry and their original times, as late entries with reason downtime. The paper is kept by Document imaging.
+  rationale: Downtime procedures keep care going; back-entry with original times keeps the record's order of events true.
+- id: BR-H45
+  text: Every change sends the revision it read. If the note or observation changed since, the change fails and nothing is saved.
+  rationale: An author editing one draft on two devices, or two nurses correcting the same reading, must not overwrite each other silently.
+- id: BR-H46
+  text: A draft not signed within draft_reminder_after is listed for its author. Drafts are never deleted automatically.
+  rationale: Forgotten drafts are unwritten records. Deleting them would lose care documentation.
+- id: BR-H47
+  text: When the author can no longer sign, for example because they left the hospital, an HIM specialist can close the deficiency as unresolvable with a reason. A draft is then filed preliminary with unauthenticated set and shown as unsigned; it is never shown as signed.
+  rationale: The content may be the only record of care, so it is kept. Medicare reviewers accept an attestation only from the author (Program Integrity Manual chapter 3, 3.3.2.4), so nobody else may sign it.
+- id: BR-H48
+  text: Notes can be written after a patient's death, such as a death note or an autopsy addendum.
+  rationale: Care documentation continues after death; refusing it would leave the end of the record incomplete.
+- id: BR-H49
+  text: A representative sees a note only within the authority the Patients module records for them, including its scope and exclusions. A note with withheld_from_representatives set is released to the patient but not to representatives. In the United States, the author sets it for care a minor consented to alone where the law lets them, or under a confidentiality agreement the parent agreed to.
+  rationale: HIPAA doesn't treat a parent as the representative for such care (45 CFR 164.502(g)(3)), and rules on minors' confidentiality also vary by EU member state. A note reaching a parent's portal can harm the young person and deter them from care.
+- id: BR-H50
+  text: A drafting tool that records the conversation can start a draft only with recording_consent from every party that recording_consent requires where the care takes place, given before recording. This module never keeps the recording; deleting it is the tool's concern, within the period the hospital agreed with the vendor.
+  rationale: US federal law lets one party consent to recording (18 U.S.C. 2511(2)(d)), but states such as California and Florida require every party's consent (California Penal Code 632(a), Florida Statutes 934.03(2)(d)). GDPR requires telling people about processing (Article 13).
+- id: BR-H51
+  text: In the European Union, a patient can see who accessed their notes and observations and when, through the access service, including by automatic notification where the member state provides it.
+  rationale: The EHDS gives a right to information on access to personal electronic health data, including through automatic notifications (Article 9), applying from 26 March 2029 or 2031 depending on the data category (Article 105).
+  jurisdiction: eu
+- id: BR-H53
+  text: A body weight is recorded in kilograms or grams only, with weight_basis. A stated or estimated weight is used only when the patient can't be weighed, is shown as such, and the encounter is listed until a measured weight replaces it. Each admission and each outpatient or emergency encounter needs a measured weight as soon as possible.
+  rationale: The National Coordinating Council for Medication Error Reporting and Prevention recommends measuring and documenting weights in metric units only, avoiding stated, estimated or historical weights, and weighing on admission and at each outpatient or emergency encounter. Pounds entered as kilograms cause serious dosing errors.
+validations:
+- field: note.encounter_id
+  rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
+  error: NOTE_INVALID_ENCOUNTER
+- field: note.type
+  rule: One of note_types
+  error: NOTE_INVALID_TYPE
+- field: note.authors
+  rule: Organization confirms each author holds a role allowed to write this type on service_at
+  error: NOTE_AUTHOR_NOT_PERMITTED
+- field: note.sections
+  rule: Each section has a title and text of at most 200000 characters; at least one section has text
+  error: NOTE_INVALID_CONTENT
+- field: note.service_at
+  rule: An RFC 3339 instant not later than now plus clock_tolerance
+  error: NOTE_INVALID_TIME
+- field: note.late_entry_reason
+  rule: Present when recorded_at is more than late_entry_threshold after service_at
+  error: NOTE_REASON_REQUIRED
+- field: note.source
+  rule: speech_recognition and ai_draft name a drafting_tool listed in drafting_tools
+  error: NOTE_TOOL_NOT_APPROVED
+- field: note.parent_note_id
+  rule: A preliminary, final or corrected note of the same patient
+  error: NOTE_INVALID_PARENT
+- field: note.copied_text
+  rule: Each source is a note of the same patient, and copy_paste_policy allows copying into this type
+  error: NOTE_COPY_NOT_ALLOWED
+- field: note.cosigner_id
+  rule: Organization confirms the cosigner may supervise the author on service_at, and the cosigner isn't a scribe
+  error: NOTE_COSIGNER_NOT_PERMITTED
+- field: note.release_hold
+  rule: Grounds allowed in this jurisdiction, the law named when the grounds are a legal requirement, at least one section or the whole note, the deciding professional, and a review date no later than hold_review_after
+  error: NOTE_INVALID_HOLD
+- field: note.status
+  rule: Fields the service sets, such as status, signed_at, version, versions, release_status and revision, can't be written by clients
+  error: NOTE_READ_ONLY_FIELD
+- field: observation.encounter_id
+  rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
+  error: OBSERVATION_INVALID_ENCOUNTER
+- field: observation.code
+  rule: A LOINC code listed for vital signs, or an item of an assessment_instruments entry
+  error: OBSERVATION_INVALID_CODE
+- field: observation.unit
+  rule: A UCUM unit allowed for the code; kg or g for body weight
+  error: OBSERVATION_INVALID_UNIT
+- field: observation.value
+  rule: Within the plausible limits in vital_sign_limits for the code, after converting to its canonical unit
+  error: OBSERVATION_IMPLAUSIBLE
+- field: observation.components
+  rule: A blood pressure has both systolic and diastolic values, or a data_absent_reason
+  error: OBSERVATION_INCOMPLETE_PANEL
+- field: observation.effective_at
+  rule: An RFC 3339 instant not later than now plus clock_tolerance
+  error: OBSERVATION_INVALID_TIME
+- field: observation.late_entry_reason
+  rule: Present when recorded_at is more than late_entry_threshold after effective_at
+  error: OBSERVATION_REASON_REQUIRED
+- field: observation.source
+  rule: device needs a device_id; derived can't be sent by clients
+  error: OBSERVATION_INVALID_SOURCE
+- field: observation.instrument
+  rule: One of assessment_instruments, with answers only to its items
+  error: OBSERVATION_INVALID_INSTRUMENT
+- field: deficiency.closed_reason
+  rule: Present when closing a deficiency as unresolvable
+  error: DEFICIENCY_REASON_REQUIRED
+- field: note.recording_consent
+  rule: Present, from every party recording_consent requires, when the drafting tool records audio
+  error: NOTE_RECORDING_CONSENT_MISSING
+- field: note.cosigner_id
+  rule: Named when signing a note whose type and author role need a cosignature
+  error: NOTE_COSIGNER_REQUIRED
+- field: observation.weight_basis
+  rule: Present for a body weight
+  error: OBSERVATION_INVALID_UNIT
+workflows:
+- name: Write and sign a note
+  trigger: A clinician documents care
+  actor: Clinician
+  steps:
+  - Start a note on the encounter, from a template or blank, which saves a draft
+  - Write and save the draft as often as needed, sending the revision each time
+  - 'Sign it: Identity confirms the credential again, required sections are checked, and signed_at is set'
+  - The note becomes final, or preliminary when a cosignature is needed, and note.signed is emitted
+  - The note is released to the patient unless it is held
+  outcome: The note is available for care and to the patient, and any deficiency for it resolves.
+- name: Cosign a trainee's note
+  trigger: A trainee signs a note whose type and role need a cosignature
+  actor: Clinician
+  steps:
+  - The note becomes preliminary and an uncosigned deficiency opens for the cosigner
+  - The cosigner reads it and cosigns, optionally adding an attestation statement
+  - The note becomes final and note.cosigned is emitted
+  outcome: The supervising practitioner has taken responsibility for the note.
+- name: Document with a scribe or drafting tool
+  trigger: A practitioner works with a scribe, dictation, speech recognition or an AI scribe
+  actor: Clinician
+  steps:
+  - The scribe or tool creates a draft naming the practitioner as author, with data_enterer or drafting_tool recorded
+  - The practitioner reviews and edits the draft
+  - The practitioner signs, confirming review, which sets review_attested
+  outcome: The note carries the practitioner's signature and shows how it was produced.
+- name: Fix a signed note
+  trigger: An error or missing information is found in a signed note
+  actor: Clinician
+  steps:
+  - For missing or new information, add an addendum and sign it
+  - For an error, the author corrects the note with a reason and signs the new version
+  - For a note on the wrong patient or a duplicate, the author or an HIM specialist marks it entered in error, and the author signs a copy on the right encounter
+  - note.corrected or note.entered_in_error is emitted so Release of information can tell recipients
+  outcome: The record shows what was wrong, what replaced it, who changed it and when.
+- name: Complete an encounter's documentation
+  trigger: Encounters reports encounter.discharged
+  actor: System
+  steps:
+  - Check the encounter for drafts, preliminary notes, open deficiencies and missing required notes
+  - If any remain, keep the deficiencies on the practitioners' lists and mark them delinquent when overdue
+  - When none remain, report documentation.completed to Encounters
+  outcome: Encounters can complete the encounter within its record completion deadline.
+- name: Record and validate vital signs
+  trigger: A nurse measures vital signs, or a monitor sends readings
+  actor: Nurse
+  steps:
+  - Enter the values with their units and times, or open the device readings waiting for validation
+  - The service checks codes, units and plausibility, flags abnormal values, and computes BMI where it can
+  - The nurse accepts the representative readings and rejects artifacts
+  - Accepted values become final and observation.recorded is emitted
+  outcome: The chart holds validated vital signs with who measured them and when.
+- name: Handle a patient's correction request
+  trigger: A patient asks for a note to be corrected
+  actor: Health information management (HIM) specialist
+  steps:
+  - Record the request, and set accuracy_contested if the patient asks for restriction meanwhile
+  - Check the content with the author or another health professional
+  - Accept it, and have the author correct the note or add an addendum, or deny it in writing
+  - Emit note.correction_decided; on denial, record any statement of disagreement and rebuttal
+  outcome: The decision is made within the deadline and travels with later disclosures.
+edgeCases:
+- id: EC-H1
+  situation: An author saves the same draft from two devices.
+  behaviour: The second save sends a stale revision and fails with NOTE_REVISION_CONFLICT; nothing is overwritten.
+  covers:
+  - BR-H45
+  - AC-H30
+- id: EC-H2
+  situation: A resident's note waits for a cosigner who is on leave.
+  behaviour: An HIM specialist changes the cosigner; the deficiency moves to the new one.
+  covers:
+  - BR-H5
+  - AC-H3
+- id: EC-H3
+  situation: A scribe tries to sign the note they entered.
+  behaviour: Refused with NOTE_NOT_AUTHOR; only the named practitioner signs.
+  covers:
+  - BR-H6
+  - AC-H4
+- id: EC-H4
+  situation: A practitioner signs an AI-drafted note without confirming review.
+  behaviour: Refused with NOTE_REVIEW_NOT_ATTESTED; the draft stays a draft.
+  covers:
+  - BR-H7
+  - AC-H5
+- id: EC-H5
+  situation: A nurse documents a fall three days after it happened.
+  behaviour: The note has service_at three days ago, needs a late_entry_reason, and shows as a late entry.
+  covers:
+  - BR-H8
+  - AC-H6
+- id: EC-H6
+  situation: A vital sign is taken at 01:30 local time on the night clocks go back, when 01:30 happens twice.
+  behaviour: The device sends an RFC 3339 time with its offset, so the instant is unambiguous; views show the offset in the repeated hour.
+  covers:
+  - BR-H8
+  - AC-H35
+- id: EC-H7
+  situation: A monitor's clock runs 10 minutes fast.
+  behaviour: Its readings are more than clock_tolerance in the future and are refused with OBSERVATION_INVALID_TIME until Device integration corrects the time.
+  covers:
+  - BR-H8
+  - AC-H35
+- id: EC-H8
+  situation: A signed note is found on the wrong patient.
+  behaviour: It is marked entered in error with reason wrong_patient, removed from care views, and a draft copy is started on the right patient for the author to sign.
+  covers:
+  - BR-H12
+  - BR-H13
+  - AC-H10
+- id: EC-H9
+  situation: A note is filed under yesterday's visit instead of today's.
+  behaviour: An HIM specialist moves it to today's encounter; yesterday's id stays in moved_from.
+  covers:
+  - BR-H13
+  - AC-H11
+- id: EC-H10
+  situation: Encounters merges two encounters while a draft is open on the duplicate.
+  behaviour: The draft moves with the other notes and the author keeps working on it.
+  covers:
+  - BR-H23
+  - AC-H24
+- id: EC-H11
+  situation: A patient merge is undone after notes were written on the merged record.
+  behaviour: Encounters reports encounter.patient_review_needed; those notes are listed for an HIM specialist, who moves or marks each one and marks the review done.
+  covers:
+  - BR-H24
+  - AC-H25
+- id: EC-H12
+  situation: A practitioner leaves the hospital with unsigned drafts.
+  behaviour: An HIM specialist closes each deficiency as unresolvable; the drafts are filed preliminary and shown as unsigned, never as signed.
+  covers:
+  - BR-H47
+  - AC-H19
+- id: EC-H13
+  situation: An encounter is cancelled, or marked entered in error, while a draft exists on it.
+  behaviour: No new entries can be started on it; the draft is listed for its author to move or discard.
+  covers:
+  - BR-H1
+  - BR-H46
+  - AC-H1
+- id: EC-H14
+  situation: A required note is marked entered in error after documentation.completed was reported but before the encounter completed.
+  behaviour: documentation.reopened is reported and a missing_note deficiency opens.
+  covers:
+  - BR-H21
+  - AC-H17
+- id: EC-H15
+  situation: A consultant adds a note a week after the encounter completed.
+  behaviour: It is a late entry with a reason; the encounter's documentation isn't reopened.
+  covers:
+  - BR-H22
+  - AC-H18
+- id: EC-H16
+  situation: A discharge summary sent to the patient's family doctor is corrected.
+  behaviour: note.corrected tells Release of information, which tells the family doctor.
+  covers:
+  - BR-H35
+  - AC-H9
+- id: EC-H17
+  situation: A clinician wants a biopsy note held until they can call the patient.
+  behaviour: In the United States a hold for review alone isn't allowed; only a licensed professional's decision that release is likely to cause harm, recorded with its review date, holds it.
+  covers:
+  - BR-H25
+  - BR-H27
+  - AC-H20
+  jurisdiction: us
+- id: EC-H18
+  situation: The patient asked for their own access to be delayed.
+  behaviour: Notes are held under the Patients module's patient_requested_delay until the patient lifts it.
+  covers:
+  - BR-H25
+  - AC-H20
+  jurisdiction: us
+- id: EC-H19
+  situation: A member state lets professionals delay access to a cancer diagnosis until they explain it.
+  behaviour: eu_release_delay holds that note type for the set time; other notes release at once.
+  covers:
+  - BR-H26
+  - AC-H21
+  jurisdiction: eu
+- id: EC-H20
+  situation: A patient asks for their therapist's psychotherapy notes.
+  behaviour: They are excluded from access; the therapist's ordinary progress notes, with diagnosis and plan, are released.
+  covers:
+  - BR-H28
+  - AC-H22
+  jurisdiction: us
+- id: EC-H21
+  situation: A patient enters that they stopped a medication, contradicting the clinician's note.
+  behaviour: The entry stays labelled patient-entered; the clinician responds in their own note.
+  covers:
+  - BR-H30
+  - AC-H26
+- id: EC-H22
+  situation: A correction request is denied and the patient disagrees.
+  behaviour: The statement of disagreement and any rebuttal are linked to the note and go with later disclosures.
+  covers:
+  - BR-H31
+  - AC-H27
+- id: EC-H23
+  situation: A nurse enters a temperature of 98.6 with unit Cel.
+  behaviour: Refused with OBSERVATION_IMPLAUSIBLE; the nurse fixes the unit.
+  covers:
+  - BR-H37
+  - AC-H31
+- id: EC-H24
+  situation: A blood pressure is entered with only a systolic value.
+  behaviour: Refused with OBSERVATION_INCOMPLETE_PANEL, unless a data_absent_reason says why diastolic is missing.
+  covers:
+  - BR-H36
+  - AC-H31
+- id: EC-H25
+  situation: A weight is corrected after a BMI was computed from it.
+  behaviour: The BMI is recomputed from the corrected weight.
+  covers:
+  - BR-H39
+  - AC-H33
+- id: EC-H26
+  situation: A monitor sends a heart rate of 220 while the patient was moving.
+  behaviour: The nurse rejects the reading; it never enters the chart.
+  covers:
+  - BR-H38
+  - AC-H32
+- id: EC-H27
+  situation: Terminology is down when a nurse records vital signs.
+  behaviour: They are saved using the last loaded code lists and checked again when it returns.
+  covers:
+  - BR-H43
+  - AC-H36
+- id: EC-H28
+  situation: Identity is down when an author signs.
+  behaviour: Signing fails with NOTE_DEPENDENCY_UNAVAILABLE and the draft is kept.
+  covers:
+  - BR-H43
+  - AC-H36
+- id: EC-H29
+  situation: The EHR was down for four hours and notes were written on paper.
+  behaviour: They are entered afterwards with source downtime_back_entry, their original times and reason downtime.
+  covers:
+  - BR-H44
+  - AC-H37
+- id: EC-H30
+  situation: A physician writes a death note after the patient died.
+  behaviour: The note is accepted like any other.
+  covers:
+  - BR-H48
+  - AC-H38
+- id: EC-H31
+  situation: An author tries to add an addendum to their own draft.
+  behaviour: Refused with NOTE_INVALID_PARENT; they edit the draft instead.
+  covers:
+  - BR-H9
+  - AC-H7
+- id: EC-H32
+  situation: A clinician copies text from a note of a patient with the same name.
+  behaviour: Refused with NOTE_COPY_NOT_ALLOWED.
+  covers:
+  - BR-H14
+  - AC-H12
+- id: EC-H33
+  situation: A resident corrects their note before the attending cosigns it.
+  behaviour: The note stays preliminary and the cosigner cosigns the new version.
+  covers:
+  - BR-H10
+  - AC-H8
+- id: EC-H35
+  situation: A tablet retries starting a note after a timeout.
+  behaviour: The retry with the same Idempotency-Key returns the note created the first time.
+  covers:
+  - FR-H12
+  - AC-H39
+- id: EC-H36
+  situation: A patient under legal hold asks for their notes to be erased after retention ends.
+  behaviour: Nothing is erased while the hold lasts.
+  covers:
+  - BR-H34
+  - AC-H29
+- id: EC-H37
+  situation: A 16-year-old consents alone to care the state lets them consent to, and a parent has proxy access.
+  behaviour: The author sets withheld_from_representatives; the teenager sees the note, the parent doesn't.
+  covers:
+  - BR-H49
+  - AC-H49
+- id: EC-H38
+  situation: An AI scribe records a visit in California and only the clinician agreed.
+  behaviour: The draft is refused with NOTE_RECORDING_CONSENT_MISSING; the patient's agreement is needed before recording.
+  covers:
+  - BR-H50
+  - AC-H50
+- id: EC-H41
+  situation: A nurse enters a child's weight as 44 lb.
+  behaviour: Refused with OBSERVATION_INVALID_UNIT; the nurse weighs and enters it in kg.
+  covers:
+  - BR-H53
+  - AC-H55
+- id: EC-H42
+  situation: An unconscious trauma patient can't be weighed.
+  behaviour: An estimated weight is recorded with weight_basis estimated, shown as estimated, and the encounter is listed until a measured weight is recorded.
+  covers:
+  - BR-H53
+  - AC-H55
+- id: EC-H43
+  situation: A state law requires a delay before a kind of result is shown to patients electronically.
+  behaviour: A hold with grounds required by law names the law; without it, the note is released.
+  covers:
+  - BR-H25
+  - BR-H27
+  - AC-H56
+  jurisdiction: us
+- id: EC-H44
+  situation: Encounters corrects a discharge time by a day.
+  behaviour: Due dates of open deficiencies counted from discharge move by a day.
+  covers:
+  - BR-H20
+  - AC-H57
+functionalRequirements:
+- id: FR-H1
+  text: The service must let authors start, edit, sign and discard notes, and cosigners cosign them, following the note lifecycle.
+  priority: must
+  verification: test
+- id: FR-H2
+  text: The service must keep every version of a corrected note and every addendum, linked to the note, readable by those who may read the note.
+  priority: must
+  verification: test
+- id: FR-H3
+  text: The service must let authors and HIM specialists mark notes and observations entered in error, and HIM specialists move them to the right encounter of the same patient.
+  priority: must
+  verification: test
+- id: FR-H4
+  text: The service must record scribes, drafting tools and the author's review for every note they produced.
+  priority: must
+  verification: test
+- id: FR-H5
+  text: The service must record the source of text copied through its copy feature and show it as copied.
+  priority: must
+  verification: test
+- id: FR-H6
+  text: The service must open, resolve and mark delinquent the deficiencies of each encounter, and list them by practitioner.
+  priority: must
+  verification: test
+- id: FR-H7
+  text: The service must report to Encounters when an encounter first has clinical data, when its documentation is complete, and when it is reopened.
+  priority: must
+  verification: test
+- id: FR-H8
+  text: The service must release signed notes to the patient's access at once, except under a hold, and let holds be reviewed.
+  priority: must
+  verification: test
+- id: FR-H9
+  text: The service must let patients add patient-entered information, labelled as such.
+  priority: must
+  verification: test
+- id: FR-H10
+  text: The service must record correction requests with their decision, any extension, statement of disagreement and rebuttal.
+  priority: must
+  verification: test
+- id: FR-H11
+  text: The service must return notes as HL7 FHIR R5 Composition and observations as Observation, conforming to the vital signs profiles.
+  priority: must
+  verification: inspection
+- id: FR-H12
+  text: The service must return the original result for a retried create with the same Idempotency-Key, and refuse a reused key with a different request.
+  priority: must
+  verification: test
+- id: FR-H13
+  text: The service must record vital signs with their codes, units, times and performer, refuse implausible values, flag abnormal ones and compute derived values.
+  priority: must
+  verification: test
+- id: FR-H14
+  text: The service must keep device readings preliminary until a nurse accepts or rejects them, when device_values_need_validation is set.
+  priority: must
+  verification: test
+- id: FR-H15
+  text: The service must record assessments with their instrument version and item answers, and compute their scores.
+  priority: must
+  verification: test
+- id: FR-H16
+  text: The service must follow encounter moves and merges, and list entries to review after a patient unmerge.
+  priority: must
+  verification: test
+- id: FR-H17
+  text: The service must log every read and change of a note or observation, and show the log to privacy officers.
+  priority: must
+  verification: test
+nonFunctionalRequirements:
+- category: compatibility
+  text: 'Notes map onto HL7 FHIR R5 Composition: status to status, type to type, authors to author, cosignature and signature to attester (mode professional or legal), parent_note_id to relatesTo appends, and sections to section. Observations map onto Observation and the vital signs profiles.'
+- category: compatibility
+  text: 'Events map to HL7 v2 MDM messages for systems that use them: note.signed to T02, or T06 for an addendum; note.cosigned to T04; note.corrected to T10; note.entered_in_error to T11 with its reason. Note status maps to Table 0271 and availability to Table 0273.'
+- category: compatibility
+  text: In the United States, notes are exchanged as US Core DocumentReference with category clinical-note, using the US Core note types.
+  jurisdiction: us
+- category: security
+  text: Only people involved in the patient's care, or with a role that needs it, can read notes and observations, and every read is logged.
+- category: reliability
+  text: A change is acknowledged only after it is committed together with its events, and a saved draft is never lost.
+- category: usability
+  text: Copied text, late entries, unsigned notes, corrected notes, patient-entered information and contested notes are visibly labelled wherever they are shown.
+- category: availability
+  text: Saving drafts and recording observations never waits on Terminology or Organization.
+- category: portability
+  text: No requirement depends on a particular database, language or framework.
+constraints:
+- id: CON-H1
+  text: Notes and observations are encrypted in transit and at rest.
+  rationale: GDPR Article 32 lists encryption as a security measure, and HIPAA treats it as an addressable safeguard (45 CFR 164.312(a)(2)(iv) and (e)).
+- id: CON-H2
+  text: A signature is an electronic act of the signer, bound to their identity and the version signed. Stamped, typed or scanned names are never accepted as signatures.
+  rationale: Hospitals must protect the integrity of authentication (42 CFR 482.24(b)), and Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
+- id: CON-H3
+  text: Stored content of a signed version is never rewritten, including by format conversion; views and exports are generated from it.
+  rationale: What the author signed must be provable later (45 CFR 164.312(c)(1)).
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. Required.
+- name: note_types
+  type: list
+  description: The note types in use, each with its LOINC code, HL7 v2 Table 0270 code where one exists, required_sections, the encounter classes it is required for, and its deadline from encounter start, discharge or procedure end. Set by each deployment.
+- name: cosign_rules
+  type: list
+  description: Which author roles need a cosignature for which note types, and which roles may cosign. Set from the medical staff bylaws.
+- name: signature_deadline
+  type: duration
+  description: Time after service_at to sign a note before it becomes a deficiency. Set by the medical staff bylaws. Required.
+- name: cosign_deadline
+  type: duration
+  description: Time after signing for the cosigner to cosign. Set by the medical staff bylaws. Required.
+- name: delinquency_after
+  type: duration
+  description: Time after a deficiency's due_at when it becomes delinquent. Set by the medical staff bylaws. Required.
+- name: psychotherapy_note_types
+  type: code[]
+  description: Note types kept as psychotherapy notes. Empty by default.
+  jurisdiction: us
+- name: eu_release_delay
+  type: rule
+  description: Where the member state's law allows delaying a patient's access until a professional explains the information, which note types and for how long. Empty by default, meaning no delay. Needs legal advice per member state.
+  jurisdiction: eu
+- name: hold_review_after
+  type: duration
+  description: The longest a release hold lasts before it must be reviewed. Default 30 days.
+- name: late_entry_threshold
+  type: duration
+  description: How long after the care an entry counts as late. Set by hospital policy; default 24 hours.
+- name: clock_tolerance
+  type: duration
+  description: How far in the future a service or effective time may be, for clock differences between devices. Default 5 minutes.
+- name: copy_paste_policy
+  type: map
+  description: For each note type, whether copying text into it is allowed. Default allowed with attribution for every type.
+- name: drafting_tools
+  type: list
+  description: Speech recognition and AI drafting tools the hospital has approved, with their versions, whether each records audio, and how long its vendor keeps audio. Empty by default.
+- name: device_values_need_validation
+  type: boolean
+  description: Whether device readings need a nurse to accept them before they are final. Default true.
+- name: vital_sign_limits
+  type: map
+  description: 'For each vital sign code: plausible limits, outside which a value is refused, and normal ranges by age band, outside which it is flagged. Set by the hospital''s clinical leadership.'
+- name: bmi_height_max_age
+  type: duration
+  description: How old a height can be for computing a BMI. Default 365 days for adults; the hospital sets it for children.
+- name: assessment_instruments
+  type: list
+  description: Assessment instruments in use, each with its version, items, LOINC codes where they exist, required items and scoring. Includes the 0 to 10 pain severity scale (LOINC 72514-3) by default.
+- name: draft_reminder_after
+  type: duration
+  description: Time after which an unsigned draft is listed for its author. Default 24 hours.
+- name: recording_consent
+  type: map
+  description: 'For each US state or EU member state where care takes place: all_parties or one_party consent to recording a conversation. Default all_parties. California and Florida require all parties (verified from statute); US federal law needs one party; the rest need legal advice.'
+performanceTargets:
+- id: PERF-H1
+  indicator: Notes signed on time
+  target: Set by the medical staff
+  measurement: Share of notes signed within signature_deadline, per month.
+- id: PERF-H2
+  indicator: Delinquent records
+  target: Set by the hospital
+  measurement: Encounters with a delinquent deficiency, per month.
+- id: PERF-H4
+  indicator: Release delay
+  target: Set by each deployment as an SLO; the law expects no delay
+  measurement: 99th percentile time from signing to release, excluding held notes.
+- id: PERF-H5
+  indicator: Lost drafts
+  target: '0'
+  measurement: Drafts saved but not retrievable. Any non-zero value is a defect.
+- id: PERF-H6
+  indicator: Observation recording time
+  target: Set by each deployment as an SLO
+  measurement: 99th percentile time to record a set of vital signs.
+acceptanceCriteria:
+- id: AC-H1
+  given: an encounter that was cancelled, and another marked entered in error, each with a draft on it
+  when: a clinician starts a note on it, a nurse records a vital sign on it, and the draft author lists their drafts
+  then: the note fails with NOTE_INVALID_ENCOUNTER and HTTP 422, the observation fails with OBSERVATION_INVALID_ENCOUNTER and HTTP 422, and the draft is listed for its author to move or discard
+  verifies:
+  - BR-H1
+  - BR-H46
+  - FR-H1
+- id: AC-H2
+  given: a draft progress note by clinician A
+  when: clinician B gets it, then A signs it with a confirmed credential, then A tries to edit it
+  then: B gets NOTE_NOT_FOUND and HTTP 404; after signing the note is final with signed_at set and note.signed is emitted; the edit fails with NOTE_NOT_EDITABLE and HTTP 409 and the stored content is unchanged
+  verifies:
+  - BR-H2
+  - BR-H3
+  - BR-H4
+  - FR-H1
+  - CON-H2
+  - CON-H3
+- id: AC-H3
+  given: a trainee's progress note whose type and role need a cosignature
+  when: the trainee signs without naming a cosigner, then naming one, an HIM specialist changes the cosigner, a clinician who doesn't supervise the trainee tries to cosign, the new cosigner cosigns with an attestation, and someone tries to cosign again
+  then: signing without a cosigner fails with NOTE_COSIGNER_REQUIRED and HTTP 422; signing makes it preliminary and emits deficiency.opened of kind uncosigned; the deficiency moves to the new cosigner; the unrelated clinician gets NOTE_COSIGNER_NOT_PERMITTED and HTTP 403; cosigning makes it final, keeps the trainee's text and emits note.cosigned; the second attempt gets NOTE_NOT_AWAITING_COSIGNATURE and HTTP 409
+  verifies:
+  - BR-H5
+  - FR-H1
+- id: AC-H4
+  given: a scribe who started a note for practitioner P
+  when: the scribe signs it, then P signs it
+  then: the scribe gets NOTE_NOT_AUTHOR and HTTP 403; P's signature makes it final, with the scribe as data_enterer and P as author
+  verifies:
+  - BR-H6
+  - FR-H4
+- id: AC-H5
+  given: an AI scribe that is approved and one that isn't
+  when: each starts a draft with source ai_draft, and the author signs the approved one without confirming review, then with it
+  then: the unapproved tool gets NOTE_TOOL_NOT_APPROVED and HTTP 422; signing without review gets NOTE_REVIEW_NOT_ATTESTED and HTTP 422; signing with review succeeds with review_attested set and drafting_tool kept
+  verifies:
+  - BR-H7
+  - FR-H4
+- id: AC-H6
+  given: late_entry_threshold of 24 hours
+  when: a nurse starts a note with service_at three days ago and no reason, then with a reason, then one with service_at an hour in the future
+  then: the first fails with NOTE_REASON_REQUIRED and HTTP 422; the second is saved and shown as a late entry with both times; the third fails with NOTE_INVALID_TIME and HTTP 422
+  verifies:
+  - BR-H8
+- id: AC-H7
+  given: a final note and a draft
+  when: the author adds an addendum to the final note and signs it, then tries to add one to the draft
+  then: the addendum is a new note with parent_note_id set and its own signature, note.signed carries the parent_note_id, and the parent is unchanged; the second fails with NOTE_INVALID_PARENT and HTTP 422
+  verifies:
+  - BR-H9
+  - FR-H2
+- id: AC-H8
+  given: a final note, and a preliminary trainee note
+  when: another clinician corrects the final note, its author corrects it without a reason, then with one, and the trainee corrects the preliminary note
+  then: the other clinician gets NOTE_NOT_AUTHOR and HTTP 403; no reason gets NOTE_REASON_REQUIRED and HTTP 422; with a reason the note is corrected, version 2, version 1 is readable in versions, and note.corrected is emitted; the trainee's note stays preliminary and needs cosigning again
+  verifies:
+  - BR-H10
+  - FR-H2
+- id: AC-H9
+  given: a final note that Release of information sent to another hospital
+  when: its author corrects it
+  then: note.corrected is emitted with the note id and reason code, for Release of information to tell the recipient
+  verifies:
+  - BR-H35
+- id: AC-H10
+  given: a final note on the wrong patient
+  when: its author marks it entered in error without a reason, then with reason wrong_patient, and then tries to discard it
+  then: no reason gets NOTE_REASON_REQUIRED and HTTP 422; with the reason it is entered_in_error, gone from care and patient views, still readable by HIM specialists, note.entered_in_error is emitted and a draft copy with the same service_at is started on the right patient; discarding gets NOTE_NOT_EDITABLE and HTTP 409
+  verifies:
+  - BR-H12
+  - BR-H13
+  - FR-H3
+- id: AC-H11
+  given: a note filed under the wrong encounter
+  when: an HIM specialist moves it to another encounter of the same patient, then tries to move it to another patient's encounter
+  then: the first move succeeds, moved_from keeps the old encounter and note.moved is emitted; the second fails with NOTE_WRONG_PATIENT and HTTP 422
+  verifies:
+  - BR-H13
+  - FR-H3
+- id: AC-H12
+  given: two notes of the same patient and one of another patient
+  when: a clinician copies text from the same patient's note, then from the other patient's
+  then: the first copy is saved with copied_text naming the source note, author and date, and is shown as copied; the second fails with NOTE_COPY_NOT_ALLOWED and HTTP 422
+  verifies:
+  - BR-H14
+  - FR-H5
+- id: AC-H13
+  given: note_types requiring a discharge summary for inpatient stays, and a signature_deadline of 24 hours
+  when: an inpatient encounter starts, a progress note stays unsigned for 25 hours, and it stays open delinquency_after past due
+  then: deficiency.opened is emitted for a missing discharge summary and for the unsigned note, the unsigned one becomes delinquent and deficiency.delinquent is emitted, and signing resolves it
+  verifies:
+  - BR-H15
+  - BR-H20
+  - FR-H6
+- id: AC-H17
+  given: a discharged encounter with every required note final and no deficiency
+  when: the service checks it, then a required note is marked entered in error before the encounter completes
+  then: documentation.completed is emitted; then documentation.reopened is emitted and a missing_note deficiency opens
+  verifies:
+  - BR-H21
+  - FR-H7
+- id: AC-H18
+  given: a completed encounter
+  when: a consultant starts a note on it without a late entry reason, then with one
+  then: the first fails with NOTE_REASON_REQUIRED and HTTP 422; the second is saved as a late entry and no documentation.reopened is emitted
+  verifies:
+  - BR-H22
+- id: AC-H19
+  given: an open unsigned deficiency whose author left, with a draft
+  when: an HIM specialist closes it without a reason, then with one, then closes it again, then closes an unknown id
+  then: no reason gets DEFICIENCY_REASON_REQUIRED and HTTP 422; with one it is closed_unresolvable and the draft is preliminary with unauthenticated set and shown as unsigned; closing again gets DEFICIENCY_NOT_OPEN and HTTP 409; the unknown id gets DEFICIENCY_NOT_FOUND and HTTP 404
+  verifies:
+  - BR-H47
+- id: AC-H20
+  given: a signed note
+  when: a clinician places a hold without a review date, then with grounds, sections and a review date, the patient asks for a review, the clinician who placed it tries to review it, and another licensed professional ends it
+  then: the first fails with NOTE_INVALID_HOLD and HTTP 422; the second holds only those sections and emits note.release_held; the review request returns HTTP 202; the same clinician gets NOTE_FORBIDDEN and HTTP 403; ending it releases the note and emits note.released
+  verifies:
+  - BR-H27
+  - FR-H8
+- id: AC-H21
+  given: eu_release_delay holding a diagnosis note type for 7 days, and a progress note
+  when: both are signed
+  then: the progress note is released at once with note.released; the diagnosis note is held until a professional releases it or 7 days pass
+  verifies:
+  - BR-H26
+  jurisdiction: eu
+- id: AC-H22
+  given: psychotherapy_note_types including a session note type, and a session note
+  when: another clinician gets it, the patient lists their notes, and the encounter's documentation is checked
+  then: the clinician gets NOTE_FORBIDDEN and HTTP 403, the patient doesn't see it, and it isn't required for documentation to be complete
+  verifies:
+  - BR-H28
+  jurisdiction: us
+- id: AC-H23
+  given: an encounter with sensitivity SUD
+  when: a note on it is signed with PSY added
+  then: the note carries SUD and PSY, and note.signed carries both
+  verifies:
+  - BR-H29
+- id: AC-H24
+  given: notes, a draft and observations on two encounters
+  when: Encounters reports encounter.merged, then encounter.moved to another patient
+  then: every entry, the draft included, moves to the remaining encounter with the old id in moved_from; after the move their patient_id is the new patient
+  verifies:
+  - BR-H23
+  - FR-H16
+- id: AC-H25
+  given: notes written on a merged patient's encounter
+  when: Encounters reports encounter.patient_review_needed after the merge is undone
+  then: those notes are listed for review, and an HIM specialist marks each done after moving or keeping it
+  verifies:
+  - BR-H24
+  - FR-H16
+- id: AC-H26
+  given: a patient's own record
+  when: the patient adds an entry, then a clinician tries to edit it, and the patient tries to edit a clinician's note
+  then: the entry is final, labelled patient-entered, and emits note.signed with source patient_entered; the clinician's edit fails with NOTE_NOT_EDITABLE and HTTP 409; the patient's edit fails with NOTE_FORBIDDEN and HTTP 403
+  verifies:
+  - BR-H30
+  - FR-H9
+- id: AC-H27
+  given: a correction request with restriction
+  when: it is recorded, denied with a reason, decided again, the patient files a disagreement, an HIM specialist adds a rebuttal, and someone decides an unknown request
+  then: accuracy_contested is set and note.accuracy_contested is emitted; the denial emits note.correction_decided and clears it; deciding again gets NOTE_CORRECTION_ALREADY_DECIDED and HTTP 409; the disagreement and rebuttal are linked to the note; the unknown request gets NOTE_CORRECTION_REQUEST_NOT_FOUND and HTTP 404
+  verifies:
+  - BR-H31
+  - BR-H32
+  - FR-H10
+- id: AC-H28
+  given: a restricted patient
+  when: a clinician reads a note without a reason, then with one, and a privacy officer reads the access log
+  then: without a reason it fails with NOTE_FORBIDDEN and HTTP 403; with one it succeeds; the log shows both attempts with who, when and the reason
+  verifies:
+  - BR-H33
+  - FR-H17
+- id: AC-H29
+  given: a patient under legal hold whose record retention has ended
+  when: erasure is requested
+  then: no note or observation is erased while the hold lasts
+  verifies:
+  - BR-H34
+- id: AC-H30
+  given: a draft and an observation read at revision 3, then changed to revision 4
+  when: each is changed again sending revision 3
+  then: the note fails with NOTE_REVISION_CONFLICT and HTTP 409, the observation with OBSERVATION_REVISION_CONFLICT and HTTP 409, and nothing is saved
+  verifies:
+  - BR-H45
+- id: AC-H31
+  given: vital_sign_limits for an adult
+  when: a nurse records a heart rate of 130 /min, a heart rate in mm[Hg], an unknown code, a temperature of 98.6 Cel, and a blood pressure with only systolic
+  then: the heart rate is final, flagged H, and emits observation.recorded; the unit fails with OBSERVATION_INVALID_UNIT and HTTP 422; the code with OBSERVATION_INVALID_CODE and HTTP 422; the temperature with OBSERVATION_IMPLAUSIBLE and HTTP 422; the blood pressure with OBSERVATION_INCOMPLETE_PANEL and HTTP 422
+  verifies:
+  - BR-H36
+  - BR-H37
+  - FR-H13
+- id: AC-H32
+  given: device_values_need_validation set
+  when: a monitor sends a reading without a device id, then two readings with one, and a nurse accepts one, rejects the other, and tries to validate the accepted one again
+  then: the first fails with OBSERVATION_INVALID_SOURCE and HTTP 422; the two are preliminary; the accepted one is final with the nurse as performer; the rejected one isn't in the chart; validating again fails with OBSERVATION_NOT_EDITABLE and HTTP 409
+  verifies:
+  - BR-H38
+  - FR-H14
+- id: AC-H33
+  given: a weight and a height measured this month
+  when: the BMI is computed, a client corrects the BMI directly, and the weight is corrected
+  then: the BMI is derived with derived_from naming both; correcting it fails with OBSERVATION_DERIVED_READ_ONLY and HTTP 422; after the weight correction the BMI is recomputed
+  verifies:
+  - BR-H39
+  - FR-H13
+- id: AC-H34
+  given: a final observation
+  when: a nurse corrects it without a reason, then with one, marks another entered in error, corrects that one, gets an unknown id, and an HIM specialist moves one to another patient's encounter
+  then: no reason fails with OBSERVATION_REASON_REQUIRED and HTTP 422; with one it is amended, the old value is in history and observation.corrected is emitted; marking emits observation.entered_in_error; correcting it fails with OBSERVATION_NOT_EDITABLE and HTTP 409; the unknown id gets OBSERVATION_NOT_FOUND and HTTP 404; the move fails with NOTE_WRONG_PATIENT and HTTP 422
+  verifies:
+  - BR-H40
+  - FR-H3
+- id: AC-H35
+  given: clock_tolerance of 5 minutes
+  when: a device sends a reading 10 minutes in the future, and one at 01:30 with offset -04:00 on the night clocks go back
+  then: the first fails with OBSERVATION_INVALID_TIME and HTTP 422; the second is stored as that exact instant and shown with its offset
+  verifies:
+  - BR-H8
+- id: AC-H36
+  given: Terminology is unreachable, and later Identity is unreachable
+  when: a nurse records vital signs, then an author signs a draft
+  then: the vital signs are saved with the last loaded code lists and checked again later; signing fails with NOTE_DEPENDENCY_UNAVAILABLE and HTTP 503 and the draft is kept
+  verifies:
+  - BR-H43
+- id: AC-H37
+  given: notes written on paper during a downtime
+  when: they are entered afterwards
+  then: each has source downtime_back_entry, its original service_at, and late_entry_reason downtime
+  verifies:
+  - BR-H44
+- id: AC-H38
+  given: a deceased patient
+  when: a physician signs a death note on their encounter
+  then: the note is signed like any other
+  verifies:
+  - BR-H48
+- id: AC-H39
+  given: a note started with Idempotency-Key k1
+  when: the same request is retried with k1, then a different request is sent with k1
+  then: the retry returns the same note; the different request fails with NOTE_IDEMPOTENCY_KEY_REUSED and HTTP 422
+  verifies:
+  - FR-H12
+- id: AC-H40
+  given: a draft whose type requires a findings section
+  when: its author signs with a wrong credential, then with the findings section empty, then a client sends signed_at in an edit
+  then: the first fails with NOTE_REAUTHENTICATION_FAILED and HTTP 401; the second with NOTE_SECTIONS_INCOMPLETE and HTTP 422; the third with NOTE_READ_ONLY_FIELD and HTTP 422
+  verifies:
+  - BR-H4
+  - CON-H2
+- id: AC-H41
+  given: a signed progress note and a draft
+  when: the patient lists their notes
+  then: the signed note was released when signed and note.released was emitted; the draft isn't listed
+  verifies:
+  - BR-H25
+  - FR-H8
+  jurisdiction: us
+- id: AC-H42
+  given: assessment_instruments with the 0 to 10 pain scale
+  when: a nurse records a pain score of 7, an assessment with an unknown instrument, and one missing a required item
+  then: the first is saved with score 7; the second fails with OBSERVATION_INVALID_INSTRUMENT and HTTP 422; the third is saved without a score
+  verifies:
+  - BR-H41
+  - FR-H15
+- id: AC-H43
+  given: an encounter with no clinical data
+  when: the first note on it is signed
+  then: documentation.data_recorded is emitted once with the encounter id
+  verifies:
+  - BR-H42
+  - FR-H7
+- id: AC-H44
+  given: a draft and a final note
+  when: the author discards each
+  then: the draft becomes cancelled; the final note fails with NOTE_NOT_EDITABLE and HTTP 409
+  verifies:
+  - BR-H11
+  - FR-H1
+- id: AC-H45
+  given: a final note and a heart rate
+  when: each is read with Accept application/fhir+json
+  then: the note is a FHIR R5 Composition with the author as attester, and the heart rate an Observation conforming to the heart rate profile
+  verifies:
+  - FR-H11
+- id: AC-H46
+  given: a nurse, and note types in use
+  when: the nurse starts an operative report, a note of an unknown type, and a note with a section of 300000 characters
+  then: the first fails with NOTE_AUTHOR_NOT_PERMITTED and HTTP 403, the second with NOTE_INVALID_TYPE and HTTP 422, the third with NOTE_INVALID_CONTENT and HTTP 422
+  verifies:
+  - FR-H1
+- id: AC-H47
+  given: stored notes and observations
+  when: storage and connections are inspected
+  then: data is encrypted at rest and every connection uses TLS
+  verifies:
+  - CON-H1
+- id: AC-H49
+  given: a teenager's note with withheld_from_representatives set, and a parent with proxy access
+  when: it is signed and both list the teenager's notes
+  then: note.released carries withheld_from_representatives; the teenager sees the note and the parent doesn't
+  verifies:
+  - BR-H49
+- id: AC-H50
+  given: recording_consent all_parties for California, and an AI scribe that records audio
+  when: it starts a draft with only the clinician's agreement, then with the patient's too
+  then: the first fails with NOTE_RECORDING_CONSENT_MISSING and HTTP 422; the second is saved with recording_consent and no recording is stored
+  verifies:
+  - BR-H50
+- id: AC-H53
+  given: an EU patient whose notes were read by two clinicians
+  when: the patient gets their access log
+  then: it lists both reads with role, time and action
+  verifies:
+  - BR-H51
+  jurisdiction: eu
+- id: AC-H55
+  given: a patient in the emergency department
+  when: a nurse records a weight of 44 [lb_av], then 20 kg estimated, then 19.6 kg measured
+  then: the first fails with OBSERVATION_INVALID_UNIT and HTTP 422; the estimated weight is saved, shown as estimated, and documentation status lists the measured weight as missing; after the measured weight it no longer does
+  verifies:
+  - BR-H53
+  - BR-H36
+  - FR-H13
+- id: AC-H56
+  given: a signed note
+  when: a clinician places a hold with grounds required by law without naming the law, then naming it
+  then: the first fails with NOTE_INVALID_HOLD and HTTP 422; the second holds the note and emits note.release_held
+  verifies:
+  - BR-H25
+  - BR-H27
+  jurisdiction: us
+- id: AC-H57
+  given: an open deficiency due 30 days after discharge
+  when: Encounters reports encounter.amended moving the discharge a day earlier, then encounter.record_overdue
+  then: due_at moves a day earlier; then the deficiency is delinquent and deficiency.delinquent is emitted
+  verifies:
+  - BR-H20
+- id: AC-H58
+  given: an AI scribe that marks its output as AI-generated
+  when: its draft is signed
+  then: the note keeps the marking with source ai_draft and drafting_tool
+  verifies:
+  - BR-H7
+operations:
+- name: Start a note
+  actor: Clinician
+  description: Start a draft note on an encounter, blank, from a template, as an addendum source, or from a scribe or drafting tool. Accepts a retry key.
+  method: POST
+  path: /notes
+  success: 201
+  input: encounter, type, and optional title, sections, service_at, authors, source, drafting_tool, template, copied text, sensitivity, late_entry_reason, withheld_from_representatives and recording_consent
+  output: the draft note
+  errors:
+  - NOTE_INVALID_ENCOUNTER
+  - NOTE_INVALID_TYPE
+  - NOTE_AUTHOR_NOT_PERMITTED
+  - NOTE_INVALID_CONTENT
+  - NOTE_INVALID_TIME
+  - NOTE_REASON_REQUIRED
+  - NOTE_TOOL_NOT_APPROVED
+  - NOTE_RECORDING_CONSENT_MISSING
+  - NOTE_COPY_NOT_ALLOWED
+  - NOTE_READ_ONLY_FIELD
+  - NOTE_IDEMPOTENCY_KEY_REUSED
+- name: Get a note
+  actor: Clinician
+  description: Get a note, its addenda and its release status. Returns a FHIR R5 Composition when asked for application/fhir+json.
+  method: GET
+  path: /notes/{id}
+  success: 200
+  input: note id, and a reason when the patient is restricted
+  output: the note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+- name: List notes
+  actor: Clinician
+  description: List notes by patient, encounter, type, status, author or date.
+  method: GET
+  path: /notes
+  success: 200
+  input: filters, limit and cursor
+  output: notes without their sections, and next_cursor
+  errors:
+  - NOTE_FORBIDDEN
+- name: Edit a draft
+  actor: Clinician
+  description: Change a draft's content, title, service time, authors or withheld_from_representatives.
+  method: PATCH
+  path: /notes/{id}
+  success: 200
+  input: changed fields and revision
+  output: the draft
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+  - NOTE_NOT_AUTHOR
+  - NOTE_NOT_EDITABLE
+  - NOTE_INVALID_CONTENT
+  - NOTE_INVALID_TIME
+  - NOTE_REASON_REQUIRED
+  - NOTE_COPY_NOT_ALLOWED
+  - NOTE_READ_ONLY_FIELD
+  - NOTE_REVISION_CONFLICT
+- name: Sign a note
+  actor: Clinician
+  description: Sign a draft as its responsible author, confirming the credential again and, for scribed or drafted content, confirming review.
+  method: POST
+  path: /notes/{id}/sign
+  success: 200
+  input: revision, the credential confirmation from Identity, the cosigner when one is needed, and review confirmation where needed
+  output: the note, final or preliminary
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_NOT_AUTHOR
+  - NOTE_NOT_EDITABLE
+  - NOTE_SECTIONS_INCOMPLETE
+  - NOTE_REAUTHENTICATION_FAILED
+  - NOTE_REVIEW_NOT_ATTESTED
+  - NOTE_COSIGNER_REQUIRED
+  - NOTE_COSIGNER_NOT_PERMITTED
+  - NOTE_REVISION_CONFLICT
+  - NOTE_DEPENDENCY_UNAVAILABLE
+- name: Cosign a note
+  actor: Clinician
+  description: Cosign a preliminary note as the assigned cosigner, optionally with an attestation statement.
+  method: POST
+  path: /notes/{id}/cosign
+  success: 200
+  input: revision, credential confirmation and optional attestation
+  output: the final note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_NOT_AWAITING_COSIGNATURE
+  - NOTE_COSIGNER_NOT_PERMITTED
+  - NOTE_REAUTHENTICATION_FAILED
+  - NOTE_REVISION_CONFLICT
+  - NOTE_DEPENDENCY_UNAVAILABLE
+- name: Change the cosigner
+  actor: Health information management (HIM) specialist
+  description: Assign a different cosigner, for example when the first is away. The deficiency moves to them.
+  method: PUT
+  path: /notes/{id}/cosigner
+  success: 200
+  input: cosigner and revision
+  output: the note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_NOT_AWAITING_COSIGNATURE
+  - NOTE_COSIGNER_NOT_PERMITTED
+  - NOTE_REVISION_CONFLICT
+- name: Discard a draft
+  actor: Clinician
+  description: Cancel a draft that was never signed.
+  method: POST
+  path: /notes/{id}/discard
+  success: 200
+  input: revision
+  output: the cancelled note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_NOT_AUTHOR
+  - NOTE_NOT_EDITABLE
+  - NOTE_REVISION_CONFLICT
+- name: Add an addendum
+  actor: Clinician
+  description: Start a draft addendum to a signed note. It is signed like any note.
+  method: POST
+  path: /notes/{id}/addenda
+  success: 201
+  input: sections, and optional service_at and late_entry_reason
+  output: the draft addendum
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_INVALID_PARENT
+  - NOTE_AUTHOR_NOT_PERMITTED
+  - NOTE_INVALID_CONTENT
+  - NOTE_REASON_REQUIRED
+  - NOTE_IDEMPOTENCY_KEY_REUSED
+- name: Correct a note
+  actor: Clinician
+  description: Replace a signed note's content with a new version, with a reason, and sign it.
+  method: POST
+  path: /notes/{id}/corrections
+  success: 200
+  input: sections, reason, revision and credential confirmation
+  output: the corrected note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_NOT_AUTHOR
+  - NOTE_NOT_EDITABLE
+  - NOTE_INVALID_CONTENT
+  - NOTE_SECTIONS_INCOMPLETE
+  - NOTE_REASON_REQUIRED
+  - NOTE_REAUTHENTICATION_FAILED
+  - NOTE_REVISION_CONFLICT
+- name: List a note's versions
+  actor: Clinician
+  description: List every version of a corrected note with who changed it, when and why.
+  method: GET
+  path: /notes/{id}/versions
+  success: 200
+  input: note id
+  output: versions, newest first
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+- name: Mark a note entered in error
+  actor: Health information management (HIM) specialist
+  description: Mark a signed note entered in error with a reason. The author can do it too.
+  method: POST
+  path: /notes/{id}/entered-in-error
+  success: 200
+  input: reason code, text and revision
+  output: the note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_NOT_EDITABLE
+  - NOTE_REASON_REQUIRED
+  - NOTE_FORBIDDEN
+  - NOTE_REVISION_CONFLICT
+- name: Move a note
+  actor: Health information management (HIM) specialist
+  description: Move a note to the right encounter of the same patient, with a reason.
+  method: POST
+  path: /notes/{id}/move
+  success: 200
+  input: target encounter, reason and revision
+  output: the note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_INVALID_ENCOUNTER
+  - NOTE_WRONG_PATIENT
+  - NOTE_REASON_REQUIRED
+  - NOTE_REVISION_CONFLICT
+- name: Hold a note's release
+  actor: Clinician
+  description: Hold a note, or some of its sections, back from the patient on allowed grounds, or withhold it from representatives only.
+  method: POST
+  path: /notes/{id}/release-hold
+  success: 200
+  input: grounds, the law when a law requires the hold, sections, review date or withhold from representatives, and revision
+  output: the note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_INVALID_HOLD
+  - NOTE_FORBIDDEN
+  - NOTE_REVISION_CONFLICT
+- name: End a release hold
+  actor: Clinician
+  description: End a hold, which releases the note.
+  method: DELETE
+  path: /notes/{id}/release-hold
+  success: 200
+  input: revision
+  output: the note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+  - NOTE_REVISION_CONFLICT
+- name: Ask for a hold to be reviewed
+  actor: Patient
+  description: Ask for a hold on one of the patient's notes to be reviewed.
+  method: POST
+  path: /notes/{id}/release-hold/review-requests
+  success: 202
+  input: optional statement
+  output: the request
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+- name: Review a hold
+  actor: Clinician
+  description: As a licensed professional who didn't place the hold, uphold or end it.
+  method: POST
+  path: /notes/{id}/release-hold/review
+  success: 200
+  input: decision, reason and revision
+  output: the note
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+  - NOTE_REASON_REQUIRED
+  - NOTE_REVISION_CONFLICT
+- name: Add patient-entered information
+  actor: Patient
+  description: Add information to the patient's own record, labelled as patient-entered.
+  method: POST
+  path: /patient-entries
+  success: 201
+  input: encounter, sections
+  output: the entry, final
+  errors:
+  - NOTE_INVALID_ENCOUNTER
+  - NOTE_INVALID_CONTENT
+  - NOTE_FORBIDDEN
+  - NOTE_IDEMPOTENCY_KEY_REUSED
+- name: Request a correction
+  actor: Patient
+  description: Ask for a note to be corrected, optionally asking for it to be restricted meanwhile.
+  method: POST
+  path: /notes/{id}/correction-requests
+  success: 201
+  input: what is wrong, what it should say, and whether to restrict
+  output: the request with its due date
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+  - NOTE_IDEMPOTENCY_KEY_REUSED
+- name: Decide a correction request
+  actor: Health information management (HIM) specialist
+  description: Accept or deny a correction request, or extend it once.
+  method: POST
+  path: /note-correction-requests/{id}/decision
+  success: 200
+  input: accept, deny or extend, with the reason
+  output: the request
+  errors:
+  - NOTE_CORRECTION_REQUEST_NOT_FOUND
+  - NOTE_CORRECTION_ALREADY_DECIDED
+  - NOTE_REASON_REQUIRED
+- name: File a statement of disagreement
+  actor: Patient
+  description: Add a statement of disagreement to a denied request.
+  method: POST
+  path: /note-correction-requests/{id}/disagreement
+  success: 200
+  input: statement
+  output: the request
+  errors:
+  - NOTE_CORRECTION_REQUEST_NOT_FOUND
+  - NOTE_FORBIDDEN
+- name: Add a rebuttal
+  actor: Health information management (HIM) specialist
+  description: Add the hospital's rebuttal to a statement of disagreement.
+  method: POST
+  path: /note-correction-requests/{id}/rebuttal
+  success: 200
+  input: rebuttal
+  output: the request
+  errors:
+  - NOTE_CORRECTION_REQUEST_NOT_FOUND
+- name: Get an encounter's documentation status
+  actor: System
+  description: Whether an encounter's documentation is complete, and what is still missing.
+  method: GET
+  path: /documentation-status/{encounter_id}
+  success: 200
+  input: encounter id
+  output: complete or not, open deficiencies, drafts, preliminary notes, and whether a measured weight is missing
+  errors:
+  - NOTE_INVALID_ENCOUNTER
+- name: List deficiencies
+  actor: Health information management (HIM) specialist
+  description: List deficiencies by practitioner, department, status or delinquency.
+  method: GET
+  path: /deficiencies
+  success: 200
+  input: filters, limit and cursor
+  output: deficiencies and next_cursor
+  errors:
+  - NOTE_FORBIDDEN
+- name: Close a deficiency as unresolvable
+  actor: Health information management (HIM) specialist
+  description: Close a deficiency the author can no longer resolve, with a reason.
+  method: POST
+  path: /deficiencies/{id}/close
+  success: 200
+  input: reason
+  output: the deficiency
+  errors:
+  - DEFICIENCY_NOT_FOUND
+  - DEFICIENCY_NOT_OPEN
+  - DEFICIENCY_REASON_REQUIRED
+- name: List entries to review after an unmerge
+  actor: Health information management (HIM) specialist
+  description: List notes and observations recorded on a merged patient before the merge was undone.
+  method: GET
+  path: /unmerge-reviews
+  success: 200
+  input: patient, limit and cursor
+  output: entries and next_cursor
+  errors:
+  - NOTE_FORBIDDEN
+- name: Mark an unmerge review done
+  actor: Health information management (HIM) specialist
+  description: Confirm an entry is on the right patient, after moving or marking it in error if it wasn't.
+  method: POST
+  path: /unmerge-reviews/{id}/done
+  success: 200
+  input: note or observation id
+  output: the review item
+  errors:
+  - NOTE_NOT_FOUND
+- name: Get a note's access log
+  actor: Privacy officer
+  description: Who read or changed a note, when and why.
+  method: GET
+  path: /notes/{id}/access-log
+  success: 200
+  input: note id, limit and cursor
+  output: log entries
+  errors:
+  - NOTE_NOT_FOUND
+  - NOTE_FORBIDDEN
+- name: Get the patient's access log
+  actor: Patient
+  description: Who accessed the patient's notes and observations, and when.
+  method: GET
+  path: /access-log
+  success: 200
+  input: limit and cursor
+  output: log entries with role, time and action
+  errors:
+  - NOTE_FORBIDDEN
+  jurisdiction: eu
+- name: Record observations
+  actor: Nurse
+  description: Record one or more vital signs, or device readings. Accepts a retry key.
+  method: POST
+  path: /observations
+  success: 201
+  input: 'encounter, and for each: code, value or data_absent_reason, unit, components, effective_at, source, device, method, weight_basis and late_entry_reason'
+  output: the observations, with interpretation and any derived values
+  errors:
+  - OBSERVATION_INVALID_ENCOUNTER
+  - OBSERVATION_INVALID_CODE
+  - OBSERVATION_INVALID_UNIT
+  - OBSERVATION_IMPLAUSIBLE
+  - OBSERVATION_INCOMPLETE_PANEL
+  - OBSERVATION_INVALID_TIME
+  - OBSERVATION_REASON_REQUIRED
+  - OBSERVATION_INVALID_SOURCE
+  - NOTE_IDEMPOTENCY_KEY_REUSED
+- name: Get an observation
+  actor: Clinician
+  description: Get one observation and its history. Returns a FHIR R5 Observation when asked for application/fhir+json.
+  method: GET
+  path: /observations/{id}
+  success: 200
+  input: observation id
+  output: the observation
+  errors:
+  - OBSERVATION_NOT_FOUND
+  - NOTE_FORBIDDEN
+- name: List observations
+  actor: Clinician
+  description: List observations by patient, encounter, code, status or time range.
+  method: GET
+  path: /observations
+  success: 200
+  input: filters, limit and cursor
+  output: observations and next_cursor
+  errors:
+  - NOTE_FORBIDDEN
+- name: Validate device readings
+  actor: Nurse
+  description: Accept or reject preliminary device readings.
+  method: POST
+  path: /observations/validation
+  success: 200
+  input: 'for each reading: accept or reject, and revision'
+  output: the accepted observations
+  errors:
+  - OBSERVATION_NOT_FOUND
+  - OBSERVATION_NOT_EDITABLE
+  - OBSERVATION_REVISION_CONFLICT
+- name: Correct an observation
+  actor: Nurse
+  description: Correct a final observation's value with a reason.
+  method: POST
+  path: /observations/{id}/corrections
+  success: 200
+  input: value, unit, components, reason and revision
+  output: the amended observation
+  errors:
+  - OBSERVATION_NOT_FOUND
+  - OBSERVATION_NOT_EDITABLE
+  - OBSERVATION_INVALID_UNIT
+  - OBSERVATION_IMPLAUSIBLE
+  - OBSERVATION_INCOMPLETE_PANEL
+  - OBSERVATION_REASON_REQUIRED
+  - OBSERVATION_DERIVED_READ_ONLY
+  - OBSERVATION_REVISION_CONFLICT
+- name: Mark an observation entered in error
+  actor: Nurse
+  description: Mark an observation entered in error with a reason.
+  method: POST
+  path: /observations/{id}/entered-in-error
+  success: 200
+  input: reason and revision
+  output: the observation
+  errors:
+  - OBSERVATION_NOT_FOUND
+  - OBSERVATION_NOT_EDITABLE
+  - OBSERVATION_REASON_REQUIRED
+  - OBSERVATION_REVISION_CONFLICT
+- name: Move an observation
+  actor: Health information management (HIM) specialist
+  description: Move an observation to the right encounter of the same patient, with a reason.
+  method: POST
+  path: /observations/{id}/move
+  success: 200
+  input: target encounter, reason and revision
+  output: the observation
+  errors:
+  - OBSERVATION_NOT_FOUND
+  - OBSERVATION_INVALID_ENCOUNTER
+  - NOTE_WRONG_PATIENT
+  - OBSERVATION_REASON_REQUIRED
+  - OBSERVATION_REVISION_CONFLICT
+- name: Record an assessment
+  actor: Nurse
+  description: Record an assessment's item answers; the service computes the score.
+  method: POST
+  path: /assessments
+  success: 201
+  input: encounter, instrument, answers, effective_at and late_entry_reason
+  output: the assessment, with its score when complete
+  errors:
+  - OBSERVATION_INVALID_ENCOUNTER
+  - OBSERVATION_INVALID_INSTRUMENT
+  - OBSERVATION_INVALID_TIME
+  - OBSERVATION_REASON_REQUIRED
+  - NOTE_IDEMPOTENCY_KEY_REUSED
+apiConventions:
+- topic: Authentication
+  text: Every request carries the caller's identity from Identity. Permissions are checked against it (Permission matrix). Signing also needs a fresh credential confirmation (BR-H4).
+- topic: Errors
+  text: Errors use problem details (application/problem+json) with a code member, such as NOTE_NOT_EDITABLE. A request reports every failing field at once.
+  reference: RFC 9457
+- topic: Pagination
+  text: 'Lists are cursor-based: limit and an optional cursor in, next_cursor out.'
+- topic: Concurrency
+  text: Every change sends the revision it read. A stale revision fails with NOTE_REVISION_CONFLICT or OBSERVATION_REVISION_CONFLICT (BR-H45).
+- topic: Retries
+  text: Every create accepts an Idempotency-Key header; a retry returns the original result (FR-H12).
+  reference: IETF draft-ietf-httpapi-idempotency-key-header
+- topic: Times
+  text: Instants are RFC 3339 timestamps with an offset; the service stores them in UTC.
+  reference: RFC 3339
+- topic: FHIR
+  text: Notes are returned as HL7 FHIR R5 Composition, and observations as Observation, when the request asks for application/fhir+json (FR-H11).
+- topic: Versioning
+  text: Additive changes don't change the version. A breaking change ships as a new major version with Deprecation and Sunset headers.
+  reference: RFC 9745, RFC 8594
+events:
+- name: note.signed
+  description: A note, addendum or patient-entered entry was signed and is available for care, final or preliminary.
+  payload:
+  - note_id
+  - encounter_id
+  - patient_id
+  - type
+  - status
+  - sensitivity
+  - version
+  - revision
+  - parent_note_id
+  - source
+- name: note.cosigned
+  description: A preliminary note was cosigned and is final.
+  payload:
+  - note_id
+  - encounter_id
+  - patient_id
+  - type
+  - status
+  - sensitivity
+  - version
+  - revision
+- name: note.corrected
+  description: A signed note has a new version.
+  payload:
+  - note_id
+  - encounter_id
+  - patient_id
+  - type
+  - status
+  - sensitivity
+  - version
+  - revision
+  - reason_code
+- name: note.entered_in_error
+  description: A signed note was marked entered in error.
+  payload:
+  - note_id
+  - encounter_id
+  - patient_id
+  - type
+  - status
+  - sensitivity
+  - version
+  - revision
+  - reason_code
+- name: note.moved
+  description: A note moved to another encounter of the same patient.
+  payload:
+  - note_id
+  - encounter_id
+  - patient_id
+  - type
+  - status
+  - sensitivity
+  - version
+  - revision
+  - from_encounter_id
+- name: note.released
+  description: A note became readable by the patient.
+  payload:
+  - note_id
+  - patient_id
+  - withheld_from_representatives
+  - revision
+- name: note.release_held
+  description: A note, or part of it, is held back from the patient.
+  payload:
+  - note_id
+  - patient_id
+  - grounds
+  - review_at
+  - revision
+- name: note.correction_decided
+  description: A correction request was accepted or denied.
+  payload:
+  - note_id
+  - patient_id
+  - request_id
+  - decision
+  - revision
+- name: note.accuracy_contested
+  description: A note's accuracy is contested, or no longer is.
+  payload:
+  - note_id
+  - patient_id
+  - contested
+  - revision
+- name: documentation.data_recorded
+  description: The first signed note or final observation was recorded on an encounter.
+  payload:
+  - encounter_id
+  - patient_id
+- name: documentation.completed
+  description: An encounter's documentation is complete.
+  payload:
+  - encounter_id
+  - patient_id
+  - completed_at
+- name: documentation.reopened
+  description: An encounter reported complete has something missing again.
+  payload:
+  - encounter_id
+  - patient_id
+  - reason
+- name: deficiency.opened
+  description: A practitioner owes the record something.
+  payload:
+  - deficiency_id
+  - encounter_id
+  - practitioner_id
+  - kind
+  - due_at
+- name: deficiency.delinquent
+  description: A deficiency is past delinquency_after.
+  payload:
+  - deficiency_id
+  - encounter_id
+  - practitioner_id
+  - kind
+- name: observation.recorded
+  description: An observation was recorded, preliminary from a device or final.
+  payload:
+  - observation_id
+  - encounter_id
+  - patient_id
+  - code
+  - status
+  - interpretation
+  - revision
+- name: observation.corrected
+  description: An observation's value was corrected.
+  payload:
+  - observation_id
+  - encounter_id
+  - patient_id
+  - code
+  - revision
+- name: observation.entered_in_error
+  description: An observation was marked entered in error.
+  payload:
+  - observation_id
+  - encounter_id
+  - patient_id
+  - code
+  - revision
+deliveryGuarantees:
+- id: DG-H1
+  text: Events are published at least once; consumers drop one with a source and id they have seen.
+  rationale: A relay can publish twice after a crash. CloudEvents defines source plus id as the duplicate check.
+- id: DG-H2
+  text: Events about one note or observation can arrive out of order; each carries the revision, and consumers ignore a lower one.
+  rationale: Brokers and retries don't guarantee order.
+- id: DG-H3
+  text: Events carry ids, codes and sensitivity, never note text or values. Consumers read the note or observation.
+  rationale: Events fan out widely. This follows the minimum necessary standard (45 CFR 164.502(b)) and GDPR data minimisation (Article 5(1)(c)).
+- id: DG-H4
+  text: Every event carries a unique id, its type, the entry it is about, when the change happened, and the revision where the entry has one.
+  rationale: Consumers order and deduplicate by these. CloudEvents defines id, type and time for every event.
+permissions:
+- name: note.read
+  description: Read notes of patients in your care.
+- name: note.write
+  description: Write, sign and correct your own notes.
+- name: note.cosign
+  description: Cosign notes of authors you supervise.
+- name: note.release
+  description: Hold a note's release, and review holds.
+- name: note.manage
+  description: Move notes, mark them entered in error, manage deficiencies and decide correction requests.
+- name: note.audit
+  description: Read access logs.
+- name: observation.read
+  description: Read observations of patients in your care.
+- name: observation.write
+  description: Record, validate and correct observations.
+- name: patient_entry.write
+  description: Add patient-entered information and request corrections of your own record.
+accessMatrix:
+- action: Get or list notes, and list versions
+  roles:
+    Clinician: own
+    Nurse: own
+    Trainee: own
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: any
+    Patient: own
+  permission: note.read
+  note: 'own: patients in their care, or for a patient their own released notes. Restricted patients need a reason (BR-H33). Notes kept apart from the record, such as US psychotherapy notes, only by their author. Drafts only by their author and creator (BR-H2).'
+- action: Start a note, edit a draft, discard a draft, add an addendum
+  roles:
+    Clinician: own
+    Nurse: own
+    Trainee: own
+    Scribe: own
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: own
+    Patient: none
+  permission: note.write
+  note: 'own: patients in their care; a scribe or drafting tool only for the named author (BR-H6, BR-H7).'
+- action: Sign or correct a note
+  roles:
+    Clinician: own
+    Nurse: own
+    Trainee: own
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.write
+  note: 'own: notes they are the responsible author of (BR-H4, BR-H10).'
+- action: Cosign a note
+  roles:
+    Clinician: own
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.cosign
+  note: 'own: notes they are assigned to cosign.'
+- action: Change the cosigner
+  roles:
+    Clinician: none
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.manage
+- action: Mark a note entered in error
+  roles:
+    Clinician: own
+    Nurse: own
+    Trainee: own
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.manage
+  note: 'own: notes they authored, with note.write.'
+- action: Move a note or observation
+  roles:
+    Clinician: none
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.manage
+- action: Hold, end or review a release hold
+  roles:
+    Clinician: own
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.release
+  note: 'own: a licensed professional caring for the patient; a reviewer must not be the one who placed it (BR-H27).'
+- action: Add patient-entered information, request a correction, ask for a hold review, file a disagreement
+  roles:
+    Clinician: none
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: own
+  permission: patient_entry.write
+  note: 'own: their own record, or one they represent within the authority the Patients module records.'
+- action: Decide a correction request, add a rebuttal
+  roles:
+    Clinician: none
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.manage
+- action: Get documentation status, check for a current history and physical
+  roles:
+    Clinician: own
+    Nurse: own
+    Trainee: own
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: any
+    Patient: none
+  permission: note.read
+- action: List deficiencies, close one as unresolvable, review unmerges
+  roles:
+    Clinician: own
+    Nurse: none
+    Trainee: own
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: none
+    Patient: none
+  permission: note.manage
+  note: 'own: list their own deficiencies only; closing and unmerge review need an HIM specialist.'
+- action: Get a note's access log
+  roles:
+    Clinician: none
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: any
+    System: none
+    Patient: none
+  permission: note.audit
+- action: Get the patient's own access log
+  roles:
+    Clinician: none
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: own
+  permission: patient_entry.write
+  note: Where the jurisdiction gives patients that right.
+- action: Get or list observations
+  roles:
+    Clinician: own
+    Nurse: own
+    Trainee: own
+    Scribe: none
+    Health information management (HIM) specialist: any
+    Privacy officer: none
+    System: any
+    Patient: own
+  permission: observation.read
+  note: 'own: patients in their care, or the patient''s own.'
+- action: Record, validate, correct or mark observations in error, record assessments
+  roles:
+    Clinician: own
+    Nurse: own
+    Trainee: own
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: own
+    Patient: none
+  permission: observation.write
+  note: 'own: patients in their care; System only records device readings, preliminary.'
+personalData:
+- field: note.patient_id, note.encounter_id, note.type, note.title, note.sections, note.service_at, note.recorded_at
+  category: health data; special category under GDPR Article 9
+  purpose: The record of care
+  retention: record_retention of the Patients module
+- field: note.authors, note.data_enterer, note.cosigner_id, note.signed_at, note.cosigned_at, note.attestation
+  category: personal data of staff
+  purpose: Showing who wrote and authenticated each entry
+  retention: record_retention of the Patients module
+- field: note.source, note.drafting_tool, note.review_attested, note.template_id, note.copied_text, note.version, note.versions, note.parent_note_id, note.moved_from, note.revision
+  category: health data
+  purpose: Provenance and integrity of the record
+  retention: record_retention of the Patients module
+- field: note.sensitivity
+  category: special category; reveals the kind of care
+  purpose: Applying extra protection
+  retention: record_retention of the Patients module
+- field: note.psychotherapy
+  category: special category; reveals mental health care
+  purpose: Keeping psychotherapy notes apart
+  retention: record_retention of the Patients module
+  jurisdiction: us
+- field: note.late_entry_reason, note.entered_in_error_reason, note.unauthenticated, note.status
+  category: health data
+  purpose: Showing how and when the record changed
+  retention: record_retention of the Patients module
+- field: note.release_status, note.release_hold, note.withheld_from_representatives
+  category: health data
+  purpose: Managing the patient's access
+  retention: record_retention of the Patients module
+- field: note.correction_requests, note.accuracy_contested
+  category: personal
+  purpose: Handling the patient's right to correction
+  retention: As long as the note, and in the United States at least 6 years from the decision (45 CFR 164.530(j)(2))
+- field: observation.patient_id, observation.encounter_id, observation.category, observation.code, observation.value, observation.unit, observation.components, observation.data_absent_reason, observation.effective_at, observation.recorded_at, observation.method, observation.interpretation, observation.derived_from, observation.instrument, observation.score, observation.order_id, observation.status
+  category: health data
+  purpose: The record of care
+  retention: record_retention of the Patients module
+- field: observation.performer_id, observation.source, observation.device_id, observation.weight_basis, observation.late_entry_reason, observation.history, observation.revision
+  category: health data and staff personal data
+  purpose: Showing who measured what, how and when
+  retention: record_retention of the Patients module
+- field: deficiency.encounter_id, deficiency.practitioner_id, deficiency.kind, deficiency.note_type, deficiency.note_id, deficiency.due_at, deficiency.status, deficiency.delinquent, deficiency.closed_reason
+  category: personal data of staff
+  purpose: Completing records on time, and medical staff performance review
+  retention: Set by the hospital; at least until the encounter completes
+- field: access log
+  category: personal
+  purpose: Showing who accessed health data
+  retention: access_log_retention of the Patients module
+- field: note.recording_consent
+  category: personal
+  purpose: Showing the conversation was recorded lawfully
+  retention: record_retention of the Patients module
+errors:
+- code: NOTE_NOT_FOUND
+  http: 404
+  message: No note exists with that id, or you can't see it.
+- code: NOTE_FORBIDDEN
+  http: 403
+  message: Your role doesn't allow this on this note or patient.
+- code: NOTE_INVALID_ENCOUNTER
+  http: 422
+  message: The encounter doesn't exist, is cancelled or entered in error, or its patient isn't in use.
+- code: NOTE_INVALID_TYPE
+  http: 422
+  message: That note type isn't in use here.
+- code: NOTE_AUTHOR_NOT_PERMITTED
+  http: 403
+  message: This author's role may not write this note type.
+- code: NOTE_NOT_AUTHOR
+  http: 403
+  message: Only the note's responsible author can do this.
+- code: NOTE_NOT_EDITABLE
+  http: 409
+  message: The note isn't in a status that allows this, such as editing a signed note or discarding one.
+- code: NOTE_INVALID_CONTENT
+  http: 422
+  message: A section is missing its title, has no text, or is too long.
+- code: NOTE_SECTIONS_INCOMPLETE
+  http: 422
+  message: A required section of this note type has no text.
+- code: NOTE_INVALID_TIME
+  http: 422
+  message: The service time is in the future.
+- code: NOTE_REASON_REQUIRED
+  http: 422
+  message: This needs a reason, such as a correction, a move, a review decision or a late entry.
+- code: NOTE_TOOL_NOT_APPROVED
+  http: 422
+  message: The drafting tool isn't on the approved list.
+- code: NOTE_RECORDING_CONSENT_MISSING
+  http: 422
+  message: The drafting tool records the conversation, and the agreement this location requires isn't recorded.
+- code: NOTE_REVIEW_NOT_ATTESTED
+  http: 422
+  message: Drafted or scribed content needs the author to confirm they reviewed it.
+- code: NOTE_REAUTHENTICATION_FAILED
+  http: 401
+  message: Your credential couldn't be confirmed for signing.
+- code: NOTE_COSIGNER_NOT_PERMITTED
+  http: 403
+  message: This person can't cosign this author's note.
+- code: NOTE_NOT_AWAITING_COSIGNATURE
+  http: 409
+  message: The note isn't waiting for a cosignature.
+- code: NOTE_COSIGNER_REQUIRED
+  http: 422
+  message: This note type and role need a cosigner; name one when signing.
+- code: NOTE_INVALID_PARENT
+  http: 422
+  message: An addendum needs a signed note of the same patient that isn't entered in error.
+- code: NOTE_COPY_NOT_ALLOWED
+  http: 422
+  message: Copied text must come from the same patient, and this note type may not allow copying.
+- code: NOTE_WRONG_PATIENT
+  http: 422
+  message: The target encounter belongs to another patient; mark the entry entered in error and record it again there.
+- code: NOTE_INVALID_HOLD
+  http: 422
+  message: The hold's grounds aren't allowed here, or it has no sections, deciding professional or review date in range.
+- code: NOTE_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service.
+- code: NOTE_REVISION_CONFLICT
+  http: 409
+  message: The note changed since you read it. Read it again.
+- code: NOTE_IDEMPOTENCY_KEY_REUSED
+  http: 422
+  message: That retry key was used with a different request.
+- code: NOTE_DEPENDENCY_UNAVAILABLE
+  http: 503
+  message: Identity or Encounters can't be reached. Try again.
+- code: NOTE_CORRECTION_REQUEST_NOT_FOUND
+  http: 404
+  message: No correction request exists with that id.
+- code: NOTE_CORRECTION_ALREADY_DECIDED
+  http: 409
+  message: The request is already decided, or was already extended once.
+- code: DEFICIENCY_NOT_FOUND
+  http: 404
+  message: No deficiency exists with that id.
+- code: DEFICIENCY_NOT_OPEN
+  http: 409
+  message: The deficiency is already resolved or closed.
+- code: DEFICIENCY_REASON_REQUIRED
+  http: 422
+  message: Closing a deficiency as unresolvable needs a reason.
+- code: OBSERVATION_NOT_FOUND
+  http: 404
+  message: No observation exists with that id.
+- code: OBSERVATION_INVALID_ENCOUNTER
+  http: 422
+  message: The encounter doesn't exist, is cancelled or entered in error, or its patient isn't in use.
+- code: OBSERVATION_INVALID_CODE
+  http: 422
+  message: That code isn't a vital sign or assessment item in use here.
+- code: OBSERVATION_INVALID_UNIT
+  http: 422
+  message: That unit isn't allowed for this code; body weight is kg or g, with whether it was measured, stated or estimated.
+- code: OBSERVATION_IMPLAUSIBLE
+  http: 422
+  message: The value is outside the plausible limits for this code. Check the value and unit.
+- code: OBSERVATION_INCOMPLETE_PANEL
+  http: 422
+  message: A blood pressure needs both systolic and diastolic values, or a reason one is absent.
+- code: OBSERVATION_INVALID_TIME
+  http: 422
+  message: The time measured is in the future.
+- code: OBSERVATION_REASON_REQUIRED
+  http: 422
+  message: This needs a reason, such as a correction, a move or a late entry.
+- code: OBSERVATION_INVALID_SOURCE
+  http: 422
+  message: A device reading needs a device id, and derived values can't be sent.
+- code: OBSERVATION_INVALID_INSTRUMENT
+  http: 422
+  message: That instrument isn't in use, or an answer isn't one of its items.
+- code: OBSERVATION_NOT_EDITABLE
+  http: 409
+  message: The observation isn't in a status that allows this.
+- code: OBSERVATION_DERIVED_READ_ONLY
+  http: 422
+  message: A derived value is computed from its sources; correct those instead.
+- code: OBSERVATION_REVISION_CONFLICT
+  http: 409
+  message: The observation changed since you read it. Read it again.
+dependencies:
+- service: encounter-service
+  direction: upstream
+  reason: owns encounters
+  criticality: hard
+  contract:
+  - 'Asks: does this encounter exist, for which patient, in which status and class, with which sensitivity codes?'
+  - 'Receives: encounter.started, encounter.discharged, encounter.completed, encounter.cancelled, encounter.entered_in_error and encounter.amended, so notes open, are required and lock with the encounter'
+  - 'Receives: encounter.moved and encounter.merged, so notes and observations follow the encounter'
+  - 'Receives: encounter.patient_review_needed, to list entries for review after an undone patient merge'
+  - 'Receives: encounter.record_overdue, shown on the responsible practitioner''s deficiency list'
+  - 'Gives: documentation.data_recorded, documentation.completed and documentation.reopened'
+  - Completing and locking encounters is Encounters' concern
+- service: patient-service
+  direction: upstream
+  reason: owns patients
+  criticality: hard
+  contract:
+  - 'Asks: is this patient''s record in use, and is it restricted?'
+  - 'Asks: may this person act for this patient, with which scope and exclusions, and has the patient asked for their own access to be delayed (patient_requested_delay)?'
+  - 'Asks: correction_deadline, correction_extension, record_retention and access_log_retention for this jurisdiction'
+  - 'Asks: is this patient under legal hold?'
+  - 'Receives: patient.legal_hold_changed'
+- service: identity-service
+  direction: upstream
+  reason: authenticates callers and signers
+  criticality: hard
+  contract:
+  - 'Asks: who is the caller, and do they hold this permission?'
+  - 'Asks: confirm the signer''s credential again now, before a signature'
+- service: organization-service
+  direction: upstream
+  reason: owns practitioners' roles and supervision
+  criticality: soft
+  contract:
+  - 'Asks: may this practitioner write this note type on this date?'
+  - 'Asks: may this practitioner supervise and cosign for this author?'
+  - Practitioner roles and scope of practice are Organization's concern
+- service: terminology-service
+  direction: upstream
+  reason: validates codes and units
+  criticality: soft
+  contract:
+  - 'Asks: is this LOINC, SNOMED CT or UCUM code valid on this date?'
+- service: device-integration-service
+  direction: upstream
+  reason: delivers readings from monitors and other devices
+  criticality: soft
+  contract:
+  - 'Receives: device readings with the device id, code, value, unit and measured time'
+  - Connecting devices and keeping their clocks right is Device integration's concern
+- service: documentation-assistant
+  direction: upstream
+  reason: speech recognition and AI drafting tools
+  criticality: soft
+  contract:
+  - 'Receives: drafts with the tool name and version, for the named author to review'
+  - 'Receives: any machine-readable marking that content is AI-generated, kept with the note''s provenance'
+  - Drafting is the tool's concern; this module accepts only tools in drafting_tools
+  - 'Receives: the recording consent it collected before recording, with who agreed and when'
+  - Deleting recordings is the tool's concern
+- service: orders-service
+  direction: upstream
+  reason: owns orders
+  criticality: soft
+  contract:
+  - 'Asks: does this order exist for this patient?'
+  - 'Gives: observation.recorded with order_id, so Orders can see ordered measurements that are overdue'
+  - Order status and tracking an order's schedule are Orders' concern
+- service: release-of-information-service
+  direction: downstream
+  reason: copies, disclosures and exports
+  criticality: soft
+  contract:
+  - 'Gives: note.corrected and note.entered_in_error, so it tells everyone it sent the note to'
+  - 'Gives: note.correction_decided, with any statement of disagreement and rebuttal, to include with later disclosures'
+  - 'Gives: note.accuracy_contested, so copies mark the note as disputed'
+  - 'Gives: this module''s part of a copy request and of a single-patient electronic health information export, without notes kept apart from the record'
+  - Accounting of disclosures and copies are Release of information's concern
+- service: patient-access-service
+  direction: downstream
+  reason: the patient portal, and EU electronic health data access services
+  criticality: soft
+  contract:
+  - 'Gives: note.released and note.release_held, so the patient sees released notes and is told what is held'
+  - 'Gives: withheld_from_representatives with note.released, so representatives don''t see those notes'
+  - 'Gives: the access log entries for a patient, where the jurisdiction gives patients that right'
+  - Presenting the record to patients is the access service's concern
+- service: consent-service
+  direction: downstream
+  reason: disclosure decisions
+  criticality: soft
+  contract:
+  - 'Gives: each note''s sensitivity codes, and whether it is kept apart from the record'
+  - Disclosure decisions, authorizations and restrictions on professionals' access are Consent's concern
+- service: billing-service
+  direction: downstream
+  reason: coding and claims
+  criticality: soft
+  contract:
+  - 'Gives: note.signed, note.cosigned, note.corrected and note.moved, so coding uses the signed, current note on the right encounter'
+  - Coding is Billing's concern
+- service: notification-service
+  direction: downstream
+  reason: tells people about work waiting for them
+  criticality: soft
+  contract:
+  - 'Gives: deficiency.opened and deficiency.delinquent, for the practitioner and HIM specialists'
+- service: clinical-decision-support-service
+  direction: downstream
+  reason: early warning scores and alerts
+  criticality: soft
+  contract:
+  - 'Gives: observation.recorded, observation.corrected and observation.entered_in_error'
+  - Early warning, alerts and escalation are Clinical decision support's concern
+- service: health-information-exchange-service
+  direction: downstream
+  reason: sends documents to other organizations
+  criticality: soft
+  contract:
+  - 'Gives: note.signed for discharge summaries and other documents it sends, as US Core DocumentReference or HL7 Europe Hospital Discharge Report'
+  - Choosing recipients and transport is the exchange service's concern
+- service: document-imaging-service
+  direction: downstream
+  reason: scanned paper
+  criticality: soft
+  contract:
+  - 'Gives: the note ids that scanned downtime pages belong to'
+  - Scanning and storing paper is Document imaging's concern
+risks:
+- id: RISK-H1
+  risk: A note is written on the wrong patient.
+  impact: Care decisions and disclosures based on someone else's information.
+  mitigation: Entered in error with a copy on the right patient, no cross-patient copying, and recipients told (BR-H12, BR-H13, BR-H14, BR-H35).
+- id: RISK-H2
+  risk: Copied text carries outdated or wrong findings forward.
+  impact: Errors spread through the record, and cloned documentation raises billing concerns.
+  mitigation: Copied text is labelled with its source and copy_paste_policy can block it (BR-H14); monitoring is a deployment duty.
+- id: RISK-H3
+  risk: An author signs a drafted note without reading it.
+  impact: Invented or misattributed findings enter the legal record.
+  mitigation: Review attestation, approved tools only, and provenance kept (BR-H7); auditing review behaviour is a deployment duty.
+- id: RISK-H4
+  risk: Records stay incomplete.
+  impact: Survey findings under the conditions of participation, and encounters that can't be completed or billed.
+  mitigation: Deficiencies with deadlines and delinquency (BR-H20), and reporting to Encounters (BR-H21).
+- id: RISK-H5
+  risk: A patient reads bad news in a note before anyone explains it.
+  impact: Distress, and complaints.
+  mitigation: Holds only on lawful grounds with review (BR-H27), and the EU delay where member-state law allows it; clinicians plan conversations around release.
+- id: RISK-H6
+  risk: Device artifacts enter the chart.
+  impact: False alerts and wrong trends.
+  mitigation: Validation before readings are final (BR-H38), plausibility limits (BR-H37).
+decisions:
+- id: ADR-H1
+  decision: Clinical notes and observations are specified at the healthcare level, with an EHR layer for hospital documentation rules.
+  rationale: Notes, signing, corrections, release to patients and vital signs work the same in any care setting; only hospital deadlines and hospital note types are hospital work.
+  date: '2026-10-09'
+- id: ADR-H2
+  decision: A corrected note keeps its id and gains versions, rather than becoming a new note.
+  rationale: FHIR keeps a corrected Composition's identity, so links from other modules stay valid. HL7 v2 interfaces send a replacement document (MDM T10) built from the new version.
+  date: '2026-10-09'
+- id: ADR-H3
+  decision: Vital signs and assessments live in this module, not in Orders and results.
+  rationale: 'The care team measures them at the bedside, usually without an order, and they share notes'' needs: performer, time, late entry and correction. Laboratory results come from orders and stay there.'
+  date: '2026-10-09'
+- id: ADR-H4
+  decision: A draft isn't part of the record used for care and isn't released.
+  rationale: HL7 v2 keeps a document unavailable until it is authenticated, and ONC says notes not yet finalized need not be released unless used to make decisions. Others act only on signed notes, so a draft is never used to make decisions.
+  date: '2026-10-09'
+- id: ADR-H5
+  decision: Device readings need validation by default.
+  rationale: Artifact-laden readings filed automatically pollute the record; hospitals that trust a device can turn it off.
+  date: '2026-10-09'
+references:
+- id: REF-H1
+  title: HL7 FHIR R5, Composition
+  url: https://hl7.org/fhir/R5/composition.html
+  note: Statuses, attesters, relatesTo and sections of a clinical document.
+- id: REF-H2
+  title: HL7 FHIR R5, Vital signs profiles
+  url: https://hl7.org/fhir/R5/observation-vitalsigns.html
+  note: LOINC codes and UCUM units for each vital sign.
+- id: REF-H3
+  title: HL7 US Core, Clinical notes
+  url: https://hl7.org/fhir/us/core/clinical-notes.html
+  note: The note types US servers support and the clinical-note category.
+- id: REF-H4
+  title: 'HL7 Version 2.4, Chapter 9: Medical records and information management'
+  url: https://www.hl7.eu/HL7v2x/v24/std24/ch09.htm
+  note: 'MDM events T01 to T11: edits only while unavailable, addenda, replacement and cancel.'
+- id: REF-H5
+  title: HL7 v2 Table 0271, Document completion status
+  url: https://terminology.hl7.org/CodeSystem-v2-0271.html
+  note: Dictated, in progress, pre-authenticated, authenticated, legally authenticated.
+- id: REF-H6
+  title: HL7 v2 Table 0273, Document availability status
+  url: https://terminology.hl7.org/CodeSystem-v2-0273.html
+  note: Available, obsolete, unavailable, deleted.
+- id: REF-H7
+  title: HL7 v2 Table 0270, Document type
+  url: https://terminology.hl7.org/CodeSystem-v2-0270.html
+  note: HL7 v2 codes for note types.
+- id: REF-H8
+  title: '42 CFR 482.24, Condition of participation: Medical record services'
+  url: https://www.ecfr.gov/current/title-42/section-482.24
+  note: Dated, timed, authenticated entries; history and physical; discharge summary; completion within 30 days; retention.
+- id: REF-H11
+  title: Medicare Program Integrity Manual, Chapter 3
+  url: https://www.cms.gov/Regulations-and-Guidance/Guidance/Manuals/downloads/pim83c03.pdf
+  note: Section 3.3.2.4 signatures, scribes and AI transcription; 3.3.2.5 amendments, corrections and delayed entries; 3.3.2.6 psychotherapy notes.
+- id: REF-H12
+  title: 45 CFR 164.501, Definitions
+  url: https://www.ecfr.gov/current/title-45/section-164.501
+  note: Psychotherapy notes.
+- id: REF-H13
+  title: 45 CFR 164.508, Uses and disclosures for which an authorization is required
+  url: https://www.ecfr.gov/current/title-45/section-164.508
+  note: Authorization for psychotherapy notes.
+- id: REF-H14
+  title: 45 CFR 164.524, Access of individuals to protected health information
+  url: https://www.ecfr.gov/current/title-45/section-164.524
+  note: Right of access, exclusions and reviewable denials.
+- id: REF-H15
+  title: 45 CFR 164.526, Amendment of protected health information
+  url: https://www.ecfr.gov/current/title-45/section-164.526
+  note: Decisions, denials, disagreement and telling recipients.
+- id: REF-H16
+  title: 45 CFR 164.312, Technical safeguards
+  url: https://www.ecfr.gov/current/title-45/section-164.312
+  note: Audit controls, integrity and encryption.
+- id: REF-H17
+  title: 45 CFR 171.201, Preventing harm exception
+  url: https://www.ecfr.gov/current/title-45/section-171.201
+  note: When a release may be held to prevent harm.
+- id: REF-H18
+  title: 45 CFR 171.202, Privacy exception
+  url: https://www.ecfr.gov/current/title-45/section-171.202
+  note: Respecting an individual's request not to share.
+- id: REF-H19
+  title: ONC, Information blocking FAQ on non-final clinical information
+  url: https://healthit.gov/faq/non-final-clinical-information-such-draft-clinical-notes-or-incomplete-test-results-are-pending/
+  note: Draft notes and the designated record set.
+- id: REF-H20
+  title: AHIMA, Amendments in the Electronic Health Record Toolkit
+  url: https://www.ahima.org/media/r2dc4xhg/amendments-in-the-electronic-health-record_axs.pdf
+  note: Late entries, addenda and corrections.
+- id: REF-H21
+  title: The Joint Commission, Documentation assistance provided by scribes
+  url: https://jointcommission.org/standards/standard-faqs/ambulatory/record-of-care-treatment-and-services-rc/000002210
+  note: Scribes are identifiable and the practitioner authenticates.
+- id: REF-H22
+  title: Tsou and others, Safe practices for copy and paste in the EHR, Applied Clinical Informatics 2017
+  url: https://doi.org/10.4338/aci-2016-09-r-0150
+  note: Partnership for Health IT Patient Safety recommendations.
+- id: REF-H24
+  title: Regulation (EU) 2025/327, European Health Data Space
+  url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
+  note: Articles 3, 5, 6, 8, 13, 14 and 105.
+- id: REF-H25
+  title: Regulation (EU) 2016/679, GDPR
+  url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
+  note: Articles 5, 9, 15 to 18, 28, 32 and 35.
+- id: REF-H26
+  title: OpenID Connect Core 1.0
+  url: https://openid.net/specs/openid-connect-core-1_0.html
+  note: prompt=login and max_age for a fresh authentication before signing.
+- id: REF-H27
+  title: IETF, The Idempotency-Key HTTP header field
+  url: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+  note: 422 for a reused key with a different request.
+- id: REF-H28
+  title: RFC 9457, Problem details for HTTP APIs
+  url: https://www.rfc-editor.org/rfc/rfc9457
+  note: Error format.
+- id: REF-H29
+  title: '45 CFR 164.502, Uses and disclosures: general rules'
+  url: https://www.ecfr.gov/current/title-45/section-164.502
+  note: Personal representatives of unemancipated minors, (g)(3).
+- id: REF-H30
+  title: 18 U.S.C. 2511, Interception of communications
+  url: https://www.law.cornell.edu/uscode/text/18/2511
+  note: One-party consent under federal law, (2)(d).
+- id: REF-H31
+  title: California Penal Code 632
+  url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=632.
+  note: Consent of all parties to record a confidential communication.
+- id: REF-H32
+  title: Florida Statutes 934.03
+  url: http://www.leg.state.fl.us/statutes/index.cfm?App_mode=Display_Statute&URL=0900-0999/0934/Sections/0934.03.html
+  note: All parties' prior consent to intercept a communication.
+- id: REF-H34
+  title: NCC MERP, Recommendations to weigh patients and document metric weights
+  url: https://www.nccmerp.org/recommendations-weigh-patients-and-document-metric-weights-ensure-accurate-medication-dosing-adopted
+  note: Metric weights only; avoid stated or estimated weights; weigh at each encounter.
+- id: REF-H36
+  title: Regulation (EU) 2024/1689, Artificial Intelligence Act
+  url: https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng
+  note: Article 50 transparency; Article 113 application from 2 August 2026.
+- id: REF-H37
+  title: 45 CFR 171.103, Information blocking
+  url: https://www.ecfr.gov/current/title-45/section-171.103
+  note: Practices required by law aren't information blocking.
+- id: REF-H38
+  title: Regulation (EU) 2026/1744, Digital Omnibus on AI
+  url: https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng
+  note: Adds the 2 December 2026 deadline for AI tools on the market before 2 August 2026.
+acronyms:
+- term: AI
+  definition: Artificial intelligence
+- term: BMI
+  definition: Body mass index
+- term: EHDS
+  definition: European Health Data Space, Regulation (EU) 2025/327
+- term: H&P
+  definition: History and physical examination
+- term: HDR
+  definition: HL7 Europe Hospital Discharge Report
+- term: HIM
+  definition: Health information management
+- term: LOINC
+  definition: Logical Observation Identifiers Names and Codes
+- term: MDM
+  definition: Medical document management, the HL7 v2 message type for documents
+- term: UCUM
+  definition: Unified Code for Units of Measure
+tables:
+- name: notes
+  description: One row per note. Signed content lives in note_versions.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: encounter_id
+    type: uuid
+  - name: type
+    type: text
+  - name: title
+    type: text
+    nullable: true
+  - name: status
+    type: text
+    default: '''draft'''
+  - name: current_version
+    type: integer
+    default: '1'
+    note: version
+  - name: draft_sections
+    type: jsonb
+    nullable: true
+    note: sections while a draft; moved to note_versions on signing
+  - name: service_at
+    type: timestamptz
+  - name: recorded_at
+    type: timestamptz
+    default: now()
+  - name: authors
+    type: jsonb
+  - name: data_enterer
+    type: uuid
+    nullable: true
+  - name: source
+    type: text
+  - name: drafting_tool
+    type: text
+    nullable: true
+  - name: review_attested
+    type: boolean
+    default: '''false'''
+  - name: recording_consent
+    type: jsonb
+    nullable: true
+    note: who agreed, when and how
+  - name: signed_at
+    type: timestamptz
+    nullable: true
+  - name: cosigner_id
+    type: uuid
+    nullable: true
+  - name: cosigned_at
+    type: timestamptz
+    nullable: true
+  - name: attestation
+    type: text
+    nullable: true
+  - name: parent_note_id
+    type: uuid
+    nullable: true
+  - name: template_id
+    type: text
+    nullable: true
+  - name: sensitivity
+    type: text[]
+    default: '''{}'''
+  - name: psychotherapy
+    type: boolean
+    default: '''false'''
+  - name: late_entry_reason
+    type: text
+    nullable: true
+  - name: release_status
+    type: text
+    default: '''not_released'''
+  - name: release_hold
+    type: jsonb
+    nullable: true
+  - name: withheld_from_representatives
+    type: boolean
+    default: '''false'''
+  - name: entered_in_error_reason
+    type: jsonb
+    nullable: true
+  - name: moved_from
+    type: uuid[]
+    default: '''{}'''
+  - name: unauthenticated
+    type: boolean
+    default: '''false'''
+  - name: accuracy_contested
+    type: boolean
+    default: '''false'''
+  - name: revision
+    type: integer
+    default: '0'
+  indexes:
+  - name: notes_by_encounter
+    definition: CREATE INDEX ON notes (encounter_id, service_at)
+    note: An encounter's notes in order.
+  - name: notes_drafts
+    definition: CREATE INDEX ON notes ((authors->0->>'practitioner_id'), recorded_at) WHERE status = 'draft'
+    note: An author's drafts, for reminders.
+  - name: notes_addenda
+    definition: CREATE INDEX ON notes (parent_note_id) WHERE parent_note_id IS NOT NULL
+  constraints:
+  - name: notes_pkey
+    definition: PRIMARY KEY (id)
+  - name: notes_status
+    definition: CHECK (status IN ('draft', 'preliminary', 'final', 'corrected', 'cancelled', 'entered_in_error'))
+  - name: notes_signed
+    definition: CHECK (status IN ('draft', 'cancelled') OR signed_at IS NOT NULL OR unauthenticated)
+  - name: notes_error_reason
+    definition: CHECK (status <> 'entered_in_error' OR entered_in_error_reason IS NOT NULL)
+- name: note_versions
+  description: 'versions and sections: one row per signed version. Insert-only (TN-H1).'
+  columns:
+  - name: note_id
+    type: uuid
+  - name: version
+    type: integer
+  - name: sections
+    type: jsonb
+  - name: copied_text
+    type: jsonb
+    default: '''[]'''
+  - name: content_hash
+    type: text
+    note: SHA-256 of the canonical content, bound to the signature
+  - name: signed_by
+    type: uuid
+    nullable: true
+  - name: signed_at
+    type: timestamptz
+    nullable: true
+  - name: reason
+    type: text
+    nullable: true
+    note: Why this version replaced the previous one
+  indexes: []
+  constraints:
+  - name: note_versions_pkey
+    definition: PRIMARY KEY (note_id, version)
+- name: note_correction_requests
+  description: 'correction_requests: requests to correct a note, with their decision.'
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: note_id
+    type: uuid
+  - name: requested_by
+    type: uuid
+  - name: requested_at
+    type: timestamptz
+  - name: request
+    type: text
+  - name: restrict
+    type: boolean
+    default: '''false'''
+  - name: due_at
+    type: timestamptz
+  - name: extension_reason
+    type: text
+    nullable: true
+  - name: decision
+    type: text
+    nullable: true
+  - name: decision_reason
+    type: text
+    nullable: true
+  - name: decided_at
+    type: timestamptz
+    nullable: true
+  - name: disagreement
+    type: text
+    nullable: true
+  - name: rebuttal
+    type: text
+    nullable: true
+  indexes:
+  - name: note_correction_requests_open
+    definition: CREATE INDEX ON note_correction_requests (due_at) WHERE decision IS NULL
+  constraints:
+  - name: note_correction_requests_pkey
+    definition: PRIMARY KEY (id)
+- name: observations
+  description: One row per vital sign or assessment.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: encounter_id
+    type: uuid
+  - name: category
+    type: text
+  - name: code
+    type: text
+  - name: value
+    type: jsonb
+    nullable: true
+    note: quantity, code or integer as entered
+  - name: unit
+    type: text
+    nullable: true
+  - name: components
+    type: jsonb
+    default: '''[]'''
+  - name: data_absent_reason
+    type: text
+    nullable: true
+  - name: effective_at
+    type: timestamptz
+  - name: recorded_at
+    type: timestamptz
+    default: now()
+  - name: performer_id
+    type: uuid
+  - name: source
+    type: text
+  - name: device_id
+    type: text
+    nullable: true
+  - name: method
+    type: jsonb
+    nullable: true
+  - name: weight_basis
+    type: text
+    nullable: true
+  - name: status
+    type: text
+  - name: interpretation
+    type: text
+    nullable: true
+  - name: derived_from
+    type: uuid[]
+    default: '''{}'''
+  - name: instrument
+    type: text
+    nullable: true
+  - name: score
+    type: numeric
+    nullable: true
+  - name: order_id
+    type: uuid
+    nullable: true
+  - name: late_entry_reason
+    type: text
+    nullable: true
+  - name: revision
+    type: integer
+    default: '0'
+  indexes:
+  - name: observations_by_patient
+    definition: CREATE INDEX ON observations (patient_id, code, effective_at DESC)
+    note: Trends and the latest height for BMI.
+  - name: observations_to_validate
+    definition: CREATE INDEX ON observations (encounter_id) WHERE status = 'preliminary'
+    note: Device readings waiting for a nurse.
+  constraints:
+  - name: observations_pkey
+    definition: PRIMARY KEY (id)
+  - name: observations_value
+    definition: CHECK (value IS NOT NULL OR data_absent_reason IS NOT NULL OR components <> '[]')
+  - name: observations_device
+    definition: CHECK (source <> 'device' OR device_id IS NOT NULL)
+  - name: observations_weight_metric
+    definition: CHECK (code <> '29463-7' OR (unit IN ('kg', 'g') AND weight_basis IS NOT NULL))
+- name: observation_history
+  description: 'history: every earlier value of an observation. Insert-only.'
+  columns:
+  - name: observation_id
+    type: uuid
+  - name: revision
+    type: integer
+  - name: previous
+    type: jsonb
+  - name: reason
+    type: text
+  - name: by
+    type: uuid
+  - name: at
+    type: timestamptz
+    default: now()
+  indexes: []
+  constraints:
+  - name: observation_history_pkey
+    definition: PRIMARY KEY (observation_id, revision)
+- name: documentation_deficiencies
+  description: One row per deficiency.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: encounter_id
+    type: uuid
+  - name: practitioner_id
+    type: uuid
+  - name: kind
+    type: text
+  - name: note_type
+    type: text
+    nullable: true
+  - name: note_id
+    type: uuid
+    nullable: true
+  - name: due_at
+    type: timestamptz
+  - name: status
+    type: text
+    default: '''open'''
+  - name: delinquent
+    type: boolean
+    default: '''false'''
+  - name: closed_reason
+    type: text
+    nullable: true
+  indexes:
+  - name: deficiencies_by_practitioner
+    definition: CREATE INDEX ON documentation_deficiencies (practitioner_id, due_at) WHERE status = 'open'
+    note: A practitioner's list.
+  - name: deficiencies_by_encounter
+    definition: CREATE INDEX ON documentation_deficiencies (encounter_id) WHERE status = 'open'
+    note: Whether documentation is complete.
+  constraints:
+  - name: documentation_deficiencies_pkey
+    definition: PRIMARY KEY (id)
+  - name: deficiencies_closed_reason
+    definition: CHECK (status <> 'closed_unresolvable' OR closed_reason IS NOT NULL)
+- name: unmerge_reviews
+  description: Entries to check after a patient unmerge.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: patient_id
+    type: uuid
+  - name: entry_type
+    type: text
+    note: note or observation
+  - name: entry_id
+    type: uuid
+  - name: done_at
+    type: timestamptz
+    nullable: true
+  - name: done_by
+    type: uuid
+    nullable: true
+  indexes: []
+  constraints:
+  - name: unmerge_reviews_pkey
+    definition: PRIMARY KEY (id)
+- name: documentation_access_log
+  description: Every read and change of a note or observation.
+  columns:
+  - name: id
+    type: bigint
+    default: generated always as identity
+  - name: entry_type
+    type: text
+  - name: entry_id
+    type: uuid
+  - name: actor
+    type: uuid
+  - name: action
+    type: text
+  - name: reason
+    type: text
+    nullable: true
+  - name: at
+    type: timestamptz
+    default: now()
+  indexes:
+  - name: access_log_by_entry
+    definition: CREATE INDEX ON documentation_access_log (entry_id, at)
+  constraints: []
+technicalNotes:
+- id: TN-H1
+  title: Make signed versions impossible to change
+  text: Insert signed versions into note_versions only, revoke UPDATE and DELETE on it from the application role, and store a SHA-256 hash of the canonical content with the signature, so any later change is detectable.
+- id: TN-H2
+  title: Confirm the signer at signing
+  text: Ask Identity for a fresh authentication before signing, for example an OpenID Connect request with prompt=login or max_age=0, and keep the authentication time with the signature.
+- id: TN-H3
+  title: Check limits in one unit
+  text: Convert each value to its code's canonical UCUM unit with a UCUM library before checking vital_sign_limits, but store the value as entered. A Fahrenheit temperature typed as Celsius then fails the plausibility check.
+- id: TN-H4
+  title: Compute deficiencies from deadlines
+  text: Run a scheduled job over open notes and required note types keyed on due_at; make it idempotent so a rerun opens no duplicate deficiency, and resolve deficiencies in the same transaction as the signature.
+- id: TN-H5
+  title: Never lose a draft
+  text: Autosave drafts to the server with their revision, and keep the client copy until the server acknowledges it.
+compliance:
+- id: CMP-H8
+  regulation: Medicare Program Integrity Manual
+  provision: Chapter 3, 3.3.2.4
+  obligation: Handwritten or electronic signatures, no stamps; the practitioner signs notes made by scribes or AI tools; attestations only by the author.
+  how: Electronic signatures by the author only, review attestation, no signing for departed authors.
+  status: met
+  covered_by:
+  - BR-H4
+  - BR-H6
+  - BR-H7
+  - BR-H47
+  jurisdiction: us
+- id: CMP-H9
+  regulation: Medicare Program Integrity Manual
+  provision: Chapter 3, 3.3.2.5
+  obligation: The date and author of any amendment, correction or delayed entry identifiable, and the change clearly and permanently shown.
+  how: Late entries, addenda and versioned corrections.
+  status: met
+  covered_by:
+  - BR-H8
+  - BR-H9
+  - BR-H10
+  jurisdiction: us
+- id: CMP-H10
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.524
+  obligation: Give access, except psychotherapy notes and information for legal proceedings, denying only on reviewable grounds with review by another professional.
+  how: Release on signing, lawful holds with review, psychotherapy notes excluded.
+  status: met
+  covered_by:
+  - BR-H25
+  - BR-H27
+  - BR-H28
+  jurisdiction: us
+- id: CMP-H11
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.508(a)(2)
+  obligation: Authorization for most uses and disclosures of psychotherapy notes.
+  how: Notes kept apart and flagged; authorizations are Consent's.
+  status: other module
+  covered_by:
+  - BR-H28
+  jurisdiction: us
+- id: CMP-H12
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.526
+  obligation: Decide amendment requests in 60 days, with written denials, disagreement statements and telling recipients.
+  how: Correction requests and events to Release of information.
+  status: met
+  covered_by:
+  - BR-H31
+  - BR-H35
+  jurisdiction: us
+- id: CMP-H13
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.530(j)
+  obligation: Keep required documentation, such as amendment requests, for 6 years.
+  how: Correction requests kept as long as the note and at least 6 years.
+  status: met
+  covered_by:
+  - BR-H31
+  jurisdiction: us
+- id: CMP-H14
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(b)
+  obligation: Use and disclose only the minimum necessary.
+  how: Events carry ids, never note text.
+  status: met
+  covered_by:
+  - DG-H3
+  jurisdiction: us
+- id: CMP-H15
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(b)
+  obligation: Audit controls.
+  how: Every read and change logged.
+  status: met
+  covered_by:
+  - BR-H33
+  jurisdiction: us
+- id: CMP-H16
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(c)(1)
+  obligation: Protect information from improper alteration or destruction.
+  how: Signed content never changes in place; versions are insert-only.
+  status: met
+  covered_by:
+  - BR-H3
+  - CON-H3
+  jurisdiction: us
+- id: CMP-H17
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(2)(iv) and (e)
+  obligation: Encryption at rest and in transit.
+  how: Encrypted storage and connections.
+  status: met
+  covered_by:
+  - CON-H1
+  jurisdiction: us
+- id: CMP-H18
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(e) and 164.504(e)
+  obligation: Business associate agreements with vendors that handle health information, such as AI drafting tools.
+  how: Approved tools only; contracts are the hospital's duty.
+  status: deployment
+  covered_by:
+  - BR-H7
+  jurisdiction: us
+- id: CMP-H19
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.103, 171.201 and 171.202(e)
+  obligation: Don't interfere with access to electronic health information, except to prevent harm or at the patient's request.
+  how: Release on signing, holds only on these grounds.
+  status: met
+  covered_by:
+  - BR-H25
+  - BR-H27
+  jurisdiction: us
+- id: CMP-H20
+  regulation: 42 CFR Part 2
+  provision: 42 CFR 2.13 and 2.31
+  obligation: Protect substance use disorder program records and disclose them only with the required consent.
+  how: Sensitivity codes on every note and event; disclosure decisions are Consent's.
+  status: other module
+  covered_by:
+  - BR-H29
+  jurisdiction: us
+- id: CMP-H21
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(b)(10)
+  obligation: Export all of one patient's electronic health information.
+  how: This module gives its part; Release of information produces the export.
+  status: other module
+  covered_by:
+  - BR-H28
+  jurisdiction: us
+- id: CMP-H22
+  regulation: GDPR (EU) 2016/679
+  provision: Article 9(2)(h) and 17(3)
+  obligation: Process health data for care, and keep it while needed for care or a legal obligation.
+  how: No erasure during retention.
+  status: met
+  covered_by:
+  - BR-H34
+  jurisdiction: eu
+- id: CMP-H23
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 12(3) and 15
+  obligation: Give access within one month.
+  how: Notes released when signed.
+  status: met
+  covered_by:
+  - BR-H26
+  jurisdiction: eu
+- id: CMP-H24
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 16 and 18
+  obligation: Rectification, and restriction while accuracy is checked.
+  how: Correction requests and accuracy_contested.
+  status: met
+  covered_by:
+  - BR-H31
+  - BR-H32
+  jurisdiction: eu
+- id: CMP-H25
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(c) and 32
+  obligation: Data minimisation and security appropriate to the risk.
+  how: Minimal events, encryption and access logging.
+  status: met
+  covered_by:
+  - DG-H3
+  - CON-H1
+  - BR-H33
+  jurisdiction: eu
+- id: CMP-H26
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 28, 30, 35 and 37
+  obligation: Processor contracts (such as with AI drafting vendors), records of processing, impact assessment and a data protection officer.
+  how: The hospital's duties; an impact assessment covers AI drafting before use.
+  status: deployment
+  covered_by:
+  - BR-H7
+  jurisdiction: eu
+- id: CMP-H27
+  regulation: GDPR (EU) 2016/679
+  provision: Article 6(1)
+  obligation: A lawful basis under Article 6 as well as an Article 9 exception.
+  how: The hospital records its basis.
+  status: deployment
+  covered_by:
+  - BR-H34
+  jurisdiction: eu
+- id: CMP-H28
+  regulation: GDPR (EU) 2016/679
+  provision: Articles 44 to 49
+  obligation: Transfers outside the EU need an adequacy decision or safeguards, such as for cloud drafting tools.
+  how: The hospital's duty when it approves a tool.
+  status: deployment
+  covered_by:
+  - BR-H7
+  jurisdiction: eu
+- id: CMP-H29
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 3
+  obligation: Immediate access through national access services, with delays only where member-state law allows.
+  how: Release on signing and eu_release_delay; the access service is the member state's.
+  status: partly met
+  covered_by:
+  - BR-H26
+  jurisdiction: eu
+- id: CMP-H30
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 5
+  obligation: Patients can insert information, clearly distinguishable, without altering professionals' entries.
+  how: Patient-entered information.
+  status: met
+  covered_by:
+  - BR-H30
+  jurisdiction: eu
+- id: CMP-H31
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 6
+  obligation: Online rectification requests, with accuracy checked with a health professional.
+  how: Correction requests checked with the author or another professional.
+  status: met
+  covered_by:
+  - BR-H31
+  jurisdiction: eu
+- id: CMP-H32
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 8
+  obligation: Patients can restrict professionals' access, and the restriction is not visible to providers.
+  how: Consent owns restrictions.
+  status: other module
+  covered_by:
+  - BR-H29
+  jurisdiction: eu
+- id: CMP-H34
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(g)(3)
+  obligation: A parent isn't a minor's representative for care the minor lawfully consented to alone.
+  how: withheld_from_representatives and representative scope.
+  status: met
+  covered_by:
+  - BR-H49
+  jurisdiction: us
+- id: CMP-H35
+  regulation: US federal and state recording laws
+  provision: 18 U.S.C. 2511(2)(d); California Penal Code 632(a); Florida Statutes 934.03(2)(d)
+  obligation: Recording a conversation needs the consent the law of the place requires, from one or all parties.
+  how: recording_consent per state, checked before a recording tool drafts.
+  status: met
+  covered_by:
+  - BR-H50
+  jurisdiction: us
+- id: CMP-H36
+  regulation: GDPR (EU) 2016/679
+  provision: Article 13
+  obligation: Tell people about processing, such as recording a consultation, when their data is collected.
+  how: Recording consent before recording; the notice is the hospital's.
+  status: deployment
+  covered_by:
+  - BR-H50
+  jurisdiction: eu
+- id: CMP-H37
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 9
+  obligation: Information on access to the patient's data, including automatic notifications.
+  how: The patient's access log, through the access service.
+  status: partly met
+  covered_by:
+  - BR-H51
+  jurisdiction: eu
+- id: CMP-H40
+  regulation: EU AI Act (EU) 2024/1689
+  provision: Article 50(2)
+  obligation: Providers of AI systems generating text mark the output as AI-generated, in a machine-readable way, from 2 August 2026; tools already on the market before then have until 2 December 2026.
+  how: The tool vendor marks output; this module keeps the marking with the note's provenance; the hospital approves only compliant tools.
+  status: deployment
+  covered_by:
+  - BR-H7
+  jurisdiction: eu
+---
+
+
+Every note, vital sign and assessment about a patient is recorded here,
+against the encounter it documents. This module keeps them attributable and
+provable: who wrote each entry, when the care happened, when it was written,
+who signed it, and what it said before anyone changed it.
+
+## A signed note never changes in place
+
+Until its author signs, a note is a draft that nobody else acts on, so it can
+be edited freely (BR-H2). Signing makes it available for care. From then on,
+others may have read and acted on it, so a fix is a correction that keeps the
+earlier version, or an addendum beside it (BR-H3, BR-H9, BR-H10). A note on
+the wrong patient isn't moved or deleted: it is marked entered in error and
+written again where it belongs (BR-H12, BR-H13).
+
+## The signature is the author's, whoever typed the words
+
+Scribes, dictation, speech recognition and AI tools can all draft a note, but
+only the practitioner signs it, after confirming they reviewed it (BR-H6,
+BR-H7). Nobody signs for someone else, not even for a practitioner who has
+left. Their note is filed as unsigned rather than given a signature they never
+made (BR-H47).
+
+## Patients read notes when clinicians can
+
+A signed note reaches the patient straight away. Holding it back for a
+clinician to review first is likely information blocking in the United States,
+and in the European Union patients have a right to immediate access. So a
+note is held only on the narrow grounds the law allows, and the patient can
+have the decision reviewed (BR-H25, BR-H26, BR-H27).
+
+## A device reading is a suggestion until a nurse accepts it
+
+Monitors record artifacts as readily as vital signs. Readings stay preliminary
+until a nurse accepts the ones that represent the patient, and impossible
+values, such as a Fahrenheit temperature entered as Celsius, are refused
+(BR-H37, BR-H38).
