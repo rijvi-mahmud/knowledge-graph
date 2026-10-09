@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.3.1
+version: 0.4.0
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -278,7 +278,7 @@ businessRules:
   rationale: The controller must be able to show consent was given, and it must be distinguishable, explicit for special categories and freely given (GDPR Articles 7(1), 7(2), 7(4) and 9(2)(a)).
   jurisdiction: eu
 - id: BR-H20
-  text: In the European Union, a patient can restrict health professionals' access to all or parts of their data. They are told first that this may affect their care. Disclosure checks for health professionals then answer as if the restricted data weren't there, so the restriction itself is never visible to them, except access to protect the patient's vital interests, which is logged for the patient to see.
+  text: In the European Union, a patient can restrict health professionals' access to all or parts of their data. They are told first that this may affect their care, and ehds_restriction_rules applies the member state's rules and safeguards. Disclosure checks for health professionals then answer as if the restricted data weren't there, so the restriction itself is never visible to them, except access to protect the patient's vital interests, which is logged for the patient to see.
   rationale: EHDS gives the right to restrict access, requires the patient to be told of its effect, keeps the fact of a restriction hidden from providers, and allows vital-interest access that is logged (EHDS Articles 8 and 11(5)); these apply from 26 March 2029 (Article 105).
   jurisdiction: eu
 - id: BR-H21
@@ -331,6 +331,14 @@ businessRules:
   text: 'In the United States, a disclosure to a family member, friend or other person the patient identified, for their involvement in the patient''s care or its payment, asks the Patients module whether that person is involved and whether the patient objected. It is permitted only for information directly relevant to that involvement: when the patient is present and agreed or didn''t object, or, when the patient is absent, incapacitated or in an emergency, when a clinician judges it in their best interest and records that judgment.'
   rationale: HIPAA allows these disclosures without an authorization only on these conditions (45 CFR 164.510(b)(1) to (3)), and an agreed restriction on them binds (BR-H13).
   jurisdiction: us
+- id: BR-H36
+  text: In the United States, a Part 2 consent to use records, or testimony about them, in a civil, criminal, administrative or legislative investigation or proceeding is its own consent, never combined with consent for any other purpose.
+  rationale: Part 2 forbids combining consent for proceedings with any other consent (42 CFR 2.31(d)).
+  jurisdiction: us
+- id: BR-H37
+  text: In the United States, a patient can opt out of fundraising communications by a method that costs them no more than a nominal amount, and opt back in. After an opt-out, disclosure checks for purpose fundraising answer deny, and no care or payment ever depends on the choice.
+  rationale: HIPAA requires a clear opt-out with every fundraising communication, forbids further ones after it, allows opting back in and forbids conditioning care on the choice (45 CFR 164.514(f)(2)).
+  jurisdiction: us
 validations:
 - field: consent.patient_id
   rule: A patient record in use, as the Patients module answers
@@ -359,6 +367,9 @@ validations:
 - field: consent.status
   rule: Fields the service sets, such as status and revision, can't be written by clients
   error: CONSENT_READ_ONLY_FIELD
+- field: consent.document
+  rule: A consent for use in legal proceedings against the patient stands alone
+  error: CONSENT_COMPOUND_NOT_ALLOWED
 stateMachine:
   initial:
   - draft
@@ -519,6 +530,11 @@ edgeCases:
   - BR-H33
   - AC-H37
   jurisdiction: us
+- id: EC-H14
+  situation: A patient who reads only Spanish is given an English consent form.
+  behaviour: 'It isn''t informed consent: the form is translated or interpreted, and the language and any interpreter are recorded with the signature.'
+  covers:
+  - BR-H25
 functionalRequirements:
 - id: FR-H1
   text: The service must record consents of every kind in consent_kinds, validate their required elements, and keep their documents unaltered.
@@ -626,6 +642,10 @@ settings:
 - name: gdpr_child_consent_age
   type: integer
   description: 'In the EU, the age from which a child can give GDPR consent online alone: 16 unless the member state set a lower age, never below 13 (GDPR Article 8(1)).'
+  jurisdiction: eu
+- name: ehds_restriction_rules
+  type: policy
+  description: In the EU, the member state's rules and safeguards for restricting access, such as which categories can be restricted (EHDS Article 8). Needs legal advice per member state.
   jurisdiction: eu
 performanceTargets:
 - id: PERF-H1
@@ -959,6 +979,20 @@ acceptanceCriteria:
   verifies:
   - BR-H13
   - FR-H4
+  jurisdiction: us
+- id: AC-H47
+  given: jurisdiction us
+  when: a Part 2 consent for use in a custody hearing is combined with a consent for treatment, payment and operations, then recorded alone
+  then: the first fails with CONSENT_COMPOUND_NOT_ALLOWED and HTTP 422; the second is accepted
+  verifies:
+  - BR-H36
+  jurisdiction: us
+- id: AC-H48
+  given: jurisdiction us and a patient who replied to a fundraising letter asking for no more
+  when: a fundraising disclosure to the hospital foundation is checked, then the patient opts back in and it is checked again
+  then: the first is deny and the second permit; neither choice affects their appointments
+  verifies:
+  - BR-H37
   jurisdiction: us
 operations:
 - name: Record a consent
@@ -1559,6 +1593,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: consent.opt_out_changed and requests not to share, so exchange and secondary use honour them'
+  - 'Gives: Part 2 consents that name an intermediary''s participants by a general designation, so the intermediary can list the disclosures it made when a patient asks (42 CFR 2.24)'
 - service: notification-service
   direction: downstream
   reason: sends messages
@@ -1665,7 +1700,18 @@ references:
   title: 45 CFR 92.201, Meaningful access for individuals with limited English proficiency
   url: https://www.ecfr.gov/current/title-45/section-92.201
   note: Language assistance for informed consent.
+- id: REF-H18
+  title: 45 CFR 164.514, Other requirements relating to uses and disclosures
+  url: https://www.ecfr.gov/current/title-45/section-164.514
+  note: (f), fundraising communications and the opt-out.
 changelog:
+- version: 0.4.0
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H36: a Part 2 consent for legal proceedings stands alone (42 CFR 2.31(d)).'
+  - 'BR-H37: fundraising opt-out (45 CFR 164.514(f)(2)).'
+  - ehds_restriction_rules for member state rules on EU restrictions; the exchange contract passes general designations for intermediary disclosure lists (42 CFR 2.24); edge case for consent in a language the patient reads.
 - version: 0.3.1
   date: '2026-10-10'
   breaking: false
@@ -1954,7 +2000,7 @@ compliance:
   jurisdiction: us
 - id: CMP-H6
   regulation: 42 CFR Part 2
-  provision: 42 CFR 2.12(c)(3), 2.14, 2.22, 2.31, 2.32, 2.33 and 2.51
+  provision: 42 CFR 2.12(c)(3), 2.14, 2.22, 2.31 (including (d)), 2.32, 2.33 and 2.51
   obligation: Valid consents, minors' consent, patient notice, the statement with each disclosure, redisclosure limits and emergency disclosure records.
   how: Part 2 consent validation, obligations in check answers, notices and emergency uses.
   status: met
@@ -1966,6 +2012,7 @@ compliance:
   - BR-H17
   - BR-H24
   - BR-H33
+  - BR-H36
   jurisdiction: us
 - id: CMP-H7
   regulation: 21st Century Cures Act information blocking
@@ -2047,6 +2094,15 @@ compliance:
   covered_by:
   - BR-H10
   jurisdiction: eu
+- id: CMP-H15
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.514(f)(2)
+  obligation: Offer an opt-out with every fundraising communication, honour it, allow opting back in, and never condition care on it.
+  how: Fundraising opt-outs and disclosure checks for purpose fundraising.
+  status: met
+  covered_by:
+  - BR-H37
+  jurisdiction: us
 ---
 
 Every time a module shares or shows a patient's data, there is a question
