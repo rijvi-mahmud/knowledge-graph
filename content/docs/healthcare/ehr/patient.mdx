@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.4.1
+version: 0.4.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -98,6 +98,9 @@ businessRules:
 - id: BR-E12
   text: When a temporary name or id is replaced, by identification, naming, reconciliation or merge, every system using it is told, and bands and labels are reprinted.
   rationale: The SAFER Guide asks that any downstream use of a temporary id, including at transfer facilities, is tracked and corrected in every system.
+- id: BR-H31
+  text: A merge is allowed while either record has an active stay, but it is marked during_care so the care team is told, and bands and labels are reprinted with the record in use.
+  rationale: The SAFER Guide says that when temporary or duplicate ids are merged during care, the name must be updated in every system with safeguards against confusion.
 validations:
 - field: mother_patient_id
   rule: an existing patient in use
@@ -611,6 +614,11 @@ references:
   title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
 changelog:
+- version: 0.4.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Holds the ADT dependency and the hospital wording of BR-H31 (active stays, bands).
 - version: 0.4.1
   date: '2026-10-09'
   breaking: false
@@ -693,6 +701,14 @@ dependencies:
   - 'Gives: band data from Get identification band data'
   - 'Gives: patient.updated, patient.identified and patient.merged, so bands and labels are reprinted'
   - Printers and label formats are Printing's concern
+- service: adt-service
+  direction: upstream
+  reason: knows who is in hospital now
+  criticality: soft
+  contract:
+  - 'Asks: does this patient have an active stay?'
+  - 'Gives: patient.merged (with during_care), patient.unmerged and patient.deceased'
+  - 'Receives: care reported at admission'
 performanceTargets:
 - id: PERF-E1
   indicator: Unresolved temporary ids

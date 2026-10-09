@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.12.1
+version: 0.12.2
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -74,8 +74,8 @@ assumptions:
   text: Modules that record care tell this one when they do, so it knows when a patient was last cared for.
   rationale: Retention runs from the last care (BR-H18), and a record with care on it must be merged, not discarded (BR-H11).
 - id: AS-H5
-  text: The Admission, discharge and transfer module can say whether a patient has an active stay.
-  rationale: A merge during a stay needs extra care (BR-H31), and only that module knows who is in hospital.
+  text: Encounters can say whether a patient has an open encounter.
+  rationale: A merge during care needs extra care (BR-H31), and Encounters knows whose care is in progress.
 - id: AS-H6
   text: The organization has one MRN system for each scope set in mrn_scope, and this module is the only one that assigns numbers in it.
   rationale: Two systems assigning MRNs from the same range would give two patients one number.
@@ -412,7 +412,7 @@ businessRules:
   text: When another record in use has the same given and family name, both records carry similar_name_alert. Search results flag patients with the same or similar names.
   rationale: The SAFER Guide recommends warning users when a new record shares a name with another patient, or a search returns several patients with the same or similar names.
 - id: BR-H31
-  text: A merge is allowed while either record has an active stay, but it is marked during_care so the care team is told, and bands and labels are reprinted with the record in use.
+  text: A merge is allowed while either record has care in progress (an open encounter), but it is marked during_care so the care team is told, and identification labels are reprinted with the record in use.
   rationale: The SAFER Guide says that when temporary or duplicate ids are merged during care, the name must be updated in every system with safeguards against confusion.
 - id: BR-H32
   text: Unknown values are left blank, partial or marked estimated. Placeholders such as UNKNOWN, a made-up birth date or a dummy phone number are never stored, and matching ignores blank and estimated values.
@@ -662,7 +662,7 @@ workflows:
   actor: Health information management (HIM) specialist
   steps:
   - Check the revisions and that both records are in use
-  - Ask Admission, discharge and transfer whether either record has an active stay, and mark the merge during_care if so
+  - Ask Encounters whether either record has an open encounter, and mark the merge during_care if so
   - For every field where the records differ, record the value to keep
   - Mark the source merged with replaced_by, and copy its identifiers to the target marked old
   - Record who merged, why and how the records differed
@@ -2831,18 +2831,10 @@ dependencies:
   reason: records care against the patient
   criticality: soft
   contract:
-  - 'Gives: patient.merged, patient.unmerged and patient.deceased'
+  - 'Gives: patient.merged (with during_care), patient.unmerged and patient.deceased'
   - 'Receives: care reported when an encounter starts'
   - 'Asks: does this patient have an open encounter?'
   - Moving clinical data between records after a merge is Encounter's concern
-- service: adt-service
-  direction: upstream
-  reason: knows who is in hospital now
-  criticality: soft
-  contract:
-  - 'Asks: does this patient have an active stay?'
-  - 'Gives: patient.merged (with during_care), patient.unmerged and patient.deceased'
-  - 'Receives: care reported at admission'
 - service: consent-service
   direction: downstream
   reason: holds consents, opt-outs and privacy notice acknowledgments
@@ -3147,6 +3139,11 @@ references:
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
 changelog:
+- version: 0.12.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - A merge during care asks Encounters for an open encounter, so it works without a hospital ADT module (BR-H31); the ADT dependency is in the EHR layer.
 - version: 0.12.1
   date: '2026-10-09'
   breaking: false

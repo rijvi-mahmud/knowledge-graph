@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.3
+version: 0.1.4
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - EC-H17 no longer names ADT; the stay acceptance criterion AC-H64 is now AC-E72 in the EHR layer.
 - version: 0.1.3
   date: '2026-10-09'
   breaking: false
@@ -616,8 +621,8 @@ edgeCases:
   - BR-H6
   - AC-H31
 - id: EC-H17
-  situation: A patient dies during a stay.
-  behaviour: ADT discharges the encounter with disposition expired; the Patients module records the death. A later encounter for that patient fails with ENCOUNTER_PATIENT_DECEASED.
+  situation: A patient dies during an encounter.
+  behaviour: The module managing the encounter, or a clinician, ends it with disposition expired; the Patients module records the death. A later encounter for that patient fails with ENCOUNTER_PATIENT_DECEASED.
   covers:
   - BR-H22
   - AC-H33
@@ -1095,13 +1100,6 @@ acceptanceCriteria:
   verifies:
   - BR-H48
   - FR-H15
-- id: AC-H64
-  given: an inpatient encounter
-  when: ADT reports stay.moved and, for another pair, stay.merged
-  then: the encounter is moved with the stay, and the two encounters are merged as BR-H48 describes
-  verifies:
-  - BR-H47
-  - BR-H48
 - id: AC-H65
   given: an ambulatory encounter on 30 September and an ICD-10-CM code valid only from 1 October
   when: the code is recorded as a diagnosis

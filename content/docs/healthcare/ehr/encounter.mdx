@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.3
+version: 0.13.4
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,11 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'AC-E72 (was AC-H64): encounters follow stay.moved and stay.merged.'
 - version: 0.13.3
   date: '2026-10-09'
   breaking: false
@@ -628,6 +633,14 @@ acceptanceCriteria:
   verifies:
   - BR-E46
   - BR-E36
+- id: AC-E72
+  given: an inpatient encounter
+  when: ADT reports stay.moved and, for another pair, stay.merged
+  then: the encounter is moved with the stay, and the two encounters are merged as BR-H48 describes
+  verifies:
+  - BR-H47
+  - BR-H48
+  variant: inpatient
 operations:
 - name: Change class
   actor: System
