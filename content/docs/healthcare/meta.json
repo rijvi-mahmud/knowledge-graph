@@ -9,6 +9,7 @@
     "clinical-documentation",
     "practitioner",
     "terminology",
+    "identity",
     "ehr"
   ]
 }

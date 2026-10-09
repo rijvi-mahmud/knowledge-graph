@@ -9,6 +9,7 @@
     "adt",
     "clinical-documentation",
     "terminology",
-    "practitioner"
+    "practitioner",
+    "identity"
   ]
 }

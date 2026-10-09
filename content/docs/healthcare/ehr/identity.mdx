@@ -1,0 +1,84 @@
+---
+title: Identity and access
+description: 'Hospital sign-in: shared clinical workstations with badge tap, and read-only access during downtime, built on the healthcare identity rules.'
+module: identity
+version: 0.1.0
+status: draft
+industry: healthcare
+domain: ehr
+extends: healthcare/identity
+purpose: 'Add what a hospital needs to the healthcare identity rules: fast, secure switching between users on shared clinical workstations, and controlled access to the read-only backup during an EHR downtime.'
+scope:
+- 'Shared clinical workstations: badge tap with a PIN, and switching users without closing the workstation'
+- Shorter inactivity timeouts on shared workstations
+- Access to the read-only backup during a downtime
+nonGoals:
+- Badge hardware and printing. Facilities and security own them.
+businessRules:
+- id: BR-E1
+  text: On a shared clinical workstation, a staff member signs in by tapping their badge and entering a PIN, which together are two factors, and the next user's tap ends the previous user's session on that workstation; one user's session never carries over to another.
+  rationale: Clinicians sign in many times an hour on shared workstations; fast switching keeps each action attributed to the right person (45 CFR 164.312(a)(2)(i)).
+- id: BR-E2
+  text: Shared clinical workstations lock after shared_workstation_timeout of inactivity, hiding patient data, and end the session after session_inactivity_timeout.
+  rationale: Screens in clinical areas are seen by passers-by; HIPAA expects sessions to end after inactivity (45 CFR 164.312(a)(2)(iii)).
+- id: BR-E3
+  text: During an EHR downtime, staff reach the read-only backup with their own accounts, and every access is logged; the backup never accepts changes.
+  rationale: The SAFER Contingency Planning guide expects a read-only backup during downtime; access must still be attributable to a person.
+edgeCases:
+- id: EC-E1
+  situation: A nurse walks away from a workstation in a corridor during a code.
+  behaviour: It locks after shared_workstation_timeout, and the next person's badge tap ends the nurse's session.
+  covers:
+  - BR-E1
+  - BR-E2
+  - AC-E2
+settings:
+- name: shared_workstation_timeout
+  type: duration
+  description: Inactivity before a shared clinical workstation locks. Set by the organization; short, such as a few minutes.
+acceptanceCriteria:
+- id: AC-E1
+  given: a nurse signed in on a shared workstation
+  when: a doctor taps their badge and enters their PIN on the same workstation
+  then: the nurse's session ends and the doctor's starts at AAL2; nothing the nurse had open is shown
+  verifies:
+  - BR-E1
+- id: AC-E2
+  given: shared_workstation_timeout of 2 minutes
+  when: the workstation is idle for 3 minutes
+  then: the screen locks and hides patient data
+  verifies:
+  - BR-E2
+- id: AC-E3
+  given: an EHR downtime
+  when: a nurse opens the read-only backup and tries to save a change
+  then: the access is logged under the nurse's account and the change is refused
+  verifies:
+  - BR-E3
+decisions:
+- id: ADR-E1
+  decision: Badge tap with a PIN is the sign-in on shared clinical workstations.
+  rationale: It gives two factors with a few seconds' effort, which clinicians signing in dozens of times a shift will actually use.
+  date: '2026-10-09'
+references:
+- id: REF-E1
+  title: ONC, SAFER Guides (2025)
+  url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
+  note: 'Contingency Planning: read-only backup during downtime.'
+changelog:
+- version: 0.1.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'First draft: shared clinical workstations with badge tap, workstation locking, and downtime access.'
+---
+
+Hospital sign-in builds on the [healthcare identity rules](/docs/healthcare/identity).
+This layer adds the shared clinical workstation, where a nurse and a doctor
+may sign in to the same screen minutes apart.
+
+## Switching users takes seconds, never a shared login
+
+A badge tap and a PIN sign the next person in and end the last person's
+session, so nobody is tempted to keep working under someone else's name
+(BR-E1).

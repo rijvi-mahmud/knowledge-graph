@@ -1,0 +1,1647 @@
+---
+title: Identity and access
+description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
+module: identity
+version: 0.1.0
+status: draft
+industry: healthcare
+purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
+scope:
+- Accounts for staff, patients, representatives and systems, one per person or system
+- Identity proofing, and authenticators such as passwords, security keys and smart cards
+- Sign-in, step-up authentication, sessions and automatic sign-out
+- Roles, permissions and periodic access review, and removing access when people leave
+- Emergency access (break the glass) and its review
+- Patient and representative portal accounts linked to the patient record
+- App registration and authorization with SMART App Launch, including backend services for bulk export
+- In the United States, the two-factor credentials for prescribing controlled substances
+- In the EU, electronic identification recognised under eIDAS
+nonGoals:
+- Who a patient's representatives are and what they may do. The Patients module records it; this module gives representatives their own accounts with that scope.
+- Whether a practitioner may practise. The Practitioners module decides; this module follows it.
+- Departments and job roles in the organization. Organization owns them; this module maps them to permissions.
+- Whether a particular user may see a particular patient's record. Each module decides from its own care relationship rules; this module answers whether the caller holds the permission.
+- Network security, device management and encryption keys. The organization's security operations own them.
+actors:
+- name: Account administrator
+  description: Creates accounts, assigns roles and runs access reviews.
+- name: Staff member
+  description: A clinician or other workforce member who signs in.
+- name: Patient
+  description: A patient, or a representative, using the patient portal or an app.
+- name: Privacy officer
+  description: Reviews emergency access and sign-in anomalies.
+- name: App
+  description: A third-party application acting for a patient or user, or a backend system.
+- name: System
+  description: Other modules asking about callers and permissions.
+assumptions:
+- id: AS-H1
+  text: Each module publishes the permissions its operations need.
+  rationale: This module answers whether a caller holds a permission; the modules decide which permission an action needs.
+- id: AS-H2
+  text: Practitioners and the organization's staff records say who is employed or credentialed and when they leave.
+  rationale: Accounts follow people's status; they don't decide it.
+glossary:
+- term: Account
+  definition: One person's or system's identity in the application.
+- term: Identity assurance level (IAL)
+  definition: How strongly a person's identity was proven before an account was issued (NIST SP 800-63A).
+- term: Authentication assurance level (AAL)
+  definition: 'How strongly a sign-in proves the person holds the account''s authenticators: AAL1 one factor, AAL2 two factors, AAL3 a hardware-based phishing-resistant authenticator (NIST SP 800-63B).'
+- term: Phishing-resistant
+  definition: An authenticator a fake site can't replay, such as a security key or passkey bound to the site.
+- term: Break the glass
+  definition: Emergency access to information a user wouldn't normally see, recorded and reviewed afterwards.
+- term: Scope
+  definition: What an app may do, in SMART App Launch syntax, such as patient/Observation.rs to read and search a patient's observations.
+concepts:
+- name: One person, one account
+  description: Shared accounts make it impossible to tell who did what. Every person and every system has its own account, and representatives never use the patient's.
+- name: Permission here, relationship there
+  description: This module answers whether a caller holds a permission, such as note.read. Whether they may read this patient's note, because they care for them, is the module's own rule.
+dataModel:
+- name: account.id
+  type: string
+  required: true
+  description: The account id. Never changes or is reused.
+  constraints: set by the service
+- name: account.kind
+  type: enum
+  required: true
+  description: Whose account it is.
+  constraints: 'staff | patient | representative | system; codes: none standard, local to this specification'
+- name: account.subject
+  type: reference
+  required: true
+  description: 'The person or system it belongs to: a practitioner or staff record, a patient, a representative relationship from the Patients module, or a system.'
+  constraints: one active account per subject and kind
+- name: account.username
+  type: string
+  required: true
+  description: The sign-in name.
+  constraints: unique; never reused
+- name: account.status
+  type: enum
+  required: true
+  description: Where the account is in its lifecycle.
+  constraints: 'pending | active | locked | suspended | disabled; changed only through operations; codes: none standard, local to this specification'
+- name: account.identity_assurance
+  type: code
+  required: false
+  description: How strongly the person's identity was proven, by whom and with what evidence.
+  constraints: 'codes: NIST SP 800-63A IAL1, IAL2, IAL3; in the EU, eIDAS assurance levels low, substantial, high'
+- name: account.authenticators
+  type: authenticator[]
+  required: false
+  description: 'Registered authenticators: type, whether phishing-resistant, the AAL it supports, when registered and last used.'
+  constraints: 'codes: type from a local list, such as password, otp_app, security_key, passkey, smart_card'
+- name: account.roles
+  type: role assignment[]
+  required: false
+  description: Roles held, each with the department or organization it applies to, its period and who granted it.
+  constraints: each role from roles
+- name: account.last_sign_in_at
+  type: instant
+  required: false
+  description: When the account last signed in.
+  constraints: set by the service
+- name: account.last_reviewed_at
+  type: instant
+  required: false
+  description: When an access review last confirmed the account's roles.
+  constraints: set by the service
+- name: account.revision
+  type: integer
+  required: true
+  description: Goes up with every change.
+  constraints: set by the service
+- name: role.name
+  type: string
+  required: true
+  description: The role, such as nurse or registrar.
+  constraints: unique
+- name: role.permissions
+  type: string[]
+  required: true
+  description: The permissions the role grants, from the modules' permission lists.
+- name: role.required_aal
+  type: code
+  required: true
+  description: The authentication assurance the role needs.
+  constraints: 'codes: AAL1, AAL2, AAL3'
+- name: session.id
+  type: string
+  required: true
+  description: The session id.
+  constraints: set by the service
+- name: session.aal
+  type: code
+  required: true
+  description: The assurance the sign-in reached, raised by step-up.
+  constraints: 'codes: AAL1, AAL2, AAL3'
+- name: session.started_at
+  type: instant
+  required: true
+  description: When it began, and when it was last active and last reauthenticated.
+- name: session.ended_reason
+  type: code
+  required: false
+  description: Why it ended, such as signed out, inactive, expired or account disabled.
+  constraints: 'codes: local list'
+- name: app.client_id
+  type: string
+  required: true
+  description: The registered app's id.
+  constraints: set by the service
+- name: app.kind
+  type: enum
+  required: true
+  description: How the app authenticates.
+  constraints: 'confidential | public | backend; codes: SMART App Launch client types'
+- name: app.status
+  type: enum
+  required: true
+  description: Whether the app may be used.
+  constraints: 'registered | suspended | revoked; codes: none standard, local to this specification'
+- name: grant.scopes
+  type: string[]
+  required: true
+  description: What a patient or user allowed an app to do, with when it was granted, its refresh token's expiry and any revocation.
+  constraints: SMART App Launch 2.0.0 scope syntax
+- name: break_glass.reason
+  type: text
+  required: true
+  description: Why emergency access was used, for which patient, when, how long it lasted, and the review outcome.
+relationships:
+- type: has_many
+  target: session
+  note: sessions of an account
+- type: has_many
+  target: grant
+  note: apps an account has authorized
+- type: can_trigger
+  target: event:identity.break_glass_used
+businessRules:
+- id: BR-H1
+  text: Every person and every system has its own account, identified uniquely; accounts are never shared, and a representative never uses the patient's account.
+  rationale: HIPAA requires a unique name or number for identifying and tracking each user (45 CFR 164.312(a)(2)(i)); shared accounts make it impossible to say who did what.
+- id: BR-H2
+  text: A staff account is created only for a person the organization has authorized, such as a practitioner the Practitioners module reports or a staff member in its staff records, and gets only the roles their job needs.
+  rationale: Workforce members should have only the access their work requires, through authorization and clearance procedures (45 CFR 164.308(a)(3) and (a)(4)).
+- id: BR-H3
+  text: A role grants permissions from the modules' permission lists and applies to a department or organization. Every role assignment and change records who made it and why. Each account's roles are reviewed every access_review_interval, and roles nobody confirms are removed.
+  rationale: Access must be established, reviewed and modified as people's work changes (45 CFR 164.308(a)(4)); unreviewed roles accumulate.
+- id: BR-H4
+  text: An account is disabled within deprovision_deadline of its person leaving, or the Practitioners module reporting them inactive. When it reports a practitioner suspended, roles that need an active practitioner are suspended until reinstatement.
+  rationale: Access must end when employment ends (45 CFR 164.308(a)(3)(ii)(C)); a departed or suspended clinician must not keep reaching patient data.
+- id: BR-H5
+  text: 'Each role and account kind needs an authentication assurance level, set in required_aal: at least AAL2, multi-factor, for any access to patient data, with at least one phishing-resistant authenticator offered. A sign-in below the level a request needs is refused until the user steps up.'
+  rationale: NIST SP 800-63B-4 requires two factors at AAL2 and that verifiers offer a phishing-resistant option; NIS2 expects multi-factor authentication where appropriate (Directive (EU) 2022/2555, Article 21(2)(j)).
+- id: BR-H6
+  text: Passwords are at least 15 characters when used alone, or 8 when used with another factor, are checked against a list of common and compromised passwords, and have no composition rules and no forced periodic change; a password is changed when there is evidence it is compromised.
+  rationale: NIST SP 800-63B-4 sets these lengths, requires the blocklist check, and forbids composition rules and periodic changes, which push people to weaker, predictable passwords.
+- id: BR-H7
+  text: Failed sign-ins are throttled and recorded. Unusual patterns, such as many failures or sign-ins from a new country, are reported to the privacy officer, and an account under attack is locked until verified.
+  rationale: HIPAA expects procedures for monitoring log-in attempts and reporting discrepancies (45 CFR 164.308(a)(5)(ii)(C)), and NIST SP 800-63B requires limiting failed attempts.
+- id: BR-H8
+  text: A session ends after session_inactivity_timeout without activity, and needs a fresh authentication after session_max_duration; ending it clears patient data from the screen.
+  rationale: HIPAA expects electronic sessions to end after a set time of inactivity (45 CFR 164.312(a)(2)(iii)); NIST SP 800-63B-4 recommends at most 1 hour of inactivity and 24 hours overall at AAL2.
+- id: BR-H9
+  text: A module can ask for a fresh authentication before a sensitive action, such as signing a note or a prescription; the answer says whether the user authenticated at the required level within the freshness it asked for.
+  rationale: A signature or prescription must be made by the person themselves at that moment, not by whoever finds an open session.
+- id: BR-H10
+  text: In the United States, a practitioner can sign controlled substance prescriptions only with a two-factor credential issued after identity proofing by an approved credential service provider, and only after two designated people, one a registrant with such a credential, have granted that access.
+  rationale: DEA requires two-factor authentication to sign controlled substance prescriptions, identity proofing for the credential, and logical access granted by two designated individuals (21 CFR 1311.105, 1311.115 and 1311.125).
+  jurisdiction: us
+- id: BR-H11
+  text: In an emergency, a user with a clinical role can break the glass to reach a patient's information they wouldn't otherwise see, giving a reason. The access lasts break_glass_duration, is logged, emits identity.break_glass_used, and is reviewed by the privacy officer within break_glass_review_deadline.
+  rationale: HIPAA requires a procedure for obtaining necessary information in an emergency (45 CFR 164.312(a)(2)(ii)); review afterwards stops it becoming a back door.
+- id: BR-H12
+  text: A patient or representative account is issued only after identity proofing at patient_identity_assurance and a match to the patient record the Patients module confirms. A representative gets their own account with the scope the Patients module records, which follows changes such as a minor reaching the age of majority.
+  rationale: NIST SP 800-63A-4 sets IAL2 for remote identity proofing; a portal account linked to the wrong patient discloses someone else's record, and a parent's access must end when the law says it does.
+- id: BR-H13
+  text: In the European Union, patients and health professionals can authenticate with electronic identification means recognised under eIDAS, including the EU Digital Identity Wallet, at the assurance the member state requires; health professionals reaching national health data access services must use them.
+  rationale: The EHDS makes health professional access services available only to professionals with electronic identification recognised under the eIDAS Regulation (EHDS Article 12; Regulation (EU) No 910/2014).
+  jurisdiction: eu
+- id: BR-H14
+  text: In the United States, third-party apps can register, and a patient can authorize one with SMART App Launch 2.0.0 scopes; patient apps that ask for it get a refresh token valid for at least refresh_token_lifetime. A registration or authorization is refused only on a documented security risk.
+  rationale: Certified health IT must let apps register and issue refresh tokens of at least three months (45 CFR 170.315(g)(10)); refusing an app for other reasons is likely information blocking unless the security exception applies (45 CFR 171.203).
+  jurisdiction: us
+- id: BR-H15
+  text: A patient sees every app they have authorized and can revoke any grant at once; revoking ends its tokens.
+  rationale: Patients must stay in control of who reads their record.
+- id: BR-H16
+  text: Backend systems, such as a population health platform using bulk export, authenticate with their own registered keys and system scopes, never with a person's account.
+  rationale: SMART Backend Services and Bulk Data use system scopes so a machine's access is separate from any person's and can be revoked on its own.
+- id: BR-H17
+  text: Every sign-in, failed attempt, step-up, role change, emergency access, app registration and grant is logged with who, when, from where and the outcome. The log can't be changed and is kept for audit_log_retention.
+  rationale: HIPAA requires audit controls that record and examine activity (45 CFR 164.312(b)).
+- id: BR-H18
+  text: When the Patients module merges two records, portal accounts linked to the source are linked to the target; when it undoes a merge, they are listed for review. When it records a patient's death, the patient's own account is disabled.
+  rationale: A portal account must open the right record, and a deceased patient's account mustn't stay open for anyone to use.
+- id: BR-H19
+  text: Recovering an account needs the same identity assurance as creating it, and every authenticator change is told to the account holder through a channel already on file.
+  rationale: Account recovery is a common way to take over an account; telling the holder lets them catch it.
+- id: BR-H20
+  text: Every change sends the revision it read; a stale revision fails.
+  rationale: Two administrators changing one account must not overwrite each other.
+validations:
+- field: account.subject
+  rule: An existing practitioner, staff record, patient or representative relationship, or a registered system, with no other active account of the same kind
+  error: IDENTITY_DUPLICATE
+- field: account.username
+  rule: Unique, never used before
+  error: IDENTITY_DUPLICATE
+- field: account.authenticators
+  rule: A password meets BR-H6; other authenticators are a supported type
+  error: IDENTITY_WEAK_PASSWORD
+- field: account.roles
+  rule: Each role exists and the subject's kind may hold it
+  error: IDENTITY_INVALID_ROLE
+- field: grant.scopes
+  rule: SMART App Launch 2.0.0 scope syntax, within what the app registered for
+  error: IDENTITY_INVALID_SCOPE
+- field: break_glass.reason
+  rule: Present
+  error: IDENTITY_REASON_REQUIRED
+- field: account.status
+  rule: Fields the service sets, such as status, last_sign_in_at, last_reviewed_at and revision, can't be written by clients
+  error: IDENTITY_READ_ONLY_FIELD
+stateMachine:
+  initial: pending
+  states:
+  - pending
+  - active
+  - locked
+  - suspended
+  - disabled
+  transitions:
+  - from: pending
+    to: active
+    trigger: identity proofed and first authenticator registered (BR-H12)
+  - from: active
+    to: locked
+    trigger: too many failed sign-ins or suspected attack (BR-H7)
+  - from: locked
+    to: active
+    trigger: unlocked after verification
+  - from: active
+    to: suspended
+    trigger: practitioner suspended or an administrator suspends it (BR-H4)
+  - from: suspended
+    to: active
+    trigger: reinstated
+  - from: active
+    to: disabled
+    trigger: person left, patient died or account closed (BR-H4, BR-H18)
+  - from: suspended
+    to: disabled
+    trigger: person left
+  - from: locked
+    to: disabled
+    trigger: person left
+  - from: pending
+    to: disabled
+    trigger: enrolment abandoned
+workflows:
+- name: Give a new staff member access
+  trigger: Practitioners reports a practitioner credentialed, or a staff member starts
+  actor: Account administrator
+  steps:
+  - Create the account for that person
+  - Register at least two authenticators, offering a phishing-resistant one
+  - Assign the roles their job needs, for their departments
+  outcome: They can sign in at the assurance their roles need.
+- name: Enrol a patient in the portal
+  trigger: A patient asks for portal access
+  actor: Patient
+  steps:
+  - Prove identity remotely or in person at patient_identity_assurance
+  - The Patients module confirms the matching record
+  - Register authenticators
+  outcome: The patient reaches their own record, and only theirs.
+- name: Break the glass
+  trigger: A clinician needs a record outside their usual access in an emergency
+  actor: Staff member
+  steps:
+  - Choose break the glass and give a reason
+  - Access lasts break_glass_duration and is logged
+  - The privacy officer reviews it within break_glass_review_deadline
+  outcome: Care isn't blocked, and the access is accounted for.
+- name: Connect an app
+  trigger: A patient opens a third-party app
+  actor: Patient
+  steps:
+  - The app sends the patient to sign in
+  - The patient approves the scopes it asks for
+  - The app receives tokens, and a refresh token if it asked for offline_access
+  outcome: The app reads what the patient allowed until the patient revokes it.
+- name: Remove a leaver's access
+  trigger: A person leaves or Practitioners reports them inactive
+  actor: System
+  steps:
+  - Disable the account within deprovision_deadline
+  - End its sessions and revoke its tokens
+  - Emit identity.account_disabled
+  outcome: Nobody keeps access after leaving.
+edgeCases:
+- id: EC-H1
+  situation: Two nurses share one login on a busy ward.
+  behaviour: 'Not possible: each has their own account; on shared workstations the EHR layer makes switching fast instead.'
+  covers:
+  - BR-H1
+  - AC-H1
+- id: EC-H2
+  situation: A clinician leaves on Friday afternoon.
+  behaviour: Their account is disabled the same day and their sessions and tokens end at once.
+  covers:
+  - BR-H4
+  - AC-H4
+- id: EC-H3
+  situation: An unconscious patient arrives and the doctor on duty has no care relationship yet.
+  behaviour: The doctor breaks the glass with a reason; the access is logged and reviewed.
+  covers:
+  - BR-H11
+  - AC-H11
+- id: EC-H4
+  situation: A teenager turns 18 and their parent still has portal access.
+  behaviour: The parent's access ends when the Patients module reports the change; the teenager keeps their own account.
+  covers:
+  - BR-H12
+  - AC-H12
+- id: EC-H5
+  situation: A phishing site captures a password and a one-time code.
+  behaviour: Phishing-resistant authenticators are offered and required for administrators, so a replayed code doesn't work for them.
+  covers:
+  - BR-H5
+  - AC-H5
+- id: EC-H6
+  situation: A patient's app is abandoned and the patient forgets it.
+  behaviour: The patient can see and revoke it at any time; its refresh token ends after its lifetime unless renewed.
+  covers:
+  - BR-H15
+  - AC-H16
+- id: EC-H7
+  situation: Someone asks support to reset a doctor's authenticator by phone.
+  behaviour: Recovery needs the same proof as enrolment, and the doctor is told through a channel on file.
+  covers:
+  - BR-H19
+  - AC-H20
+functionalRequirements:
+- id: FR-H1
+  text: The service must create, disable and lock accounts, one per person or system.
+  priority: must
+  verification: test
+- id: FR-H2
+  text: The service must authenticate at the assurance each role needs, including step-up, and end sessions on inactivity.
+  priority: must
+  verification: test
+- id: FR-H3
+  text: The service must answer whether a caller holds a permission, with their assurance level and authentication time.
+  priority: must
+  verification: test
+- id: FR-H4
+  text: The service must assign roles, run access reviews, and remove access when people leave.
+  priority: must
+  verification: test
+- id: FR-H5
+  text: The service must provide emergency access with logging and review.
+  priority: must
+  verification: test
+- id: FR-H6
+  text: The service must enrol patients and representatives after identity proofing and a confirmed record match.
+  priority: must
+  verification: test
+- id: FR-H7
+  text: The service must register apps and authorize them with SMART App Launch 2.0.0, including backend services.
+  priority: must
+  verification: demonstration
+  jurisdiction: us
+- id: FR-H8
+  text: The service must log every sign-in, failure, step-up, role change, emergency access and grant.
+  priority: must
+  verification: test
+nonFunctionalRequirements:
+- category: security
+  text: Authenticators are verified with phishing-resistant protocols where the authenticator supports them, and secrets never leave the service.
+- category: compatibility
+  text: In the United States, the authorization server conforms to SMART App Launch 2.0.0, OpenID Connect Core 1.0 and Bulk Data system scopes, as 45 CFR 170.215 adopts.
+  jurisdiction: us
+- category: availability
+  text: Sign-in and permission checks are on every request's path, so they need the highest availability of any module; deployments set an SLO.
+- category: portability
+  text: No requirement depends on a particular identity provider, database or framework.
+constraints:
+- id: CON-H1
+  text: Passwords are stored only as salted hashes from a slow, memory-hard function, and keys only as public keys where possible.
+  rationale: A stolen database must not reveal anyone's password; NIST SP 800-63B requires salted, cost-hardened storage.
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. Required.
+- name: required_aal
+  type: map
+  description: The authentication assurance each role and account kind needs. Default AAL2 for every account that reaches patient data, and AAL3 for administrators.
+- name: session_inactivity_timeout
+  type: duration
+  description: Inactivity before a session ends. Default 30 minutes; NIST SP 800-63B-4 recommends no more than 1 hour at AAL2.
+- name: session_max_duration
+  type: duration
+  description: How long before a fresh authentication is needed. Default 12 hours; NIST recommends no more than 24 hours at AAL2.
+- name: patient_identity_assurance
+  type: code
+  description: How strongly patients and representatives are proven before getting an account. Default IAL2 in the United States; in the EU, the eIDAS level the member state requires.
+- name: access_review_interval
+  type: duration
+  description: How often each account's roles are reviewed. Set by the organization.
+- name: deprovision_deadline
+  type: duration
+  description: How soon after someone leaves their account is disabled. Default the same day.
+- name: break_glass_duration
+  type: duration
+  description: How long emergency access lasts. Default 4 hours.
+- name: break_glass_review_deadline
+  type: duration
+  description: How soon the privacy officer reviews emergency access. Set by the organization.
+- name: refresh_token_lifetime
+  type: duration
+  description: How long a patient app's refresh token lasts. At least 3 months in the United States (45 CFR 170.315(g)(10)).
+- name: audit_log_retention
+  type: duration
+  description: How long the sign-in and access log is kept. Set from law and policy; needs legal advice.
+performanceTargets:
+- id: PERF-H1
+  indicator: Permission check latency
+  target: Set by each deployment as an SLO
+  measurement: 99th percentile time to answer a permission check.
+- id: PERF-H2
+  indicator: Leaver access
+  target: '0'
+  measurement: Accounts still active past deprovision_deadline after their person left.
+- id: PERF-H3
+  indicator: Emergency access reviewed on time
+  target: 100%
+  measurement: Share of emergency accesses reviewed within break_glass_review_deadline.
+acceptanceCriteria:
+- id: AC-H1
+  given: a practitioner with an active staff account
+  when: a second staff account is created for them, and a new account reuses a retired username
+  then: both fail with IDENTITY_DUPLICATE and HTTP 409
+  verifies:
+  - BR-H1
+  - FR-H1
+- id: AC-H2
+  given: a person with no practitioner or staff record
+  when: a staff account is created for them, then for a credentialed practitioner with the role nurse
+  then: the first fails with IDENTITY_DUPLICATE and HTTP 409 because the subject isn't valid; the second is created and identity.account_created is emitted
+  verifies:
+  - BR-H2
+- id: AC-H3
+  given: an account whose roles were last confirmed past access_review_interval
+  when: the review list is read, a role is assigned without a reason, and the review removes an unconfirmed role
+  then: the account is listed; the assignment fails with IDENTITY_REASON_REQUIRED and HTTP 422; the removal emits identity.role_changed
+  verifies:
+  - BR-H3
+  - FR-H4
+- id: AC-H4
+  given: a staff member who leaves, and a practitioner the Practitioners module suspends
+  when: deprovision_deadline passes, and practitioner.suspended arrives
+  then: the first account is disabled with sessions ended and identity.account_disabled emitted; the second account's clinical roles are suspended
+  verifies:
+  - BR-H4
+  - FR-H4
+- id: AC-H5
+  given: a nurse role requiring AAL2, and a session at AAL1
+  when: the nurse opens a patient record, then steps up with a security key
+  then: the request fails with IDENTITY_AAL_TOO_LOW and HTTP 401; after stepping up it succeeds at AAL2
+  verifies:
+  - BR-H5
+  - FR-H2
+- id: AC-H6
+  given: a user setting a single-factor password
+  when: they choose "Password123!" and then a 16-character passphrase not on the blocklist
+  then: the first fails with IDENTITY_WEAK_PASSWORD and HTTP 422; the second is accepted with no composition rule applied
+  verifies:
+  - BR-H6
+- id: AC-H7
+  given: repeated failed sign-ins to one account
+  when: they continue past the throttle
+  then: sign-ins are slowed, then the account is locked with identity.account_locked and identity.signin_anomaly emitted; a later sign-in fails with IDENTITY_ACCOUNT_LOCKED and HTTP 403, and unlocking without verification fails with IDENTITY_REASON_REQUIRED and HTTP 422
+  verifies:
+  - BR-H7
+- id: AC-H8
+  given: session_inactivity_timeout of 30 minutes
+  when: a session is idle for 31 minutes
+  then: it ends with reason inactive and the next request fails with IDENTITY_INVALID_CREDENTIAL and HTTP 401
+  verifies:
+  - BR-H8
+  - FR-H2
+- id: AC-H9
+  given: a clinician who authenticated 2 hours ago
+  when: Clinical documentation checks the permission note.write with a freshness of 5 minutes
+  then: the answer says the authentication isn't fresh enough; after a step-up it is allowed
+  verifies:
+  - BR-H9
+  - FR-H3
+- id: AC-H10
+  given: a practitioner with a proofed two-factor credential and one designated approver
+  when: controlled substance prescribing is granted, then with a second approver who is a registrant
+  then: the first fails with IDENTITY_EPCS_REQUIREMENTS_UNMET and HTTP 409; the second succeeds
+  verifies:
+  - BR-H10
+  jurisdiction: us
+- id: AC-H11
+  given: a nurse with no care relationship to a patient
+  when: they break the glass without a reason, then with one
+  then: the first fails with IDENTITY_REASON_REQUIRED and HTTP 422; the second grants access for break_glass_duration, emits identity.break_glass_used, and the review emits identity.break_glass_reviewed
+  verifies:
+  - BR-H11
+  - FR-H5
+- id: AC-H12
+  given: a patient proofed at IAL2 and matched by the Patients module, and a parent representative of a minor
+  when: the patient enrols, and later the minor reaches the age of majority
+  then: the patient's account becomes active; the parent's access to the minor's record ends
+  verifies:
+  - BR-H12
+  - FR-H6
+- id: AC-H13
+  given: a health professional signing in with an eIDAS-notified eID at assurance level high
+  when: they reach the national access service
+  then: the sign-in is accepted with the eID's assurance recorded
+  verifies:
+  - BR-H13
+  jurisdiction: eu
+- id: AC-H14
+  given: a third-party app requesting patient/Observation.rs and offline_access
+  when: it registers, the patient approves, and it asks for a scope it didn't register
+  then: identity.app_registered is emitted; the refresh token lasts at least refresh_token_lifetime; the extra scope fails with IDENTITY_INVALID_SCOPE and HTTP 422
+  verifies:
+  - BR-H14
+  - FR-H7
+  jurisdiction: us
+- id: AC-H15
+  given: an app registration from a client on a documented list of malicious hosts
+  when: it registers
+  then: it fails with IDENTITY_APP_REFUSED and HTTP 403, with the security reason recorded
+  verifies:
+  - BR-H14
+  jurisdiction: us
+- id: AC-H16
+  given: a patient with two app grants
+  when: they list them and revoke one, then revoke an unknown id
+  then: both are listed; the revoked app's tokens stop working and identity.grant_revoked is emitted; the unknown id fails with IDENTITY_GRANT_NOT_FOUND and HTTP 404
+  verifies:
+  - BR-H15
+- id: AC-H17
+  given: a population health platform
+  when: it requests a bulk export token with its registered key and system scopes
+  then: it receives a token for system scopes only, not tied to any person
+  verifies:
+  - BR-H16
+- id: AC-H18
+  given: a day of activity
+  when: a privacy officer reads an account's sign-in log
+  then: every sign-in, failure, step-up, role change and emergency access is listed with who, when, where and the outcome
+  verifies:
+  - BR-H17
+  - FR-H8
+- id: AC-H19
+  given: a portal account linked to a patient who is merged into another, and another patient who dies
+  when: patient.merged and patient.deceased arrive
+  then: the first account opens the remaining record; the second patient's own account is disabled
+  verifies:
+  - BR-H18
+- id: AC-H20
+  given: a user recovering their account
+  when: they recover with only an email link when the account was proofed at IAL2
+  then: recovery is refused until identity is proven again at IAL2, and the holder is told through a channel on file
+  verifies:
+  - BR-H19
+- id: AC-H21
+  given: an account at revision 4
+  when: it is changed with revision 3, a client sets status, a create is retried with one key and a different body, and an unknown account is read
+  then: they fail with IDENTITY_REVISION_CONFLICT and HTTP 409, IDENTITY_READ_ONLY_FIELD and HTTP 422, IDENTITY_IDEMPOTENCY_KEY_REUSED and HTTP 422, and IDENTITY_NOT_FOUND and HTTP 404
+  verifies:
+  - BR-H20
+- id: AC-H22
+  given: a staff member
+  when: they assign themselves a role, and a role with an unknown name is assigned
+  then: the first fails with IDENTITY_FORBIDDEN and HTTP 403; the second with IDENTITY_INVALID_ROLE and HTTP 422
+  verifies:
+  - FR-H4
+- id: AC-H23
+  given: an account that is active
+  when: it is unlocked
+  then: it fails with IDENTITY_INVALID_STATUS and HTTP 409
+  verifies:
+  - FR-H1
+- id: AC-H24
+  given: the Practitioners module unreachable
+  when: a staff account is created
+  then: it fails with IDENTITY_DEPENDENCY_UNAVAILABLE and HTTP 503; existing sessions keep working
+  verifies:
+  - FR-H1
+- id: AC-H25
+  given: stored passwords
+  when: the store is inspected
+  then: each is a salted hash from a memory-hard function, never the password
+  verifies:
+  - CON-H1
+operations:
+- name: Create an account
+  actor: Account administrator
+  description: Create an account for a person or system. Accepts a retry key.
+  method: POST
+  path: /accounts
+  success: 201
+  input: kind, subject, username, and roles for staff
+  output: the account, pending
+  errors:
+  - IDENTITY_DUPLICATE
+  - IDENTITY_INVALID_ROLE
+  - IDENTITY_READ_ONLY_FIELD
+  - IDENTITY_IDEMPOTENCY_KEY_REUSED
+  - IDENTITY_FORBIDDEN
+  - IDENTITY_DEPENDENCY_UNAVAILABLE
+- name: Get an account
+  actor: System
+  description: An account's kind, subject, status, roles and authenticator types.
+  method: GET
+  path: /accounts/{id}
+  success: 200
+  input: account id
+  output: the account, never secrets
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_FORBIDDEN
+- name: Search accounts
+  actor: Account administrator
+  description: Search by name, subject, role, status or last sign-in.
+  method: GET
+  path: /accounts
+  success: 200
+  input: criteria, limit and cursor
+  output: accounts and next_cursor
+  errors:
+  - IDENTITY_FORBIDDEN
+- name: Record identity proofing
+  actor: Account administrator
+  description: Record how a person's identity was proven, at what level and with what evidence.
+  method: POST
+  path: /accounts/{id}/proofing
+  success: 200
+  input: assurance level, method and evidence references
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_FORBIDDEN
+- name: Register an authenticator
+  actor: Staff member
+  description: Add a password, one-time-password app, security key, passkey or smart card.
+  method: POST
+  path: /accounts/{id}/authenticators
+  success: 201
+  input: type and enrolment data
+  output: the authenticator, without its secret
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_WEAK_PASSWORD
+  - IDENTITY_AAL_TOO_LOW
+  - IDENTITY_FORBIDDEN
+- name: Remove an authenticator
+  actor: Staff member
+  description: Remove an authenticator; the last one can't be removed.
+  method: DELETE
+  path: /accounts/{id}/authenticators/{authenticator_id}
+  success: 200
+  input: revision
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_AAL_TOO_LOW
+  - IDENTITY_REVISION_CONFLICT
+  - IDENTITY_FORBIDDEN
+- name: Sign in
+  actor: Staff member
+  description: Authenticate and start a session at the assurance the authenticators reach.
+  method: POST
+  path: /sessions
+  success: 201
+  input: username and authenticator responses
+  output: the session and its AAL
+  errors:
+  - IDENTITY_INVALID_CREDENTIAL
+  - IDENTITY_ACCOUNT_LOCKED
+  - IDENTITY_DEPENDENCY_UNAVAILABLE
+- name: Step up
+  actor: Staff member
+  description: Authenticate again to raise or refresh a session's assurance before a sensitive action.
+  method: POST
+  path: /sessions/{id}/step-up
+  success: 200
+  input: authenticator responses
+  output: the session with its new AAL and time
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_INVALID_CREDENTIAL
+  - IDENTITY_AAL_TOO_LOW
+- name: Sign out
+  actor: Staff member
+  description: End a session.
+  method: DELETE
+  path: /sessions/{id}
+  success: 200
+  input: session id
+  output: the ended session
+  errors:
+  - IDENTITY_NOT_FOUND
+- name: Check a permission
+  actor: System
+  description: Whether the caller holds a permission, at the assurance needed, and how recently they authenticated.
+  method: GET
+  path: /authorization/check
+  success: 200
+  input: session or token, permission, and the freshness needed
+  output: allowed or not, the AAL and authentication time
+  errors:
+  - IDENTITY_INVALID_CREDENTIAL
+- name: Assign a role
+  actor: Account administrator
+  description: Give an account a role for a department or organization.
+  method: POST
+  path: /accounts/{id}/roles
+  success: 201
+  input: role, scope, period and reason
+  output: the assignment
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_INVALID_ROLE
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_FORBIDDEN
+- name: Remove a role
+  actor: Account administrator
+  description: End a role assignment.
+  method: DELETE
+  path: /accounts/{id}/roles/{assignment_id}
+  success: 200
+  input: reason
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_FORBIDDEN
+- name: Define a role
+  actor: Account administrator
+  description: Create or change a role's permissions and required AAL.
+  method: PUT
+  path: /roles/{name}
+  success: 200
+  input: permissions, required_aal and revision
+  output: the role
+  errors:
+  - IDENTITY_INVALID_ROLE
+  - IDENTITY_REVISION_CONFLICT
+  - IDENTITY_FORBIDDEN
+- name: List accounts due for review
+  actor: Account administrator
+  description: Accounts whose roles haven't been confirmed within access_review_interval.
+  method: GET
+  path: /access-reviews
+  success: 200
+  input: department, limit and cursor
+  output: accounts and next_cursor
+  errors:
+  - IDENTITY_FORBIDDEN
+- name: Confirm an access review
+  actor: Account administrator
+  description: Confirm or remove each role of an account under review.
+  method: POST
+  path: /access-reviews/{account_id}
+  success: 200
+  input: roles kept and removed
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_FORBIDDEN
+- name: Disable an account
+  actor: Account administrator
+  description: Disable an account, ending its sessions and tokens.
+  method: POST
+  path: /accounts/{id}/disable
+  success: 200
+  input: reason and revision
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_REVISION_CONFLICT
+  - IDENTITY_FORBIDDEN
+- name: Unlock an account
+  actor: Account administrator
+  description: Unlock a locked account after verifying the holder.
+  method: POST
+  path: /accounts/{id}/unlock
+  success: 200
+  input: how the holder was verified, and revision
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_INVALID_STATUS
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_FORBIDDEN
+- name: Break the glass
+  actor: Staff member
+  description: Gain emergency access to a patient's information, with a reason.
+  method: POST
+  path: /break-glass
+  success: 201
+  input: patient and reason
+  output: the emergency access and when it ends
+  errors:
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_FORBIDDEN
+- name: Review emergency access
+  actor: Privacy officer
+  description: Record whether an emergency access was justified.
+  method: POST
+  path: /break-glass/{id}/review
+  success: 200
+  input: justified or not, and notes
+  output: the reviewed access
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_FORBIDDEN
+- name: Register an app
+  actor: App
+  description: Register a third-party or backend app.
+  method: POST
+  path: /apps
+  success: 201
+  input: name, kind, redirect URIs or public keys, and scopes it may request
+  output: the client id
+  errors:
+  - IDENTITY_INVALID_SCOPE
+  - IDENTITY_APP_REFUSED
+  jurisdiction: us
+- name: Authorize an app
+  actor: Patient
+  description: 'The SMART App Launch authorization request: sign in and approve scopes.'
+  method: GET
+  path: /oauth/authorize
+  success: 302
+  input: client id, scopes, redirect URI, state and PKCE challenge
+  output: a redirect to the app with an authorization code
+  errors:
+  - IDENTITY_INVALID_SCOPE
+  - IDENTITY_APP_REFUSED
+- name: Issue a token
+  actor: App
+  description: Exchange an authorization code, refresh token or backend assertion for tokens.
+  method: POST
+  path: /oauth/token
+  success: 200
+  input: grant type and credentials
+  output: access token, scopes, and a refresh token where allowed
+  errors:
+  - IDENTITY_INVALID_CREDENTIAL
+  - IDENTITY_INVALID_SCOPE
+- name: List my app grants
+  actor: Patient
+  description: The apps the account has authorized, with scopes and dates.
+  method: GET
+  path: /grants
+  success: 200
+  input: limit and cursor
+  output: grants and next_cursor
+  errors: []
+- name: Revoke an app grant
+  actor: Patient
+  description: Revoke an app's access at once.
+  method: DELETE
+  path: /grants/{id}
+  success: 200
+  input: grant id
+  output: the revoked grant
+  errors:
+  - IDENTITY_GRANT_NOT_FOUND
+- name: Grant controlled substance prescribing
+  actor: Account administrator
+  description: Record the two designated individuals' approval for a practitioner to sign controlled substance prescriptions.
+  method: POST
+  path: /accounts/{id}/epcs-access
+  success: 200
+  input: the two approvers and the credential's identity proofing record
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_EPCS_REQUIREMENTS_UNMET
+  - IDENTITY_FORBIDDEN
+  jurisdiction: us
+- name: Get an account's sign-in log
+  actor: Privacy officer
+  description: Sign-ins, failures, step-ups and role changes for an account.
+  method: GET
+  path: /accounts/{id}/sign-in-log
+  success: 200
+  input: limit and cursor
+  output: log entries
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_FORBIDDEN
+apiConventions:
+- topic: Authentication
+  text: Callers authenticate with a session or an OAuth 2.0 access token issued here; apps use SMART App Launch 2.0.0, and backend systems SMART Backend Services.
+- topic: Errors
+  text: Errors use problem details (application/problem+json) with a code member, such as IDENTITY_AAL_TOO_LOW; the OAuth endpoints use the OAuth 2.0 error responses (RFC 6749).
+  reference: RFC 9457, RFC 6749
+- topic: Pagination
+  text: 'Lists are cursor-based: limit and an optional cursor in, next_cursor out.'
+- topic: Concurrency
+  text: Every change sends the revision it read; a stale revision fails with IDENTITY_REVISION_CONFLICT (BR-H20).
+- topic: Retries
+  text: Every create accepts an Idempotency-Key header.
+  reference: IETF draft-ietf-httpapi-idempotency-key-header
+- topic: Secrets
+  text: No operation returns a password, key or token after it is issued; passwords are stored only as salted, slow hashes.
+events:
+- name: identity.account_created
+  description: An account was created.
+  payload:
+  - account_id
+  - revision
+  - kind
+- name: identity.account_disabled
+  description: An account was disabled.
+  payload:
+  - account_id
+  - revision
+  - reason
+- name: identity.account_locked
+  description: An account was locked.
+  payload:
+  - account_id
+  - revision
+- name: identity.role_changed
+  description: A role was assigned or removed.
+  payload:
+  - account_id
+  - revision
+  - role
+- name: identity.signin_anomaly
+  description: Unusual sign-in activity was detected.
+  payload:
+  - account_id
+  - revision
+  - pattern
+- name: identity.break_glass_used
+  description: Emergency access was used.
+  payload:
+  - account_id
+  - patient_id
+  - ends_at
+- name: identity.break_glass_reviewed
+  description: Emergency access was reviewed.
+  payload:
+  - account_id
+  - patient_id
+  - outcome
+- name: identity.app_registered
+  description: An app was registered.
+  payload:
+  - client_id
+  - kind
+- name: identity.grant_revoked
+  description: A patient or user revoked an app's access.
+  payload:
+  - client_id
+  - account_id
+deliveryGuarantees:
+- id: DG-H1
+  text: Events are published at least once; consumers drop one with a source and id they have seen.
+  rationale: A relay can publish twice after a crash.
+- id: DG-H2
+  text: Events carry ids and reasons, never credentials, tokens or identity evidence.
+  rationale: Events fan out widely; a leaked token is a stolen account.
+permissions:
+- name: identity.admin
+  description: Create accounts, assign roles and run access reviews.
+- name: identity.self
+  description: Manage your own authenticators, sessions and app grants.
+- name: identity.break_glass
+  description: Break the glass for emergency access.
+- name: identity.audit
+  description: Read sign-in logs and review emergency access.
+- name: identity.check
+  description: Ask whether a caller holds a permission.
+accessMatrix:
+- action: Create, search, disable and unlock accounts, assign and define roles, run access reviews, grant controlled substance prescribing
+  roles:
+    Account administrator: any
+    Staff member: none
+    Patient: none
+    Privacy officer: none
+    App: none
+    System: none
+  permission: identity.admin
+- action: Register and remove own authenticators, sign in, step up, sign out, list and revoke own app grants
+  roles:
+    Account administrator: own
+    Staff member: own
+    Patient: own
+    Privacy officer: own
+    App: none
+    System: none
+  permission: identity.self
+- action: Break the glass
+  roles:
+    Account administrator: none
+    Staff member: any
+    Patient: none
+    Privacy officer: none
+    App: none
+    System: none
+  permission: identity.break_glass
+  note: Only staff with a clinical role.
+- action: Read sign-in logs, review emergency access
+  roles:
+    Account administrator: none
+    Staff member: none
+    Patient: none
+    Privacy officer: any
+    App: none
+    System: none
+  permission: identity.audit
+- action: Check a permission, get an account
+  roles:
+    Account administrator: any
+    Staff member: own
+    Patient: own
+    Privacy officer: any
+    App: none
+    System: any
+  permission: identity.check
+- action: Register an app, request tokens
+  roles:
+    Account administrator: none
+    Staff member: none
+    Patient: none
+    Privacy officer: none
+    App: own
+    System: none
+  permission: identity.self
+  note: Apps act only within the scopes a person granted, or their own system scopes.
+personalData:
+- field: account.subject, account.username, account.kind, account.status, account.roles, account.revision
+  category: personal
+  purpose: Identifying who acts in the application and what they may do
+  retention: As long as the account, then audit_log_retention
+- field: account.identity_assurance
+  category: personal; evidence can include identity documents
+  purpose: Showing how identity was proven
+  retention: As long as the account; evidence images are not kept once verified
+- field: account.authenticators
+  category: personal; can include biometric templates on the device only
+  purpose: Signing in
+  retention: Until removed; secrets are stored only as salted hashes or public keys
+- field: account.last_sign_in_at, account.last_reviewed_at, session.id, session.aal, session.started_at, session.ended_reason
+  category: personal
+  purpose: Security and audit
+  retention: audit_log_retention
+- field: app.client_id, app.kind, app.status, grant.scopes
+  category: personal (for grants)
+  purpose: Showing which apps may act for whom
+  retention: As long as the grant, then audit_log_retention
+- field: role.name, role.permissions, role.required_aal
+  category: not personal
+  purpose: Defining access
+  retention: As long as the role is in use
+- field: break_glass.reason
+  category: health data; names the patient
+  purpose: Accounting for emergency access
+  retention: audit_log_retention
+errors:
+- code: IDENTITY_NOT_FOUND
+  http: 404
+  message: No account, session or emergency access exists with that id.
+- code: IDENTITY_FORBIDDEN
+  http: 403
+  message: Your role doesn't allow this.
+- code: IDENTITY_DUPLICATE
+  http: 409
+  message: That person or system already has an active account of this kind, or the username was used before.
+- code: IDENTITY_INVALID_CREDENTIAL
+  http: 401
+  message: The sign-in or token couldn't be verified.
+- code: IDENTITY_ACCOUNT_LOCKED
+  http: 403
+  message: The account is locked; an administrator must verify you to unlock it.
+- code: IDENTITY_AAL_TOO_LOW
+  http: 401
+  message: This needs a stronger or fresher authentication; step up and try again.
+- code: IDENTITY_WEAK_PASSWORD
+  http: 422
+  message: The password is too short or on the list of common and compromised passwords.
+- code: IDENTITY_INVALID_ROLE
+  http: 422
+  message: That role doesn't exist, or this kind of account can't hold it.
+- code: IDENTITY_INVALID_SCOPE
+  http: 422
+  message: A scope isn't valid SMART syntax or wasn't registered for this app.
+- code: IDENTITY_APP_REFUSED
+  http: 403
+  message: The app was refused for a documented security risk.
+- code: IDENTITY_GRANT_NOT_FOUND
+  http: 404
+  message: No grant exists with that id.
+- code: IDENTITY_EPCS_REQUIREMENTS_UNMET
+  http: 409
+  message: Controlled substance prescribing needs a proofed two-factor credential and two designated approvers.
+- code: IDENTITY_INVALID_STATUS
+  http: 409
+  message: The account isn't in a status that allows this.
+- code: IDENTITY_REASON_REQUIRED
+  http: 422
+  message: This needs a reason.
+- code: IDENTITY_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service.
+- code: IDENTITY_REVISION_CONFLICT
+  http: 409
+  message: It changed since you read it. Read it again.
+- code: IDENTITY_IDEMPOTENCY_KEY_REUSED
+  http: 422
+  message: That retry key was used with a different request.
+- code: IDENTITY_DEPENDENCY_UNAVAILABLE
+  http: 503
+  message: Practitioners, Patients or an identity provider can't be reached. Try again.
+dependencies:
+- service: practitioner-service
+  direction: upstream
+  reason: knows who is credentialed and active
+  criticality: hard
+  contract:
+  - 'Asks: is this practitioner active?'
+  - 'Receives: practitioner.credentialed, practitioner.suspended, practitioner.reinstated and practitioner.inactivated'
+  - 'Gives: the practitioner id an account belongs to'
+- service: patient-service
+  direction: upstream
+  reason: owns patients and their representatives
+  criticality: hard
+  contract:
+  - 'Asks: does this enrolment match a patient record in use?'
+  - 'Asks: who represents this patient, with what scope?'
+  - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.representative_changed'
+- service: organization-service
+  direction: upstream
+  reason: owns departments and job roles
+  criticality: soft
+  contract:
+  - 'Asks: which job roles does this person hold, in which departments?'
+  - Departments and job roles are Organization's concern
+- service: identity-providers
+  direction: upstream
+  reason: external identity providers, credential service providers and eIDAS nodes
+  criticality: soft
+  contract:
+  - 'Asks: is this sign-in or proofing result valid, and at what assurance?'
+- service: clinical-modules
+  direction: downstream
+  reason: every module that checks permissions
+  criticality: hard
+  contract:
+  - 'Gives: whether the caller holds a permission, with their AAL and authentication time'
+  - 'Gives: identity.break_glass_used, so modules allow the emergency access and log it'
+  - Which permission each action needs is each module's concern
+- service: notification-service
+  direction: downstream
+  reason: alerts
+  criticality: soft
+  contract:
+  - 'Gives: identity.signin_anomaly, identity.account_locked and identity.break_glass_used, for the privacy officer'
+  - 'Gives: identity.break_glass_reviewed, so the person who broke the glass learns the outcome'
+  - 'Gives: identity.account_created, identity.account_disabled, identity.role_changed, identity.app_registered and identity.grant_revoked, so holders are told of changes'
+risks:
+- id: RISK-H1
+  risk: An account is taken over by phishing.
+  impact: Mass disclosure of health data.
+  mitigation: Multi-factor authentication, phishing-resistant options, anomaly detection (BR-H5, BR-H7).
+- id: RISK-H2
+  risk: Emergency access becomes routine.
+  impact: Snooping hidden behind emergencies.
+  mitigation: Reasons, time limits and review of every use (BR-H11).
+- id: RISK-H3
+  risk: Leavers keep access.
+  impact: Unauthorized access after employment ends.
+  mitigation: Same-day deprovisioning and access reviews (BR-H3, BR-H4).
+decisions:
+- id: ADR-H1
+  decision: Identity starts at the healthcare level, with an EHR layer for shared clinical workstations.
+  rationale: Accounts and sign-in are needed by every health application; a core page waits until a second industry needs it.
+  date: '2026-10-09'
+- id: ADR-H2
+  decision: This module answers whether a caller holds a permission; each module decides patient-level access from its own care relationship rules.
+  rationale: Care relationships live in the clinical modules; centralizing them here would copy their rules.
+  date: '2026-10-09'
+openQuestions: []
+references:
+- id: REF-H1
+  title: 45 CFR 164.312, Technical safeguards
+  url: https://www.ecfr.gov/current/title-45/section-164.312
+  note: Unique user identification, emergency access, automatic logoff, audit controls, authentication.
+- id: REF-H2
+  title: 45 CFR 164.308, Administrative safeguards
+  url: https://www.ecfr.gov/current/title-45/section-164.308
+  note: Workforce security, access management, log-in monitoring, password management.
+- id: REF-H3
+  title: NIST SP 800-63B-4, Authentication and authenticator management
+  url: https://pages.nist.gov/800-63-4/sp800-63b.html
+  note: AAL2, phishing-resistant options, passwords, reauthentication.
+- id: REF-H4
+  title: NIST SP 800-63A-4, Identity proofing
+  url: https://pages.nist.gov/800-63-4/sp800-63a/ial/
+  note: Identity assurance levels.
+- id: REF-H5
+  title: 21 CFR part 1311, Electronic prescriptions for controlled substances
+  url: https://www.ecfr.gov/current/title-21/part-1311
+  note: Identity proofing, two-factor authentication, logical access control.
+- id: REF-H6
+  title: 45 CFR 170.315(g)(10) and 170.215
+  url: https://www.ecfr.gov/current/title-45/section-170.315
+  note: App registration, SMART App Launch, refresh tokens of at least three months.
+- id: REF-H7
+  title: HL7 SMART App Launch 2.0.0, Scopes and launch context
+  url: https://hl7.org/fhir/smart-app-launch/STU2/scopes-and-launch-context.html
+  note: Scope syntax and openid, fhirUser, offline_access.
+- id: REF-H8
+  title: 45 CFR 171.203, Security exception
+  url: https://www.ecfr.gov/current/title-45/section-171.203
+  note: Refusing apps only on a tailored security basis.
+- id: REF-H9
+  title: Regulation (EU) No 910/2014 (eIDAS), as amended by Regulation (EU) 2024/1183
+  url: https://eur-lex.europa.eu/eli/reg/2014/910/oj/eng
+  note: Electronic identification and the EU Digital Identity Wallet.
+- id: REF-H10
+  title: Regulation (EU) 2025/327, European Health Data Space
+  url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
+  note: Article 12, health professional access services.
+- id: REF-H11
+  title: Directive (EU) 2022/2555 (NIS2)
+  url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
+  note: Article 21(2)(j), multi-factor authentication.
+changelog:
+- version: 0.1.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'First draft: accounts, identity proofing, authentication assurance, passwords, sessions, roles and access reviews, emergency access, patient and representative accounts, apps with SMART App Launch, controlled substance prescribing credentials, and eIDAS.'
+acronyms:
+- term: AAL
+  definition: Authentication assurance level
+- term: EPCS
+  definition: Electronic prescriptions for controlled substances
+- term: IAL
+  definition: Identity assurance level
+- term: MFA
+  definition: Multi-factor authentication
+- term: OIDC
+  definition: OpenID Connect
+- term: SMART
+  definition: Substitutable Medical Applications and Reusable Technologies, the HL7 app launch and authorization framework
+tables:
+- name: accounts
+  description: One row per account.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: kind
+    type: text
+  - name: subject
+    type: jsonb
+  - name: username
+    type: text
+  - name: status
+    type: text
+    default: '''pending'''
+  - name: identity_assurance
+    type: jsonb
+    nullable: true
+  - name: last_sign_in_at
+    type: timestamptz
+    nullable: true
+  - name: last_reviewed_at
+    type: timestamptz
+    nullable: true
+  - name: revision
+    type: integer
+    default: '0'
+  indexes: []
+  constraints:
+  - name: accounts_pkey
+    definition: PRIMARY KEY (id)
+  - name: accounts_username
+    definition: UNIQUE (username)
+- name: authenticators
+  description: 'authenticators: one row per registered authenticator; secrets as hashes or public keys.'
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: account_id
+    type: uuid
+  - name: type
+    type: text
+  - name: phishing_resistant
+    type: boolean
+  - name: verifier
+    type: bytea
+    note: salted hash or public key
+  - name: registered_at
+    type: timestamptz
+  - name: last_used_at
+    type: timestamptz
+    nullable: true
+  indexes: []
+  constraints:
+  - name: authenticators_pkey
+    definition: PRIMARY KEY (id)
+- name: role_assignments
+  description: roles held by each account.
+  columns:
+  - name: account_id
+    type: uuid
+  - name: role
+    type: text
+  - name: scope
+    type: text
+  - name: period
+    type: tstzrange
+  - name: granted_by
+    type: uuid
+  - name: reason
+    type: text
+  indexes: []
+  constraints: []
+- name: roles
+  description: 'One row per role: name, permissions and required_aal.'
+  columns:
+  - name: name
+    type: text
+  - name: permissions
+    type: text[]
+  - name: required_aal
+    type: text
+  - name: revision
+    type: integer
+    default: '0'
+  indexes: []
+  constraints:
+  - name: roles_pkey
+    definition: PRIMARY KEY (name)
+- name: sessions
+  description: 'One row per session: aal, started_at, ended_reason.'
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: account_id
+    type: uuid
+  - name: aal
+    type: text
+  - name: started_at
+    type: timestamptz
+  - name: last_active_at
+    type: timestamptz
+  - name: reauthenticated_at
+    type: timestamptz
+  - name: ended_reason
+    type: text
+    nullable: true
+  indexes: []
+  constraints:
+  - name: sessions_pkey
+    definition: PRIMARY KEY (id)
+- name: apps
+  description: 'Registered apps: client_id, kind, status.'
+  columns:
+  - name: client_id
+    type: text
+  - name: name
+    type: text
+  - name: kind
+    type: text
+  - name: status
+    type: text
+  - name: redirect_uris
+    type: text[]
+    default: '''{}'''
+  - name: jwks
+    type: jsonb
+    nullable: true
+  - name: allowed_scopes
+    type: text[]
+  indexes: []
+  constraints:
+  - name: apps_pkey
+    definition: PRIMARY KEY (client_id)
+- name: grants
+  description: 'grant scopes: what each account authorized each app to do.'
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: account_id
+    type: uuid
+  - name: client_id
+    type: text
+  - name: scopes
+    type: text[]
+  - name: granted_at
+    type: timestamptz
+  - name: refresh_expires_at
+    type: timestamptz
+    nullable: true
+  - name: revoked_at
+    type: timestamptz
+    nullable: true
+  indexes: []
+  constraints:
+  - name: grants_pkey
+    definition: PRIMARY KEY (id)
+- name: break_glass
+  description: 'break_glass reason: one row per emergency access.'
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: account_id
+    type: uuid
+  - name: patient_id
+    type: uuid
+  - name: reason
+    type: text
+  - name: started_at
+    type: timestamptz
+  - name: ends_at
+    type: timestamptz
+  - name: review
+    type: jsonb
+    nullable: true
+  indexes:
+  - name: break_glass_unreviewed
+    definition: CREATE INDEX ON break_glass (started_at) WHERE review IS NULL
+  constraints:
+  - name: break_glass_pkey
+    definition: PRIMARY KEY (id)
+- name: identity_log
+  description: Every sign-in, failure, step-up, role change, emergency access and grant. Append-only.
+  columns:
+  - name: id
+    type: bigint
+    default: generated always as identity
+  - name: account_id
+    type: uuid
+    nullable: true
+  - name: event
+    type: text
+  - name: outcome
+    type: text
+  - name: source
+    type: inet
+    nullable: true
+  - name: at
+    type: timestamptz
+    default: now()
+  indexes: []
+  constraints: []
+technicalNotes:
+- id: TN-H1
+  title: Hash passwords properly
+  text: Use a memory-hard function such as Argon2id with a per-password salt, and check new passwords against a breached-password list using a privacy-preserving range query.
+- id: TN-H2
+  title: Prefer passkeys
+  text: Support WebAuthn passkeys and security keys as the phishing-resistant option; they bind to the site, so a fake site can't replay them.
+compliance:
+- id: CMP-H1
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(a)(2)(i) to (iii)
+  obligation: Unique user identification, an emergency access procedure, and automatic logoff.
+  how: One account per person, break the glass, session timeouts.
+  status: met
+  covered_by:
+  - BR-H1
+  - BR-H11
+  - BR-H8
+  jurisdiction: us
+- id: CMP-H2
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.312(b) and (d)
+  obligation: Audit controls, and verifying that a person seeking access is who they claim.
+  how: Every sign-in and change logged; multi-factor authentication.
+  status: met
+  covered_by:
+  - BR-H17
+  - BR-H5
+  jurisdiction: us
+- id: CMP-H3
+  regulation: HIPAA Security Rule
+  provision: 45 CFR 164.308(a)(3), (a)(4) and (a)(5)(ii)(C) and (D)
+  obligation: Workforce access authorization and termination, access management, log-in monitoring and password management.
+  how: Roles, reviews, deprovisioning, throttling and password rules.
+  status: met
+  covered_by:
+  - BR-H2
+  - BR-H3
+  - BR-H4
+  - BR-H6
+  - BR-H7
+  jurisdiction: us
+- id: CMP-H4
+  regulation: DEA electronic prescriptions for controlled substances
+  provision: 21 CFR 1311.105, 1311.115 and 1311.125
+  obligation: Identity-proofed two-factor credentials and logical access granted by two designated individuals.
+  how: Controlled substance prescribing access needs both.
+  status: met
+  covered_by:
+  - BR-H10
+  jurisdiction: us
+- id: CMP-H5
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(g)(10)
+  obligation: App registration, SMART App Launch authorization and refresh tokens of at least three months.
+  how: App registration and authorization server.
+  status: met
+  covered_by:
+  - BR-H14
+  - BR-H16
+  jurisdiction: us
+- id: CMP-H6
+  regulation: 21st Century Cures Act information blocking
+  provision: 45 CFR 171.203
+  obligation: Refuse apps only under a tailored security practice.
+  how: Refusals need a documented security risk.
+  status: met
+  covered_by:
+  - BR-H14
+  jurisdiction: us
+- id: CMP-H7
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 12
+  obligation: Health professionals reach access services only with eIDAS-recognised electronic identification.
+  how: eIDAS sign-in for professionals.
+  status: met
+  covered_by:
+  - BR-H13
+  jurisdiction: eu
+- id: CMP-H8
+  regulation: NIS2 Directive (EU) 2022/2555
+  provision: Article 21(2)(j)
+  obligation: Multi-factor or continuous authentication where appropriate.
+  how: AAL2 or higher for every account reaching patient data.
+  status: met
+  covered_by:
+  - BR-H5
+  jurisdiction: eu
+- id: CMP-H9
+  regulation: GDPR (EU) 2016/679
+  provision: Article 32
+  obligation: Security appropriate to the risk, including access control.
+  how: Unique accounts, multi-factor authentication, logging.
+  status: met
+  covered_by:
+  - BR-H1
+  - BR-H5
+  - BR-H17
+  jurisdiction: eu
+---
+
+Every request any module receives starts here: who is this, how sure are we,
+and may they do this? This module gives each person and system its own
+account, proves and authenticates them as strongly as what they can reach
+requires, and answers the permission question for every other module.
+
+## One person, one account
+
+A shared login makes every audit trail useless, so nobody shares one: not two
+nurses on a ward, and not a parent using a child's portal account (BR-H1).
+Representatives get their own accounts with the scope the Patients module
+records (BR-H12).
+
+## Passwords alone don't protect health data
+
+Anything that reaches patient data needs two factors, and a phishing-resistant
+option is always offered, because a captured password and code are replayed
+within minutes (BR-H5). Passwords follow NIST's current advice: long, checked
+against breached lists, and never forced to change on a schedule (BR-H6).
+
+## Emergencies don't wait for permissions
+
+A clinician can break the glass to reach a record in an emergency. It is
+fast, but it is logged and every use is reviewed (BR-H11).
+
+## Patients choose their apps
+
+In the United States, patients can connect the apps they choose through SMART
+App Launch, see every app they connected, and revoke any at once (BR-H14,
+BR-H15).

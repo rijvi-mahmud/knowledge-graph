@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.1.1
+version: 0.1.2
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -1155,6 +1155,7 @@ dependencies:
   contract:
   - 'Asks: who is the caller, and do they hold this permission?'
   - 'Gives: the practitioner id an account belongs to'
+  - 'Gives: practitioner.credentialed, practitioner.suspended, practitioner.reinstated and practitioner.inactivated, so accounts and roles follow'
   - Accounts, sign-in and permissions are Identity's concern
 - service: primary-sources
   direction: upstream
@@ -1279,6 +1280,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.1.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The Identity dependency now gives the practitioner events that accounts and roles follow.
 - version: 0.1.1
   date: '2026-10-09'
   breaking: false
