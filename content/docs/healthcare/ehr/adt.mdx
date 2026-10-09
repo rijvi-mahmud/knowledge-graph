@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.8.5
+version: 0.8.6
 status: draft
 industry: healthcare
 domain: ehr
@@ -201,7 +201,7 @@ dataModel:
 - name: notices
   type: notice[]
   required: false
-  description: 'Notices owed and given: the Important Message from Medicare (initial and follow-up) and the MOON, each with due and given times.'
+  description: 'Notices owed and given: the Important Message from Medicare (initial and follow-up), the MOON, and the Detailed Notice of Discharge when the patient appeals, each with due and given times.'
   constraints: set by the service; given times recorded through the notice operation
   jurisdiction: us
 - name: isolation_required
@@ -416,6 +416,10 @@ businessRules:
 - id: BR-E46
   text: When the Practitioners module reports an attending practitioner suspended, or their admitting privileges end, each stay they attend is listed for a bed manager or medical director to name a new attending.
   rationale: A stay must always have an attending who may practise; the change is a person's decision, so it is listed rather than made automatically.
+- id: BR-E47
+  text: In the United States, when the Quality Improvement Organization tells the hospital that a Medicare inpatient has appealed their discharge, the appeal is recorded on the stay, a Detailed Notice of Discharge falls due by noon of the following day, and stay.notice_due is emitted. The discharge isn't completed against the patient's wish while the review is pending; the QIO's decision is recorded when it arrives.
+  rationale: The hospital must deliver a detailed notice, and supply the QIO what it needs, no later than noon of the day after the QIO's notification; a beneficiary who requests review on time isn't financially responsible for continued care while it is pending (42 CFR 405.1206(e) and (f)).
+  jurisdiction: us
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -723,6 +727,13 @@ edgeCases:
   covers:
   - BR-E45
   - AC-E59
+  jurisdiction: us
+- id: EC-E32
+  situation: A Medicare patient told they are going home tomorrow calls the QIO to appeal.
+  behaviour: The appeal is recorded, the detailed notice falls due by noon next day, and the stay stays admitted until the QIO decides.
+  covers:
+  - BR-E47
+  - AC-E61
   jurisdiction: us
 functionalRequirements:
 - id: FR-E1
@@ -1265,6 +1276,13 @@ acceptanceCriteria:
   then: both stays are listed for a new attending; the third fails with STAY_INVALID_PRACTITIONER and HTTP 422
   verifies:
   - BR-E46
+- id: AC-E61
+  given: a Medicare inpatient with a planned discharge
+  when: the QIO reports at 15:00 that the patient appealed, and later decides the discharge was right
+  then: the appeal is recorded, a Detailed Notice of Discharge is due by 12:00 the next day and stay.notice_due is emitted; the discharge waits until the decision is recorded
+  verifies:
+  - BR-E47
+  jurisdiction: us
 operations:
 - name: Request an admission
   actor: Clinician
@@ -1526,11 +1544,11 @@ operations:
   - STAY_DEPENDENCY_UNAVAILABLE
 - name: Record a notice
   actor: Registrar
-  description: Record that a notice was given.
+  description: Record that a notice was given, including a discharge appeal reported by the QIO and its decision.
   method: POST
   path: /stays/{id}/notices
   success: 200
-  input: stay id, revision, notice, time given, to whom
+  input: stay id, revision, notice, time given, to whom, or a QIO appeal notification or decision
   output: the stay
   errors:
   - STAY_NOT_FOUND
@@ -2288,6 +2306,10 @@ references:
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+- id: REF-E22
+  title: 42 CFR 405.1206, Expedited determination procedures for inpatient hospital care
+  url: https://www.ecfr.gov/current/title-42/section-405.1206
+  note: Detailed notice by noon the day after the QIO's notification; liability while review is pending.
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
@@ -2592,7 +2614,21 @@ compliance:
   covered_by:
   - CON-E1
   jurisdiction: eu
+- id: CMP-E35
+  regulation: Medicare beneficiary appeals
+  provision: 42 CFR 405.1206(e)
+  obligation: Deliver a Detailed Notice of Discharge and supply the QIO's information by noon of the day after its notification.
+  how: The appeal, the notice due time and the decision are recorded on the stay.
+  status: met
+  covered_by:
+  - BR-E47
+  jurisdiction: us
 changelog:
+- version: 0.8.6
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-E47: Medicare discharge appeals: the Detailed Notice of Discharge by noon next day, and no forced discharge while the QIO reviews (42 CFR 405.1206).'
 - version: 0.8.5
   date: '2026-10-09'
   breaking: false

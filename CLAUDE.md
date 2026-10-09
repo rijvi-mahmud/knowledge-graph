@@ -412,10 +412,11 @@ every module and layer, and for every "is there any gap?" request.
    - **Domain**: compare against the SRS checklist above and the sources.
      For healthcare, the ONC SAFER Guides are the best checklist of what
      hospitals get wrong.
-   - Report a table, worst first (patient safety, legal exposure, then
-     missing sections), split into: gaps inside this module, gaps that belong
-     to another module (contract only), and internal inconsistencies. Say
-     which items still need research. Then wait for the user's go-ahead.
+   - Fix every finding directly, then report a table, worst first (patient
+     safety, legal exposure, then missing sections), split into: gaps inside
+     this module, gaps that belong to another module (contract only), and
+     internal inconsistencies. The user asked (2026-10-09) not to stop for a
+     go-ahead on content fixes.
    - Ask before changing the structure (schema, sections, sidebar); content
      inside the agreed structure doesn't need approval beyond the go-ahead.
 4. **Touch only what the module needs.** A feature that deserves its own
@@ -755,7 +756,7 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Practitioners (`healthcare/practitioner` 0.1.1, healthcare level, and `healthcare/ehr/practitioner` 0.1.2 for medical staff and privileges), Terminology (`healthcare/terminology` 0.1.4, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.7 and `healthcare/ehr/clinical-documentation` 0.4.8; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.5, EHR-only), Encounters (`healthcare/encounter` 0.1.12 and `healthcare/ehr/encounter` 0.13.12), Patients (`healthcare/patient` 0.12.5, which has no core page by the
+  drafts: Practitioners (`healthcare/practitioner` 0.1.1, healthcare level, and `healthcare/ehr/practitioner` 0.1.2 for medical staff and privileges), Terminology (`healthcare/terminology` 0.1.4, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.7 and `healthcare/ehr/clinical-documentation` 0.4.8; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.6, EHR-only), Encounters (`healthcare/encounter` 0.1.12 and `healthcare/ehr/encounter` 0.13.12), Patients (`healthcare/patient` 0.12.5, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.4.5) and Appointments
   (`healthcare/appointment` 0.11.6, `healthcare/ehr/appointment` 0.11.6; `core/appointment` 0.12.4). All
   support the US and EU through the `jurisdiction` setting. Next: Identity and access, then Consent (added to the roadmap on 2026-10-09 with Practitioners), then Orders and results.

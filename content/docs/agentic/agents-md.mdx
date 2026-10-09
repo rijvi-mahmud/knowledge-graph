@@ -96,15 +96,15 @@ is active or inactive. _[healthcare]_
   - Why: Two people with the same medical record number means a scan or a
     lookup can open the wrong person's record.
 
-**BR-E1** Every patient gets an MRN from mrn_system at registration,
-including its check digit. ... _[ehr]_
+**BR-E2** An unidentified patient is registered with an alias from
+alias_scheme and marked unidentified. ... _[ehr]_
 ```
 
 The same conventions apply to every module:
 
 | In the spec | Meaning |
 |---|---|
-| `BR-`, `FR-`, `AC-`, `EC-`, `CON-`, `AS-`, `DG-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria, edge cases, design constraints, assumptions, delivery guarantees and decisions. Ids are stable, so code, tests and commits can cite them. A layer letter, such as `BR-H3` or `BR-E1`, shows where the item was written. |
+| `BR-`, `FR-`, `AC-`, `EC-`, `CON-`, `AS-`, `DG-`, `ADR-` ids | Business rules, functional requirements, acceptance criteria, edge cases, design constraints, assumptions, delivery guarantees and decisions. Ids are stable, so code, tests and commits can cite them. A layer letter, such as `BR-H3` or `BR-E2`, shows where the item was written. |
 | `[core]`, `[healthcare]`, `[ehr]` | The layer an item comes from. |
 | `overrides` | A more specific layer replaced the item with the same id. Only the replacement applies. |
 | Validations | Each field's rule and the error code it returns. |
