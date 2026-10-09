@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.6
+version: 0.13.7
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,11 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.7
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Inherits Clinical encounters 0.1.7.
 - version: 0.13.6
   date: '2026-10-09'
   breaking: false
@@ -763,7 +768,7 @@ operations:
   method: POST
   path: /encounters
   success: 201
-  input: patient, class, department, and optional appointments, orders, pre-admission id, episodes, part_of, planned start, type, priority, reasons, admission details, location, virtual service and patient location
+  input: patient, class, department, and optional appointments, orders, pre-admission id, episodes, part_of, planned start, type, priority, reasons, admission details, location, virtual service and patient location, and downtime_entry with the original time when entering a paper record from a downtime
   output: the encounter
   errors:
   - ENCOUNTER_INVALID_PATIENT

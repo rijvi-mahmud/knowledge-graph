@@ -753,9 +753,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Terminology (`healthcare/terminology` 0.1.3, healthcare level, and `healthcare/ehr/terminology` 0.1.3, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.2 and `healthcare/ehr/clinical-documentation` 0.4.3; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.2, EHR-only), Encounters (`healthcare/encounter` 0.1.6 and `healthcare/ehr/encounter` 0.13.6), Patients (`healthcare/patient` 0.12.3, which has no core page by the
+  drafts: Terminology (`healthcare/terminology` 0.1.4, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.2 and `healthcare/ehr/clinical-documentation` 0.4.3; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.3, EHR-only), Encounters (`healthcare/encounter` 0.1.7 and `healthcare/ehr/encounter` 0.13.7), Patients (`healthcare/patient` 0.12.3, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.4.3) and Appointments
-  (`healthcare/appointment` 0.11.2, `healthcare/ehr/appointment` 0.11.2; `core/appointment` 0.12.4). All
+  (`healthcare/appointment` 0.11.3, `healthcare/ehr/appointment` 0.11.3; `core/appointment` 0.12.4). All
   support the US and EU through the `jurisdiction` setting. Next: Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

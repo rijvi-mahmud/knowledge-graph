@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.11.2
+version: 0.11.3
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -219,6 +219,11 @@ dataModel:
   required: false
   description: 'When the patient completed pre-registration for this appointment: details confirmed and financial clearance reached.'
   constraints: set by the service
+- name: downtime_entry
+  type: boolean
+  required: false
+  description: Set when the appointment, or its check-in, was recorded on paper during an EHR downtime and entered afterwards.
+  constraints: set when staff enter a record made on paper during a downtime, with its original times; never changed afterwards
 businessRules:
 - id: BR-H1
   text: Every appointment has at least one participant with the role patient, and at least one with the role practitioner.
@@ -372,6 +377,9 @@ businessRules:
 - id: BR-H48
   text: When Encounters merges a duplicate encounter into another, appointments linked to the duplicate are linked to the remaining one. When Encounters moves an encounter to another patient, appointments linked to it are flagged needs_review with review_reason encounter_moved.
   rationale: HL7 merges (A42) and moves (A45) visits. A link to a retired encounter loses the visit; an appointment whose encounter now belongs to someone else was probably booked for the wrong patient too, which only a person can decide.
+- id: BR-H49
+  text: During an EHR downtime, each department's schedule stays readable from a read-only copy refreshed at least hourly. Bookings, check-ins and cancellations made on paper are entered afterwards with their original times and downtime_entry set. Two paper bookings for the same participant or room at the same time are both kept and flagged needs_review for a person, rather than one being refused.
+  rationale: The SAFER Contingency Planning guide expects a read-only backup updated at least hourly and paper records entered and reconciled after recovery (REF-H40). Refusing a paper booking that already happened would hide care that took place.
 validations:
 - field: participants
   rule: at least one participant with the role patient and one with the role practitioner
@@ -866,6 +874,12 @@ edgeCases:
   covers:
   - BR-H47
   - AC-H64
+- id: EC-H46
+  situation: The EHR is down for four hours on a clinic morning.
+  behaviour: Staff work from the read-only schedule and paper; afterwards each booking, check-in and cancellation is entered with its original time, and clashes are flagged for review.
+  covers:
+  - BR-H49
+  - AC-H66
 functionalRequirements:
 - id: FR-H1
   text: The service must let the front desk check a patient in, recording when and which identifiers were verified.
@@ -1436,6 +1450,12 @@ acceptanceCriteria:
   then: the first is linked to the remaining encounter and appointment.encounter_linked is emitted; the second is flagged needs_review with encounter_moved
   verifies:
   - BR-H48
+- id: AC-H66
+  given: a four-hour EHR downtime during which two paper bookings were made for one practitioner at 10:00
+  when: they are entered after recovery
+  then: both are saved with their original times and downtime_entry set, and both are flagged needs_review
+  verifies:
+  - BR-H49
 operations:
 - name: Book an appointment
   actor: Requester
@@ -1443,7 +1463,7 @@ operations:
   method: POST
   path: /appointments
   success: 201
-  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient or virtual), department, and optional room, equipment, referral, orders and previous appointment
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient or virtual), department, and optional room, equipment, referral, orders and previous appointment, and downtime_entry with the original time when entering a paper record from a downtime
   output: the appointment, pending or booked
   errors:
   - APPOINTMENT_INVALID_TIME_RANGE
@@ -1496,7 +1516,7 @@ operations:
   method: POST
   path: /appointments/{id}/check-in
   success: 200
-  input: appointment id, revision, the identifiers verified
+  input: appointment id, revision, the identifiers verified, and downtime_entry with the original time when entering a paper record from a downtime
   output: the checked-in appointment
   errors:
   - APPOINTMENT_NOT_FOUND
@@ -1897,6 +1917,10 @@ personalData:
   category: personal (financial)
   purpose: Checking that payment is arranged before the visit
   retention: the Patients module's record retention for the patient
+- field: downtime_entry
+  category: health data
+  purpose: Showing an entry was made after a downtime
+  retention: the Patients module's record retention for the patient
 risks:
 - id: RISK-H1
   risk: A reminder reveals a sensitive condition to someone else.
@@ -2066,7 +2090,16 @@ references:
 - id: REF-H39
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
+- id: REF-H40
+  title: ONC, SAFER Guides (2025), Contingency Planning
+  url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
+  note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
 changelog:
+- version: 0.11.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H49: schedules during an EHR downtime, and entering paper bookings afterwards (SAFER Contingency Planning).'
 - version: 0.11.2
   date: '2026-10-09'
   breaking: false
@@ -2614,6 +2647,9 @@ tables:
   - name: pre_registered_at
     type: timestamptz
     nullable: true
+  - name: downtime_entry
+    type: boolean
+    default: '''false'''
   indexes:
   - name: appointment_hospital_encounter
     definition: CREATE INDEX ON appointment_hospital (encounter_id) WHERE encounter_id IS NOT NULL

@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.8.2
+version: 0.8.3
 status: draft
 industry: healthcare
 domain: ehr
@@ -254,6 +254,11 @@ dataModel:
   required: false
   description: The stay this duplicate was merged into (BR-E42).
   constraints: set by the service; set only on a cancelled stay
+- name: downtime_entry
+  type: boolean
+  required: false
+  description: Set when the admission, transfer or discharge was recorded on paper during an EHR downtime and entered afterwards.
+  constraints: set when staff enter a record made on paper during a downtime, with its original times; never changed afterwards
 relationships:
 - type: belongs_to
   target: patient
@@ -401,6 +406,13 @@ businessRules:
 - id: BR-E43
   text: A pending admission not admitted by expected_admission_at plus pending_admission_grace is listed as overdue, and stay.review_needed is emitted with reason admission_overdue. It is never cancelled automatically.
   rationale: An elective patient who doesn't arrive leaves a pending stay, and possibly a reserved bed, that nobody releases. A person decides, because the patient may only be late.
+- id: BR-E44
+  text: During an EHR downtime, the bed board stays readable from a read-only copy refreshed at least hourly. Admissions, transfers and discharges recorded on paper are entered afterwards in the order they happened, with their original times and downtime_entry set, so bed history and the census are rebuilt correctly. Two patients recorded in one bed at the same time are both kept and listed for a bed manager.
+  rationale: The SAFER guide expects a read-only backup updated at least hourly and paper records reconciled after recovery (REF-E19). Entering movements out of order would corrupt bed history and every census counted from it.
+- id: BR-E45
+  text: In the United States, at discharge Care management is given the number of consecutive calendar days the patient was an inpatient, not counting the day of discharge. Days under observation are not inpatient days.
+  rationale: Medicare covers a skilled nursing facility stay only after at least 3 consecutive calendar days of medically necessary inpatient care, not counting the discharge day (42 CFR 409.30(a)); observation is outpatient care, so a patient who spent nights under observation may not qualify.
+  jurisdiction: us
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -696,6 +708,19 @@ edgeCases:
   covers:
   - DG-E2
   - AC-E53
+- id: EC-E30
+  situation: Paper records from a downtime show two patients in bed 12 overnight.
+  behaviour: Both movements are entered with their times; the clash is listed for a bed manager to resolve against the paper records.
+  covers:
+  - BR-E44
+  - AC-E58
+- id: EC-E31
+  situation: A Medicare patient spends two nights under observation, is admitted, and is discharged the next day to a skilled nursing facility.
+  behaviour: Only one inpatient day counts, so Care management knows the 3-day qualifying stay isn't met.
+  covers:
+  - BR-E45
+  - AC-E59
+  jurisdiction: us
 functionalRequirements:
 - id: FR-E1
   text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
@@ -1218,6 +1243,19 @@ acceptanceCriteria:
   verifies:
   - BR-E43
   - FR-E17
+- id: AC-E58
+  given: a downtime during which a transfer at 10:00 and a discharge at 11:00 were recorded on paper
+  when: they are entered after recovery in reverse order
+  then: they are applied in time order with downtime_entry set, and the census at 10:30 counts the patient in the new bed
+  verifies:
+  - BR-E44
+- id: AC-E59
+  given: a patient under observation for two nights, then admitted for one night
+  when: they are discharged
+  then: Care management is given one inpatient day
+  verifies:
+  - BR-E45
+  jurisdiction: us
 operations:
 - name: Request an admission
   actor: Clinician
@@ -1242,7 +1280,7 @@ operations:
   method: POST
   path: /stays/{id}/admit
   success: 200
-  input: stay id, revision, order, bed or waiting location
+  input: stay id, revision, order, bed or waiting location, and downtime_entry with the original time when entering a paper record from a downtime
   output: the admitted stay
   errors:
   - STAY_NOT_FOUND
@@ -1300,7 +1338,7 @@ operations:
   method: POST
   path: /stays/{id}/transfer
   success: 200
-  input: stay id, revision, perform or cancel
+  input: stay id, revision, perform or cancel, and downtime_entry with the original time when entering a paper record from a downtime
   output: the stay
   errors:
   - STAY_NOT_FOUND
@@ -1452,7 +1490,7 @@ operations:
   method: POST
   path: /stays/{id}/discharge
   success: 200
-  input: stay id, revision, order unless against advice or death, time, disposition, destination
+  input: stay id, revision, order unless against advice or death, time, disposition, destination, and downtime_entry with the original time when entering a paper record from a downtime
   output: the discharged stay
   errors:
   - STAY_NOT_FOUND
@@ -1961,7 +1999,7 @@ personalData:
   category: health data; can reveal an infection
   purpose: Safe bed placement
   retention: Until discharge
-- field: id, revision, merged_into, access log
+- field: id, revision, merged_into, access log, downtime_entry
   category: record metadata
   purpose: Integrity and access review
   retention: record_retention, and access_log_retention for the log
@@ -2099,6 +2137,7 @@ dependencies:
   - 'Gives: stay.admitted, stay.discharge_expected and stay.discharged with destination'
   - 'Receives: an expected discharge time'
   - Discharge planning (42 CFR 482.43) is Care management's concern
+  - 'Gives: at discharge in the United States, the number of consecutive inpatient days, for skilled nursing facility eligibility'
 - service: notification-service
   direction: downstream
   reason: tells staff about due notices and ready beds
@@ -2220,6 +2259,14 @@ references:
 - id: REF-E18
   title: HL7 v2 Table 0003, event types (A42, A44, A45)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
+- id: REF-E19
+  title: ONC, SAFER Guides (2025), Contingency Planning
+  url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
+  note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
+- id: REF-E20
+  title: 42 CFR 409.30, Basic requirements for SNF coverage
+  url: https://www.ecfr.gov/current/title-42/section-409.30
+  note: At least 3 consecutive inpatient calendar days, not counting the discharge day.
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
@@ -2506,7 +2553,22 @@ compliance:
   status: other module
   covered_by: []
   jurisdiction: us
+- id: CMP-E33
+  regulation: Medicare Conditions of Payment
+  provision: 42 CFR 409.30(a)
+  obligation: A skilled nursing facility stay is covered only after 3 consecutive inpatient days.
+  how: Inpatient days are counted at discharge and given to Care management; deciding coverage is Billing's and Care management's.
+  status: other module
+  covered_by:
+  - BR-E45
+  jurisdiction: us
 changelog:
+- version: 0.8.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-E44: the bed board and movements during an EHR downtime (SAFER).'
+  - 'BR-E45: US inpatient days for skilled nursing facility eligibility (42 CFR 409.30).'
 - version: 0.8.2
   date: '2026-10-09'
   breaking: false
@@ -2652,6 +2714,9 @@ tables:
     type: uuid
     nullable: true
     note: Set only on a duplicate stay, cancelled when merged (BR-E42)
+  - name: downtime_entry
+    type: boolean
+    default: '''false'''
   indexes:
   - name: one_open_stay
     definition: UNIQUE (patient_id) WHERE status IN ('pending_admission', 'admitted')

@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments: appointments for patients in an inpatient or observation stay, which belong to the stay, built on the clinical appointment rules.'
 module: appointment
-version: 0.11.2
+version: 0.11.3
 status: draft
 industry: healthcare
 domain: ehr
@@ -149,7 +149,7 @@ operations:
   method: POST
   path: /appointments
   success: 201
-  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient, virtual, observation or inpatient), department, and optional room, equipment, referral, orders and previous appointment
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient, virtual, observation or inpatient), department, and optional room, equipment, referral, orders and previous appointment, and downtime_entry with the original time when entering a paper record from a downtime
   output: the appointment, pending or booked
   errors:
   - APPOINTMENT_INVALID_TIME_RANGE
@@ -267,6 +267,11 @@ references:
   title: Medicare, inpatient or outpatient hospital status
   url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
 changelog:
+- version: 0.11.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Inherits Clinical appointments 0.11.3.
 - version: 0.11.2
   date: '2026-10-09'
   breaking: false

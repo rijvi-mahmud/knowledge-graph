@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.1.3
+version: 0.1.4
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -166,8 +166,8 @@ dataModel:
 - name: concept.status
   type: enum
   required: true
-  description: Active or inactive in a release.
-  constraints: 'active | inactive; codes: FHIR concept-properties status'
+  description: The concept's status in a release.
+  constraints: 'active | trial | discouraged | inactive; codes: FHIR concept-properties status; LOINC ACTIVE, TRIAL, DISCOURAGED, DEPRECATED (DEPRECATED maps to inactive)'
 - name: concept.valid_for_reporting
   type: boolean
   required: false
@@ -361,6 +361,9 @@ businessRules:
 - id: BR-H32
   text: Validation, lookup and expansion keep working from the active releases when release sources or downloads are unreachable; only loading needs them.
   rationale: Every module depends on validation. A publisher's site being down must never stop care being recorded.
+- id: BR-H33
+  text: A trial code is valid with a warning that it may change. A discouraged code is valid, so existing records and mappings keep working, but validation warns against new use and returns the replacement its publisher names. A deprecated code is inactive.
+  rationale: 'LOINC marks terms ACTIVE, TRIAL, DISCOURAGED or DEPRECATED: trial terms may change, discouraged terms are not recommended for new mappings though existing ones may remain valid, and deprecated terms should not be used, with MAP_TO naming a replacement.'
 validations:
 - field: code_system.uri
   rule: An absolute URI; local systems start with local_namespace; not already registered
@@ -582,6 +585,12 @@ edgeCases:
   covers:
   - BR-H25
   - BR-H27
+- id: EC-H22
+  situation: A laboratory interface still sends a LOINC term that the new release marks DISCOURAGED.
+  behaviour: It is accepted, so results keep flowing, and the warning with the replacement is shown to the Terminology manager to update the mapping.
+  covers:
+  - BR-H33
+  - AC-H31
 functionalRequirements:
 - id: FR-H1
   text: The service must validate a code on a date against the release in effect, saying whether it exists, is active and is valid for reporting.
@@ -890,6 +899,12 @@ acceptanceCriteria:
   then: no concept of the release is active and the previous release still answers
   verifies:
   - BR-H5
+- id: AC-H31
+  given: a LOINC release with a trial, a discouraged and a deprecated term
+  when: each is validated
+  then: the trial term is valid with a warning; the discouraged term is valid with a warning and its MAP_TO replacement; the deprecated term is inactive with its replacement
+  verifies:
+  - BR-H33
 operations:
 - name: Validate a code
   actor: System
@@ -1516,7 +1531,16 @@ references:
   title: Regulation (EU) 2016/679, GDPR
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Article 5(1)(c), data minimisation.
+- id: REF-H22
+  title: LOINC, Classification of LOINC term status
+  url: https://loinc.org/kb/users-guide/editorial-policies-and-procedures/classification-of-loinc-term-status
+  note: ACTIVE, TRIAL, DISCOURAGED and DEPRECATED.
 changelog:
+- version: 0.1.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H33: LOINC trial and discouraged terms are valid with warnings; deprecated terms are inactive.'
 - version: 0.1.3
   date: '2026-10-09'
   breaking: false

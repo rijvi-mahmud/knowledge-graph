@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.6
+version: 0.1.7
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.7
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H49: encounters for care during an EHR downtime keep the real times of care (SAFER Contingency Planning).'
 - version: 0.1.6
   date: '2026-10-09'
   breaking: false
@@ -314,6 +319,11 @@ dataModel:
   required: false
   description: The encounter this duplicate was merged into (BR-H48).
   constraints: set by the service; set only with status entered_in_error
+- name: downtime_entry
+  type: boolean
+  required: false
+  description: Set when the encounter was recorded on paper during an EHR downtime and entered afterwards.
+  constraints: set when staff enter a record made on paper during a downtime, with its original times; never changed afterwards
 relationships:
 - type: belongs_to
   target: patient
@@ -435,6 +445,9 @@ businessRules:
 - id: BR-H48
   text: Two encounters of the same patient for one visit are merged by an HIM specialist, with a reason. The duplicate's appointments, locations, participants and diagnoses join the remaining encounter; the duplicate becomes entered in error with status_reason merged and merged_into set, and its visit number stays on the remaining encounter as an old identifier. encounter.merged tells clinical modules to move their entries. Encounters that belong to stays merge only when their stays merge.
   rationale: Double check-ins and patient merges create two encounters for one visit. HL7 merges visits (A42). Keeping the old visit number lets laboratory and billing messages sent with it still find the visit (BR-H34).
+- id: BR-H49
+  text: An encounter for care given during an EHR downtime is opened afterwards with the times the care actually happened and downtime_entry set. Check-ins and arrivals replayed from other modules keep their original times, and the record due date counts from the real end of care.
+  rationale: Paper records must be entered and reconciled after recovery (REF-H22); using the time of entry would misstate when care happened and shorten the time to complete the record.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -732,6 +745,12 @@ edgeCases:
   behaviour: It ignores revision 6, because each event carries the revision and a lower one is older.
   covers:
   - DG-H2
+- id: EC-H44
+  situation: Patients are seen during a ransomware outage and the EHR returns two days later.
+  behaviour: Each encounter is entered with the real times of care and downtime_entry set; Appointments replays its check-ins with their original times.
+  covers:
+  - BR-H49
+  - AC-H72
 functionalRequirements:
 - id: FR-H1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -1182,6 +1201,13 @@ acceptanceCriteria:
   - BR-H1
   - BR-H6
   variant: ambulatory
+- id: AC-H72
+  given: a visit from 09:10 to 09:40 during a downtime
+  when: it is entered at 14:00
+  then: actual_start is 09:10, actual_end 09:40, downtime_entry is set, and record_due_at counts from 09:40
+  verifies:
+  - BR-H49
+  variant: ambulatory
 operations:
 - name: Open an encounter
   actor: System
@@ -1189,7 +1215,7 @@ operations:
   method: POST
   path: /encounters
   success: 201
-  input: patient, class, department, and optional appointments, orders, episodes, part_of, planned start, type, priority, reasons, location, virtual service and patient location
+  input: patient, class, department, and optional appointments, orders, episodes, part_of, planned start, type, priority, reasons, location, virtual service and patient location, and downtime_entry with the original time when entering a paper record from a downtime
   output: the encounter
   errors:
   - ENCOUNTER_INVALID_PATIENT
@@ -1836,7 +1862,7 @@ personalData:
   category: personal
   purpose: Joining and licensing a virtual encounter
   retention: record_retention of the Patients module
-- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, status_reason, merged_into
+- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, status_reason, merged_into, downtime_entry
   category: record metadata about the patient's care
   purpose: Record completion and integrity
   retention: record_retention of the Patients module
@@ -2140,6 +2166,10 @@ references:
 - id: REF-H21
   title: HL7 v2 Table 0003, event types (A42 merge visit, A45 move visit)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
+- id: REF-H22
+  title: ONC, SAFER Guides (2025), Contingency Planning
+  url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
+  note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
 acronyms:
 - term: AMB, EMER, IMP, OBSENC, VR
   definition: 'HL7 encounter classes: ambulatory, emergency, inpatient, observation, virtual'
@@ -2233,6 +2263,9 @@ tables:
     type: uuid
     nullable: true
     note: Set only when status is entered_in_error (BR-H48)
+  - name: downtime_entry
+    type: boolean
+    default: '''false'''
   indexes:
   - name: encounters_by_patient
     definition: (patient_id, lower(actual_period))
