@@ -1281,20 +1281,20 @@ acceptanceCriteria:
 - id: AC-H1
   given: an existing record for Ana Silva, born 1990-04-02
   when: a registrar registers Ana Silva, born 1990-04-02, without a reason
-  then: the request fails with PATIENT_POSSIBLE_DUPLICATE and returns the existing record; with a reason it succeeds
+  then: the request fails with PATIENT_POSSIBLE_DUPLICATE and HTTP 409 and returns the existing record; with a reason it succeeds
   verifies:
   - BR-H1
   - FR-H1
 - id: AC-H2
   given: a record holding MRN 100234
   when: another record is given MRN 100234
-  then: the request fails with PATIENT_DUPLICATE_IDENTIFIER
+  then: the request fails with PATIENT_DUPLICATE_IDENTIFIER and HTTP 409
   verifies:
   - BR-H3
 - id: AC-H3
   given: a registration with only an estimated birth year and no address
   when: it is submitted
-  then: the record is created with birth_date_estimated true; a registration with no name fails with PATIENT_INVALID_NAME
+  then: the record is created with birth_date_estimated true; a registration with no name fails with PATIENT_INVALID_NAME and HTTP 422
   verifies:
   - BR-H4
 - id: AC-H4
@@ -1308,7 +1308,7 @@ acceptanceCriteria:
 - id: AC-H5
   given: collected_fields without gender_identity
   when: a registrar submits a gender identity, then a patient declines race and ethnicity where it is collected
-  then: the first fails with PATIENT_FIELD_NOT_COLLECTED; the second is recorded as declined
+  then: the first fails with PATIENT_FIELD_NOT_COLLECTED and HTTP 422; the second is recorded as declined
   verifies:
   - BR-H6
 - id: AC-H6
@@ -1329,7 +1329,7 @@ acceptanceCriteria:
 - id: AC-H8
   given: A merged into B, then B merged into C
   when: A is read, then a change is sent to A
-  then: A keeps its id and the read returns replaced_by C; the change fails with PATIENT_MERGED
+  then: A keeps its id and the read returns replaced_by C; the change fails with PATIENT_MERGED and HTTP 409
   verifies:
   - BR-H9
   - BR-H2
@@ -1343,13 +1343,13 @@ acceptanceCriteria:
 - id: AC-H10
   given: a record with last_care_at set
   when: it is marked entered in error
-  then: the request fails with PATIENT_HAS_CARE; a record with no care becomes entered_in_error
+  then: the request fails with PATIENT_HAS_CARE and HTTP 409; a record with no care becomes entered_in_error
   verifies:
   - BR-H11
 - id: AC-H11
   given: an active patient
   when: a death is recorded with only a year and death_source family, then retracted with a reason
-  then: the record stays active, patient.deceased then patient.death_retracted are emitted, and a death before birth_date fails with PATIENT_INVALID_DEATH_DATE
+  then: the record stays active, patient.deceased then patient.death_retracted are emitted, and a death before birth_date fails with PATIENT_INVALID_DEATH_DATE and HTTP 422
   verifies:
   - BR-H12
   - FR-H6
@@ -1370,7 +1370,7 @@ acceptanceCriteria:
 - id: AC-H14
   given: a very restricted record
   when: a clinician opens it without a reason, then with one
-  then: the first fails with PATIENT_REASON_REQUIRED; the second succeeds, is logged with the reason, and emits patient.restricted_access
+  then: the first fails with PATIENT_REASON_REQUIRED and HTTP 403; the second succeeds, is logged with the reason, and emits patient.restricted_access
   verifies:
   - BR-H20
   - BR-H19
@@ -1378,13 +1378,13 @@ acceptanceCriteria:
 - id: AC-H15
   given: a record whose last_care_at is within record_retention
   when: the patient asks for erasure
-  then: the request fails with PATIENT_RETENTION_REQUIRED; after retention, identifying fields are removed and the id remains
+  then: the request fails with PATIENT_RETENTION_REQUIRED and HTTP 409; after retention, identifying fields are removed and the id remains
   verifies:
   - BR-H18
 - id: AC-H16
   given: a record at revision 3
   when: two updates send revision 3
-  then: one succeeds; the other fails with PATIENT_REVISION_CONFLICT
+  then: one succeeds; the other fails with PATIENT_REVISION_CONFLICT and HTTP 409
   verifies:
   - BR-H21
 - id: AC-H17
@@ -1433,7 +1433,7 @@ acceptanceCriteria:
 - id: AC-H23
   given: Identity unreachable
   when: any request arrives
-  then: it fails with PATIENT_DEPENDENCY_UNAVAILABLE
+  then: it fails with PATIENT_DEPENDENCY_UNAVAILABLE and HTTP 503
   verifies:
   - FR-H14
 - id: AC-H24
@@ -1483,7 +1483,7 @@ acceptanceCriteria:
 - id: AC-H31
   given: names "Sukarno" (given only), "O'Brien-Smith", "van der Waals", "José" and "X"
   when: each is registered
-  then: all are accepted and stored exactly as given; "R2D2" as an official name fails with PATIENT_INVALID_NAME
+  then: all are accepted and stored exactly as given; "R2D2" as an official name fails with PATIENT_INVALID_NAME and HTTP 422
   verifies:
   - BR-H26
   - FR-H17
@@ -1498,7 +1498,7 @@ acceptanceCriteria:
 - id: AC-H33
   given: a phone 555-1234, an email with a 65-character local part, a US address with state "Calif", and an SSN starting 666
   when: they are submitted
-  then: they fail with PATIENT_INVALID_TELECOM, PATIENT_INVALID_TELECOM, PATIENT_INVALID_ADDRESS and PATIENT_INVALID_IDENTIFIER, reported together
+  then: they fail with PATIENT_INVALID_TELECOM and HTTP 422, PATIENT_INVALID_TELECOM and HTTP 422, PATIENT_INVALID_ADDRESS and HTTP 422 and PATIENT_INVALID_IDENTIFIER and HTTP 422, reported together
   verifies:
   - FR-H17
 - id: AC-H34
@@ -1511,7 +1511,7 @@ acceptanceCriteria:
 - id: AC-H35
   given: a record whose retention ended, one with a legal hold, and one without
   when: the retention job runs
-  then: the one without a hold is anonymised with its id kept; the held one is unchanged, and erasure requests for it fail with PATIENT_LEGAL_HOLD
+  then: the one without a hold is anonymised with its id kept; the held one is unchanged, and erasure requests for it fail with PATIENT_LEGAL_HOLD and HTTP 409
   verifies:
   - BR-H24
   - BR-H18
@@ -1545,7 +1545,7 @@ acceptanceCriteria:
 - id: AC-H40
   given: a patient signed in to the portal
   when: they change their phone number, then their birth date
-  then: the phone number changes; the birth date fails with PATIENT_SELF_SERVICE_NOT_ALLOWED
+  then: the phone number changes; the birth date fails with PATIENT_SELF_SERVICE_NOT_ALLOWED and HTTP 403
   verifies:
   - BR-H36
   - FR-H20
@@ -1564,7 +1564,7 @@ acceptanceCriteria:
 - id: AC-H43
   given: collect_photo on, and a patient who agrees
   when: a photo is taken, and then the record is read
-  then: the photo is returned with the record; with collect_photo off, uploading fails with PATIENT_FIELD_NOT_COLLECTED
+  then: the photo is returned with the record; with collect_photo off, uploading fails with PATIENT_FIELD_NOT_COLLECTED and HTTP 422
   verifies:
   - BR-H29
   - FR-H21
@@ -1579,7 +1579,7 @@ acceptanceCriteria:
 - id: AC-H45
   given: source and target records with different birth dates
   when: a merge is sent without choosing one, then with one chosen
-  then: the first fails with PATIENT_MERGE_CONFLICT_UNRESOLVED; the second succeeds and the other birth date is stored with the merge record
+  then: the first fails with PATIENT_MERGE_CONFLICT_UNRESOLVED and HTTP 422; the second succeeds and the other birth date is stored with the merge record
   verifies:
   - BR-H38
   - FR-H22
@@ -1592,27 +1592,27 @@ acceptanceCriteria:
 - id: AC-H47
   given: search_result_limit 50 and search_alert_threshold 200 per hour
   when: a search matches 80 records, and a user runs 201 searches in an hour
-  then: the first fails with PATIENT_SEARCH_TOO_BROAD; the user is reported with patient.search_volume_alert; every search is in the log
+  then: the first fails with PATIENT_SEARCH_TOO_BROAD and HTTP 422; the user is reported with patient.search_volume_alert; every search is in the log
   verifies:
   - BR-H40
   - FR-H23
 - id: AC-H48
   given: a name recorded in Arabic and in Latin script as the same name
   when: a search uses the Latin spelling
-  then: the record is found, and an invalid language tag on a name fails with PATIENT_INVALID_NAME
+  then: the record is found, and an invalid language tag on a name fails with PATIENT_INVALID_NAME and HTTP 422
   verifies:
   - BR-H41
   - FR-H24
 - id: AC-H49
   given: a patient with administrative gender recorded
   when: a sex assigned at birth and a legal sex for one jurisdiction are added
-  then: both are stored with their kinds, administrative gender is unchanged, and a legal sex without a jurisdiction fails with PATIENT_INVALID_CODE
+  then: both are stored with their kinds, administrative gender is unchanged, and a legal sex without a jurisdiction fails with PATIENT_INVALID_CODE and HTTP 422
   verifies:
   - BR-H42
 - id: AC-H50
   given: a deployment with local marital status codes
   when: a record is exported
-  then: marital status is sent as an HL7 v3 MaritalStatus code; a local code with no mapping fails the export with PATIENT_INVALID_CODE
+  then: marital status is sent as an HL7 v3 MaritalStatus code; a local code with no mapping fails the export with PATIENT_INVALID_CODE and HTTP 422
   verifies:
   - CON-H4
 - id: AC-H51
@@ -1631,27 +1631,27 @@ acceptanceCriteria:
 - id: AC-H53
   given: a patient with a proxy
   when: their death is recorded, and an executor is added with evidence
-  then: the proxy has ended and the executor is an estate representative; adding a parent representative now fails with PATIENT_INVALID_REPRESENTATIVE
+  then: the proxy has ended and the executor is an estate representative; adding a parent representative now fails with PATIENT_INVALID_REPRESENTATIVE and HTTP 422
   verifies:
   - BR-H45
 - id: AC-H54
   given: acp_acceptance required and an address marked as a confidentiality program address without a participant number
   when: it is saved, then saved with one
-  then: the first fails with PATIENT_INVALID_ADDRESS; the second is stored and excluded from matching
+  then: the first fails with PATIENT_INVALID_ADDRESS and HTTP 422; the second is stored and excluded from matching
   verifies:
   - BR-H46
   jurisdiction: us
 - id: AC-H55
   given: any patient
   when: an update sends last_care_at
-  then: it fails with PATIENT_READ_ONLY_FIELD
+  then: it fails with PATIENT_READ_ONLY_FIELD and HTTP 422
   verifies:
   - BR-H47
   - FR-H26
 - id: AC-H56
   given: a record with identity_evidence "passport scan", which isn't an allowed value
   when: it is saved
-  then: it fails with PATIENT_INVALID_CODE
+  then: it fails with PATIENT_INVALID_CODE and HTTP 422
   verifies:
   - BR-H26
 - id: AC-H57
@@ -1716,7 +1716,7 @@ acceptanceCriteria:
 - id: AC-H66
   given: a patient with a recorded death
   when: a second death is recorded, and a death is retracted for another patient with none
-  then: the first fails with PATIENT_ALREADY_DECEASED and the second with PATIENT_NOT_DECEASED, both HTTP 409
+  then: the first fails with PATIENT_ALREADY_DECEASED and HTTP 409 and the second with PATIENT_NOT_DECEASED, both HTTP 409
   verifies:
   - BR-H12
   - FR-H6
@@ -2819,6 +2819,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted, patient.entered_in_error, patient.inactivated, patient.reactivated and patient.legal_hold_changed'
+  - 'Gives: patient.updated, so modules showing patient details refresh them'
   - 'Gives: the patient banner details: names, birth date, identifiers, photo, deceased and similar_name_alert'
   - Moving entries recorded on the wrong patient is each module's concern
 - service: notification-service

@@ -1262,6 +1262,14 @@ accessMatrix:
     Coder: any
     System: none
   permission: terminology.manage
+- action: See licensed content, such as CPT descriptions
+  roles:
+    Terminology manager: any
+    Clinician: any
+    Coder: any
+    System: any
+  permission: terminology.licensed
+  note: 'any: only users and systems the hospital''s licence covers hold this permission (BR-H21).'
 personalData:
 - field: release.loaded_by
   category: personal data of staff

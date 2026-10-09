@@ -1041,7 +1041,7 @@ acceptanceCriteria:
 - id: AC-2
   given: an active appointment from 09:00 to 10:00 for a participant
   when: another booking from 09:30 to 10:30 is requested for the same participant
-  then: the request fails with APPOINTMENT_SLOT_TAKEN and nothing is persisted
+  then: the request fails with APPOINTMENT_SLOT_TAKEN and HTTP 409 and nothing is persisted
   verifies:
   - BR-4
   - FR-2
@@ -1054,14 +1054,14 @@ acceptanceCriteria:
 - id: AC-4
   given: two concurrent requests for overlapping slots for the same participant
   when: both are processed
-  then: exactly one succeeds and the other fails with APPOINTMENT_SLOT_TAKEN
+  then: exactly one succeeds and the other fails with APPOINTMENT_SLOT_TAKEN and HTTP 409
   verifies:
   - FR-2
   - CON-2
 - id: AC-5
   given: an appointment in status completed
   when: a cancel is attempted
-  then: the request fails with APPOINTMENT_TERMINAL_STATE and the record is unchanged
+  then: the request fails with APPOINTMENT_TERMINAL_STATE and HTTP 409 and the record is unchanged
   verifies:
   - BR-5
   - FR-3
@@ -1083,7 +1083,7 @@ acceptanceCriteria:
 - id: AC-8
   given: a booked appointment at revision 3
   when: a reschedule is submitted with revision 2
-  then: the request fails with APPOINTMENT_REVISION_CONFLICT and the appointment is unchanged
+  then: the request fails with APPOINTMENT_REVISION_CONFLICT and HTTP 409 and the appointment is unchanged
   verifies:
   - FR-9
 - id: AC-9
@@ -1095,7 +1095,7 @@ acceptanceCriteria:
 - id: AC-10
   given: a booked appointment whose start_at is in the future
   when: a Scheduler records a no-show
-  then: the request fails with APPOINTMENT_NOT_YET_STARTED
+  then: the request fails with APPOINTMENT_NOT_YET_STARTED and HTTP 409
   verifies:
   - BR-8
 - id: AC-11
@@ -1127,7 +1127,7 @@ acceptanceCriteria:
 - id: AC-15
   given: a booking request for 01:30 America/New_York on 1 November 2026, with no UTC offset
   when: it is submitted
-  then: the request fails with APPOINTMENT_AMBIGUOUS_LOCAL_TIME, because 01:30 occurs twice that night
+  then: the request fails with APPOINTMENT_AMBIGUOUS_LOCAL_TIME and HTTP 422, because 01:30 occurs twice that night
   verifies:
   - BR-10
 - id: AC-16
@@ -1140,13 +1140,13 @@ acceptanceCriteria:
 - id: AC-17
   given: a booking request for 02:30 America/New_York on 8 March 2026
   when: it is submitted
-  then: the request fails with APPOINTMENT_INVALID_LOCAL_TIME, because clocks skip from 02:00 to 03:00 that night
+  then: the request fails with APPOINTMENT_INVALID_LOCAL_TIME and HTTP 422, because clocks skip from 02:00 to 03:00 that night
   verifies:
   - BR-10
 - id: AC-18
   given: Calendar can't be reached
   when: a booking is requested
-  then: the request fails with APPOINTMENT_AVAILABILITY_UNAVAILABLE and nothing is persisted
+  then: the request fails with APPOINTMENT_AVAILABILITY_UNAVAILABLE and HTTP 503 and nothing is persisted
   verifies:
   - FR-13
 - id: AC-19
@@ -1221,14 +1221,14 @@ acceptanceCriteria:
 - id: AC-30
   given: a booked appointment at revision 4
   when: it is cancelled with revision 3
-  then: the request fails with APPOINTMENT_REVISION_CONFLICT and the appointment is unchanged
+  then: the request fails with APPOINTMENT_REVISION_CONFLICT and HTTP 409 and the appointment is unchanged
   verifies:
   - BR-14
   - FR-9
 - id: AC-31
   given: a group appointment with capacity 3 and 3 participants
   when: another participant is added
-  then: the request fails with APPOINTMENT_FULL
+  then: the request fails with APPOINTMENT_FULL and HTTP 409
   verifies:
   - BR-13
   - FR-17
@@ -1242,13 +1242,13 @@ acceptanceCriteria:
 - id: AC-33
   given: a booked appointment whose end has passed
   when: a reschedule or cancel is attempted
-  then: the request fails with APPOINTMENT_ENDED
+  then: the request fails with APPOINTMENT_ENDED and HTTP 409
   verifies:
   - BR-16
 - id: AC-34
   given: a 12-hour self_service_cutoff and an appointment starting in 2 hours
   when: a participant who is not a Scheduler cancels it
-  then: the request fails with APPOINTMENT_CUTOFF_PASSED, and a Scheduler can still cancel it
+  then: the request fails with APPOINTMENT_CUTOFF_PASSED and HTTP 403, and a Scheduler can still cancel it
   verifies:
   - BR-20
 - id: AC-35
@@ -1260,13 +1260,13 @@ acceptanceCriteria:
 - id: AC-36
   given: a participant with 3 active appointments in a window, one of which has already ended
   when: a Scheduler cancels in bulk for that window
-  then: two are cancelled, each with its own appointment.cancelled event, and the third is reported with APPOINTMENT_ENDED
+  then: two are cancelled, each with its own appointment.cancelled event, and the third is reported with APPOINTMENT_ENDED and HTTP 409
   verifies:
   - FR-19
 - id: AC-37
   given: a max_duration of 4 hours
   when: a 5-hour appointment is booked
-  then: the request fails with APPOINTMENT_INVALID_DURATION
+  then: the request fails with APPOINTMENT_INVALID_DURATION and HTTP 422
   verifies:
   - FR-1
 - id: AC-38
@@ -1300,7 +1300,7 @@ acceptanceCriteria:
 - id: AC-42
   given: a booked appointment with two participants
   when: one of them is removed
-  then: the request fails with APPOINTMENT_INVALID_PARTICIPANTS
+  then: the request fails with APPOINTMENT_INVALID_PARTICIPANTS and HTTP 422
   verifies:
   - BR-23
   - FR-17
@@ -1332,7 +1332,7 @@ acceptanceCriteria:
 - id: AC-47
   given: a group appointment with one host and two guests
   when: the host is removed
-  then: the request fails with APPOINTMENT_HOST_REQUIRED
+  then: the request fails with APPOINTMENT_HOST_REQUIRED and HTTP 409
   verifies:
   - BR-24
 - id: AC-48
@@ -1344,13 +1344,13 @@ acceptanceCriteria:
 - id: AC-49
   given: four appointments a participant has on Tuesdays, one of which would clash on Thursday
   when: a Scheduler reschedules them in bulk with a shift of +2 days
-  then: three move to Thursday, each with its own appointment.rescheduled event, and the fourth is reported with APPOINTMENT_SLOT_TAKEN and unchanged
+  then: three move to Thursday, each with its own appointment.rescheduled event, and the fourth is reported with APPOINTMENT_SLOT_TAKEN and HTTP 409 and unchanged
   verifies:
   - FR-24
 - id: AC-50
   given: pending_holds_slot off and a pending appointment
   when: another booking takes the same slot and then the pending one is confirmed
-  then: the other booking succeeds and the confirmation fails with APPOINTMENT_SLOT_TAKEN
+  then: the other booking succeeds and the confirmation fails with APPOINTMENT_SLOT_TAKEN and HTTP 409
   verifies:
   - BR-17
 - id: AC-51
@@ -1362,13 +1362,13 @@ acceptanceCriteria:
 - id: AC-52
   given: a booking whose start_time is after its end_time, and one that starts in the past
   when: each is sent
-  then: they fail with APPOINTMENT_INVALID_TIME_RANGE and APPOINTMENT_START_IN_PAST, both HTTP 422
+  then: they fail with APPOINTMENT_INVALID_TIME_RANGE and HTTP 422 and APPOINTMENT_START_IN_PAST, both HTTP 422
   verifies:
   - FR-1
 - id: AC-53
   given: a booking with time_zone "+02:00", and one with a participant locale "english"
   when: each is sent
-  then: they fail with APPOINTMENT_INVALID_TIME_ZONE and APPOINTMENT_INVALID_LOCALE, both HTTP 422
+  then: they fail with APPOINTMENT_INVALID_TIME_ZONE and HTTP 422 and APPOINTMENT_INVALID_LOCALE, both HTTP 422
   verifies:
   - CON-1
 - id: AC-54
@@ -1398,7 +1398,7 @@ acceptanceCriteria:
 - id: AC-58
   given: a booked appointment, and one recorded as completed
   when: the first is confirmed, and the second is corrected as a no-show
-  then: they fail with APPOINTMENT_NOT_PENDING and APPOINTMENT_NOT_A_NO_SHOW, both HTTP 409
+  then: they fail with APPOINTMENT_NOT_PENDING and HTTP 409 and APPOINTMENT_NOT_A_NO_SHOW, both HTTP 409
   verifies:
   - BR-17
 - id: AC-59
@@ -1416,13 +1416,13 @@ acceptanceCriteria:
 - id: AC-61
   given: a bulk cancel with both a participant window and a series, and a bulk reschedule with both a new time and a shift
   when: each is sent
-  then: they fail with APPOINTMENT_INVALID_BULK_FILTER and APPOINTMENT_INVALID_BULK_CHANGE, both HTTP 422
+  then: they fail with APPOINTMENT_INVALID_BULK_FILTER and HTTP 422 and APPOINTMENT_INVALID_BULK_CHANGE, both HTTP 422
   verifies:
   - FR-1
 - id: AC-62
   given: an appointment
   when: an update sends status completed, or notes longer than max_text_length, or a booking names a series that does not exist
-  then: they fail with APPOINTMENT_READ_ONLY_FIELD, APPOINTMENT_INVALID_TEXT and APPOINTMENT_INVALID_REFERENCE, all HTTP 422
+  then: they fail with APPOINTMENT_READ_ONLY_FIELD and HTTP 422, APPOINTMENT_INVALID_TEXT and HTTP 422 and APPOINTMENT_INVALID_REFERENCE, all HTTP 422
   verifies:
   - BR-25
 - id: AC-63

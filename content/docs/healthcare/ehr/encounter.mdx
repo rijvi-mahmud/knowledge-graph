@@ -539,7 +539,7 @@ acceptanceCriteria:
 - id: AC-E20
   given: an encounter
   when: actual_end before actual_start is sent, a location that does not exist is added, and a virtual encounter has no https URL
-  then: they fail with ENCOUNTER_INVALID_PERIOD, ENCOUNTER_INVALID_LOCATION and ENCOUNTER_INVALID_VIRTUAL, all HTTP 422
+  then: they fail with ENCOUNTER_INVALID_PERIOD and HTTP 422, ENCOUNTER_INVALID_LOCATION and HTTP 422 and ENCOUNTER_INVALID_VIRTUAL, all HTTP 422
   verifies:
   - BR-E12
   - BR-H15
@@ -594,7 +594,7 @@ acceptanceCriteria:
 - id: AC-E52
   given: two admitted patients named Sam Lee, one listed and one opted out, and a restricted patient
   when: a caller asks for each by name, and the restricted patient is set to listed
-  then: only the listed patient's location is returned, encounter.directory_changed is emitted on each change, and listing the restricted patient fails with ENCOUNTER_INVALID_CODE
+  then: only the listed patient's location is returned, encounter.directory_changed is emitted on each change, and listing the restricted patient fails with ENCOUNTER_INVALID_CODE and HTTP 422
   verifies:
   - BR-E38
 - id: AC-E58

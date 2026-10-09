@@ -401,20 +401,20 @@ acceptanceCriteria:
 - id: AC-E8
   given: a newborn registration naming a mother record that does not exist
   when: it is submitted
-  then: it fails with PATIENT_INVALID_MOTHER
+  then: it fails with PATIENT_INVALID_MOTHER and HTTP 422
   verifies:
   - BR-E4
 - id: AC-E9
   given: a downtime registration with downtime id D-0042
   when: it is entered after the outage and the patient already has a record
-  then: it is merged into that record; entering D-0042 again fails with PATIENT_INVALID_DOWNTIME_ID
+  then: it is merged into that record; entering D-0042 again fails with PATIENT_INVALID_DOWNTIME_ID and HTTP 422
   verifies:
   - BR-E8
   - FR-E7
 - id: AC-E10
   given: an MRN with a wrong check digit
   when: it is entered on a record
-  then: it fails with PATIENT_INVALID_IDENTIFIER
+  then: it fails with PATIENT_INVALID_IDENTIFIER and HTTP 422
   verifies:
   - BR-E1
 - id: AC-E11
@@ -445,7 +445,7 @@ acceptanceCriteria:
 - id: AC-E15
   given: an alias in use
   when: a registration tries to use the same alias, or one not in alias_scheme
-  then: it fails with PATIENT_INVALID_NAME
+  then: it fails with PATIENT_INVALID_NAME and HTTP 422
   verifies:
   - BR-E2
 - id: AC-E16
@@ -480,6 +480,7 @@ operations:
   errors:
   - PATIENT_INVALID_QUERY
   - PATIENT_DEPENDENCY_UNAVAILABLE
+  - PATIENT_SEARCH_TOO_BROAD
 - name: Register an unidentified patient
   actor: Emergency department staff
   description: Register a patient whose identity is unknown, under a new alias. Accepts a retry key.

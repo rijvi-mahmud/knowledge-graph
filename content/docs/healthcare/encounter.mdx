@@ -832,7 +832,7 @@ acceptanceCriteria:
 - id: AC-H6
   given: a stay with an open consultation part
   when: the stay is completed
-  then: the request fails with ENCOUNTER_OPEN_PARTS and HTTP 409; a part whose period is outside its parent fails with ENCOUNTER_INVALID_PARENT
+  then: the request fails with ENCOUNTER_OPEN_PARTS and HTTP 409; a part whose period is outside its parent fails with ENCOUNTER_INVALID_PARENT and HTTP 422
   verifies:
   - BR-H6
   - FR-H7
@@ -885,7 +885,7 @@ acceptanceCriteria:
 - id: AC-H19
   given: an encounter for department D-999, an invalid class, and an appointment for another patient
   when: each is sent
-  then: they fail with ENCOUNTER_INVALID_DEPARTMENT, ENCOUNTER_INVALID_CODE and ENCOUNTER_INVALID_REFERENCE, all HTTP 422
+  then: they fail with ENCOUNTER_INVALID_DEPARTMENT and HTTP 422, ENCOUNTER_INVALID_CODE and HTTP 422 and ENCOUNTER_INVALID_REFERENCE, all HTTP 422
   verifies:
   - BR-H1
 - id: AC-H21
@@ -956,7 +956,7 @@ acceptanceCriteria:
 - id: AC-H31
   given: a mother's stay, and her newborn registered with mother_patient_id
   when: the newborn's encounter is opened part of the mother's
-  then: it is accepted; part of an unrelated patient's encounter fails with ENCOUNTER_INVALID_PARENT
+  then: it is accepted; part of an unrelated patient's encounter fails with ENCOUNTER_INVALID_PARENT and HTTP 422
   verifies:
   - BR-H6
 - id: AC-H33
@@ -968,7 +968,7 @@ acceptanceCriteria:
 - id: AC-H36
   given: an open encounter in medicine
   when: its department changes to surgery
-  then: department_history holds both with their times, encounter.department_changed is emitted, and a client sending department_history fails with ENCOUNTER_READ_ONLY_FIELD
+  then: department_history holds both with their times, encounter.department_changed is emitted, and a client sending department_history fails with ENCOUNTER_READ_ONLY_FIELD and HTTP 422
   verifies:
   - BR-H25
 - id: AC-H37
@@ -1016,7 +1016,7 @@ acceptanceCriteria:
 - id: AC-H46
   given: any new encounter
   when: it is opened
-  then: it has a visit number in visit_number_system that no other encounter has had; a client sending identifiers fails with ENCOUNTER_READ_ONLY_FIELD
+  then: it has a visit number in visit_number_system that no other encounter has had; a client sending identifiers fails with ENCOUNTER_READ_ONLY_FIELD and HTTP 422
   verifies:
   - BR-H34
 - id: AC-H47
@@ -1052,7 +1052,7 @@ acceptanceCriteria:
 - id: AC-H56
   given: a patient contesting a discharge diagnosis
   when: they request a correction and ask for restriction meanwhile, and the request is later decided
-  then: accuracy_contested is set and encounter.accuracy_contested is emitted; readers see the diagnosis marked as disputed; on the decision it is cleared and encounter.accuracy_contested is emitted again; a client sending accuracy_contested fails with ENCOUNTER_READ_ONLY_FIELD
+  then: accuracy_contested is set and encounter.accuracy_contested is emitted; readers see the diagnosis marked as disputed; on the decision it is cleared and encounter.accuracy_contested is emitted again; a client sending accuracy_contested fails with ENCOUNTER_READ_ONLY_FIELD and HTTP 422
   verifies:
   - BR-H42
 - id: AC-H57
@@ -1135,6 +1135,14 @@ acceptanceCriteria:
   verifies:
   - BR-H13
   - FR-H4
+  variant: ambulatory
+- id: AC-H71
+  given: an ambulatory encounter
+  when: it is opened with a department Organization doesn't know, then a consultation is opened with part_of naming another patient's encounter
+  then: the first fails with ENCOUNTER_INVALID_DEPARTMENT and HTTP 422; the second fails with ENCOUNTER_INVALID_PARENT and HTTP 422
+  verifies:
+  - BR-H1
+  - BR-H6
   variant: ambulatory
 operations:
 - name: Open an encounter

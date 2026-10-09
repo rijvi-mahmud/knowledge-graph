@@ -837,13 +837,13 @@ acceptanceCriteria:
 - id: AC-E4
   given: a patient needing contact isolation, a bed isolated for droplet, and one unoccupied
   when: each bed is assigned
-  then: the isolated bed fails with STAY_BED_UNAVAILABLE; the unoccupied bed succeeds
+  then: the isolated bed fails with STAY_BED_UNAVAILABLE and HTTP 409; the unoccupied bed succeeds
   verifies:
   - BR-E5
 - id: AC-E5
   given: a discharged patient's bed
   when: it is assigned to the next patient, then cleaned and assigned again
-  then: the first fails with STAY_BED_UNAVAILABLE; after environmental services marks it unoccupied, bed.status_changed is emitted and the assignment succeeds
+  then: the first fails with STAY_BED_UNAVAILABLE and HTTP 409; after environmental services marks it unoccupied, bed.status_changed is emitted and the assignment succeeds
   verifies:
   - BR-E6
   - FR-E2
@@ -857,7 +857,7 @@ acceptanceCriteria:
 - id: AC-E7
   given: an admitted patient
   when: they are discharged without an order, once as routine and once against medical advice
-  then: the routine one fails with STAY_ORDER_REQUIRED; the other is discharged with disposition aadvice and stay.discharged is emitted
+  then: the routine one fails with STAY_ORDER_REQUIRED and HTTP 422; the other is discharged with disposition aadvice and stay.discharged is emitted
   verifies:
   - BR-E9
   - FR-E6
@@ -1034,13 +1034,13 @@ acceptanceCriteria:
 - id: AC-E34
   given: an order for intensive care
   when: a general ward bed is assigned
-  then: it fails with STAY_BED_UNAVAILABLE; an intensive care bed succeeds
+  then: it fails with STAY_BED_UNAVAILABLE and HTTP 409; an intensive care bed succeeds
   verifies:
   - BR-E5
 - id: AC-E35
   given: room_sharing_policy same_sex and a two-bed room with one patient
   when: a patient of the other recorded sex is assigned the empty bed
-  then: it fails with STAY_BED_UNAVAILABLE
+  then: it fails with STAY_BED_UNAVAILABLE and HTTP 409
   verifies:
   - BR-E5
 - id: AC-E36
