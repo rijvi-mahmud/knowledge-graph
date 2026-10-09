@@ -63,8 +63,17 @@ export function specToOpenApi(spec: ModuleSpecData, title: string, url: string) 
     },
     servers: [{ url: '/', description: 'Your deployment of this module' }],
     externalDocs: { url: `${siteUrl}${url}`, description: 'The full specification' },
+    // Every operation needs the caller's identity (the spec's API conventions).
+    security: [{ bearerAuth: [] }],
     paths,
     components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          description: "A token from the deployment's Identity service, identifying the caller. Permissions are checked against it.",
+        },
+      },
       schemas: {
         Problem: {
           type: 'object',
