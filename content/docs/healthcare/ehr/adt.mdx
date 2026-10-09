@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.8.6
+version: 0.9.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -262,16 +262,28 @@ dataModel:
 relationships:
 - type: belongs_to
   target: patient
-  note: every stay has one patient
+  note: '1: patient_id'
 - type: has_one
   target: encounter
-  note: the clinical record of the stay, owned by Encounters
+  note: '0..1: encounter_id, set once Encounters opens it; one stay, one encounter'
 - type: belongs_to
-  target: order
-  note: the admission and discharge orders
+  target: practitioner
+  note: '1 while pending or admitted: attending_practitioner_id; earlier attendings kept in history (BR-E28)'
 - type: belongs_to
   target: bed
-  note: the bed occupied, owned by Organization
+  note: '0..1: bed_id, owned by Organization; unset while boarding'
+- type: has_many
+  target: bed
+  note: '1..*: bed_history, every bed or waiting location with its period'
+- type: belongs_to
+  target: order
+  note: '0..1: admission_order_id; 0..1: discharge_order_id; owned by Orders'
+- type: belongs_to
+  target: location
+  note: '0..1: waiting_location_id; 0..1: temporary_location; owned by Organization'
+- type: belongs_to
+  target: facility
+  note: '0..1: discharge_destination_id, owned by Organization or Exchange'
 - type: can_trigger
   target: event:stay.admitted
 businessRules:
@@ -420,6 +432,9 @@ businessRules:
   text: In the United States, when the Quality Improvement Organization tells the hospital that a Medicare inpatient has appealed their discharge, the appeal is recorded on the stay, a Detailed Notice of Discharge falls due by noon of the following day, and stay.notice_due is emitted. The discharge isn't completed against the patient's wish while the review is pending; the QIO's decision is recorded when it arrives.
   rationale: The hospital must deliver a detailed notice, and supply the QIO what it needs, no later than noon of the day after the QIO's notification; a beneficiary who requests review on time isn't financially responsible for continued care while it is pending (42 CFR 405.1206(e) and (f)).
   jurisdiction: us
+- id: BR-E48
+  text: When the Practitioners module reports two practitioners merged, stays naming the source practitioner as attending or admitting practitioner are changed to the remaining one, recorded in history, without counting as an attending change.
+  rationale: A stay must name the practitioner record in use, or pages and orders reach a retired record; the merge changes no one's responsibility, so it isn't a handover.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -1283,6 +1298,12 @@ acceptanceCriteria:
   verifies:
   - BR-E47
   jurisdiction: us
+- id: AC-E62
+  given: an admitted stay whose attending is a practitioner record later merged into another
+  when: practitioner.merged arrives
+  then: the stay names the remaining practitioner as attending, the change is in history, and no attending change is reported
+  verifies:
+  - BR-E48
 operations:
 - name: Request an admission
   actor: Clinician
@@ -2119,6 +2140,7 @@ dependencies:
   - 'Gives: an admission cancelled in error, so the encounter is marked entered in error'
   - 'Gives: a re-admission flag and the facility directory answer'
   - 'Receives: the encounter id for each stay, encounter.observation_started, and whether clinical data is recorded'
+  - 'Receives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled, encounter.class_changed and encounter.directory_changed, to check the encounter still matches the stay'
   - The clinical record is Encounters' concern
 - service: appointment-service
   direction: downstream
@@ -2214,7 +2236,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Asks: is this practitioner active, with admitting privileges, on this date?'
-  - 'Receives: practitioner.suspended and practitioner.privileges_changed'
+  - 'Receives: practitioner.suspended, practitioner.privileges_changed and practitioner.merged'
   - Credentialing and privileges are the Practitioners module's concern
 risks:
 - id: RISK-E1
@@ -2624,6 +2646,21 @@ compliance:
   - BR-E47
   jurisdiction: us
 changelog:
+- version: 0.9.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Relationships match the data model and FHIR R5 cardinalities, each with its cardinality.
+- version: 0.9.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-E48: stays follow a practitioner merge.'
+- version: 0.8.7
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Dependency contracts name the exact events given and received, matching the other module's contract.
 - version: 0.8.6
   date: '2026-10-09'
   breaking: false

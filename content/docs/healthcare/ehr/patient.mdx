@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.4.5
+version: 0.4.6
 status: draft
 industry: healthcare
 domain: ehr
@@ -614,6 +614,11 @@ references:
   title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
 changelog:
+- version: 0.4.6
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Relationship to the mother's record for a newborn (mother_patient_id).
 - version: 0.4.5
   date: '2026-10-09'
   breaking: false
@@ -774,6 +779,10 @@ compliance:
   - BR-H55
   - FR-E6
   jurisdiction: us
+relationships:
+- type: belongs_to
+  target: patient
+  note: '0..1: mother_patient_id, for a newborn (FHIR Patient.link seealso)'
 ---
 Patients build on the [patient record rules](/docs/healthcare/patient)
 every healthcare application shares. This layer adds what happens at a

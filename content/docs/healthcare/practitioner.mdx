@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.1.3
+version: 0.2.1
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -196,6 +196,15 @@ relationships:
   note: screening results
 - type: can_trigger
   target: event:practitioner.suspended
+- type: has_many
+  target: qualification
+  note: '0..*: licences, registrations, certifications and degrees (FHIR Practitioner.qualification 0..*)'
+- type: has_many
+  target: identifier
+  note: '0..*: NPI, national registration or staff numbers (FHIR Practitioner.identifier 0..*)'
+- type: exposes_to
+  target: identity
+  note: the practitioner id an account belongs to
 businessRules:
 - id: BR-H1
   text: One practitioner has one record. Before a record is created, existing records are searched by identifier, such as the NPI or a registration number, and by name with birth date; a probable match is picked or a new record is created with a reason. Duplicates found later are merged by a credentialing specialist, keeping every identifier and qualification.
@@ -1180,7 +1189,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: whether a practitioner is licensed in a jurisdiction on a date, and may prescribe controlled substances there'
-  - 'Gives: practitioner.suspended and practitioner.reinstated, so modules stop and resume booking, starting care and signing'
+  - 'Gives: practitioner.suspended, practitioner.reinstated and practitioner.inactivated, so modules stop and resume booking, starting care and signing'
   - 'Gives: practitioner.updated and practitioner.merged, so displayed names and links stay right'
   - What each module allows a suspended practitioner to do is that module's concern
 - service: billing-service
@@ -1282,6 +1291,16 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.2.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Relationships match the data model and FHIR R5 cardinalities, each with its cardinality.
+- version: 0.2.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The clinical-modules contract also gives practitioner.inactivated.
 - version: 0.1.3
   date: '2026-10-09'
   breaking: false

@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.12
+version: 0.1.14
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,16 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.14
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'Relationships match the data model and FHIR R5 cardinalities, each with its cardinality. Fixed: encounter to appointment is 0..*, not one.'
+- version: 0.1.13
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Dependency contracts name the exact events given and received, matching the other module's contract.
 - version: 0.1.12
   date: '2026-10-09'
   breaking: false
@@ -358,24 +368,39 @@ dataModel:
 relationships:
 - type: belongs_to
   target: patient
-  note: every encounter has one patient
-- type: belongs_to
+  note: '1: patient_id (FHIR Encounter.subject 0..1, required here)'
+- type: has_many
   target: appointment
-  note: optional; the appointment that scheduled it
+  note: '0..*: appointment_ids; one visit can cover several appointments (FHIR Encounter.appointment 0..*)'
+- type: belongs_to
+  target: encounter
+  note: '0..1: part_of, such as the stay a consultation happened in (FHIR partOf 0..1)'
 - type: has_many
   target: encounter
-  note: encounters part of this one
+  note: '0..*: encounters part of this one'
+- type: belongs_to
+  target: department
+  note: '1: department_id, owned by Organization (FHIR serviceProvider 0..1, required here)'
+- type: has_many
+  target: practitioner
+  note: '0..*: participants with role and period (FHIR participant.actor)'
+- type: has_many
+  target: location
+  note: '0..*: locations with period and status, owned by Organization (FHIR Encounter.location 0..*)'
+- type: has_many
+  target: episode_of_care
+  note: '0..*: episode_of_care_ids, owned by Episodes (FHIR episodeOfCare 0..*)'
+- type: has_many
+  target: order
+  note: '0..*: based_on, owned by Orders (FHIR basedOn 0..*)'
+- type: has_many
+  target: account
+  note: '0..*: account_ids, owned by Billing (FHIR Encounter.account 0..*)'
 - type: exposes_to
   target: clinical-documentation
   note: notes and results attach by encounter id
 - type: can_trigger
   target: event:encounter.completed
-- type: belongs_to
-  target: order
-  note: optional; the orders it carries out, held in based_on (FHIR Encounter.basedOn)
-- type: belongs_to
-  target: account
-  note: billing accounts, owned by Billing
 businessRules:
 - id: BR-H1
   text: Every encounter has one patient in use, one class and one responsible department.
@@ -2071,6 +2096,7 @@ dependencies:
   - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
   - 'Receives: appointment.checked_in'
   - 'Receives: appointment.check_in_undone'
+  - 'Receives: appointment.encounter_linked, confirming the link Appointments recorded'
   - 'Gives: encounter.appointment_added, when a check-in joins an open encounter'
   - 'Gives: encounter.started, encounter.discontinued, encounter.cancelled and encounter.entered_in_error, so the appointment follows its encounter'
   - 'Gives: the id of the encounter it opened'

@@ -2,7 +2,7 @@
 title: Medical staff and privileges
 description: 'Hospital practitioners: medical staff appointment, clinical privileges, National Practitioner Data Bank queries and reappointment, built on the practitioner rules.'
 module: practitioner
-version: 0.1.2
+version: 0.1.4
 status: draft
 industry: healthcare
 domain: ehr
@@ -337,6 +337,13 @@ dependencies:
   - 'Gives: practitioner.credential_expiring and practitioner.credential_expired, for the practitioner and credentialing staff'
   - 'Gives: practitioner.npdb_query_due and practitioner.reappointment_due'
   - 'Gives: practitioner.npdb_report_received, for the credentials committee'
+- service: adt-service
+  direction: downstream
+  reason: admits patients under a practitioner
+  criticality: soft
+  contract:
+  - 'Answers: is this practitioner active, with admitting privileges, on this date?'
+  - 'Gives: practitioner.privileges_changed, so admissions under a practitioner who lost admitting privileges are reviewed'
 decisions:
 - id: ADR-E1
   decision: Privileges are granted per procedure or service from a catalogue.
@@ -356,6 +363,16 @@ references:
   url: https://www.npdb.hrsa.gov/guidebook/DSubmittingaQuery.jsp
   note: Continuous Query enrollment fulfills the mandatory query requirements; 12-month enrollment.
 changelog:
+- version: 0.1.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Relationships match the data model and FHIR R5 cardinalities, each with its cardinality.
+- version: 0.1.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Dependency contracts name the exact events given and received, matching the other module's contract.
 - version: 0.1.2
   date: '2026-10-09'
   breaking: false
@@ -437,6 +454,16 @@ compliance:
   covered_by:
   - BR-E3
   jurisdiction: us
+relationships:
+- type: has_one
+  target: medical staff membership
+  note: '0..1: category, appointed_at and reappoint_by'
+- type: has_many
+  target: privilege
+  note: '0..*: clinical privileges, each for one procedure or service in a department and period'
+- type: has_many
+  target: npdb query
+  note: '0..*: NPDB queries and Continuous Query enrollments (United States)'
 ---
 
 Hospital practitioners build on the [practitioner rules](/docs/healthcare/practitioner)

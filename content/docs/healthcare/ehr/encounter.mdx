@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.12
+version: 0.13.14
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,16 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.14
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Relationships match the data model and FHIR R5 cardinalities, each with its cardinality.
+- version: 0.13.13
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Dependency contracts name the exact events given and received, matching the other module's contract.
 - version: 0.13.12
   date: '2026-10-09'
   breaking: false
@@ -929,7 +939,8 @@ dependencies:
   reason: reports admissions, transfers, leave, class changes and discharges
   criticality: soft
   contract:
-  - 'Receives: pending admit, transfer and discharge and their cancels, cancelled transfers, corrected movements, bed swaps, temporary transfers and returns, pre-admission, cancelled pre-admission, admission, transfer, leave, return and their cancels, attending changes and their cancels, class change, re-admission, discharge (including from leave), cancelled discharge, admissions cancelled in error and cleared expected discharges, stays moved to another patient, and merged stays'
+  - 'Receives: stay.admission_requested, stay.admitted, stay.admission_cancelled, stay.bed_assigned, stay.transfer_requested, stay.transferred, stay.beds_swapped, stay.movement_corrected, stay.transfer_cancelled, stay.leave_started, stay.leave_ended, stay.leave_cancelled, stay.temporary_location_changed, stay.class_changed, stay.attending_changed, stay.discharge_expected, stay.discharged, stay.discharge_cancelled, stay.moved and stay.merged, covering pending, cancelled and corrected movements, leave, class changes, discharge and its cancel, and stays moved or merged'
+  - 'Receives: an admission cancelled in error, a re-admission flag and the facility directory answer'
   - 'Gives: the encounter id for each stay'
   - 'Gives: encounter.location_changed, encounter.on_hold, encounter.resumed, encounter.discharge_cancelled and encounter.class_changed, confirming what was recorded'
   - 'Gives: encounter.observation_started with when the US observation notice is due; deciding who gets the notice, and giving it, is ADT''s concern'
@@ -1049,6 +1060,10 @@ functionalRequirements:
   text: The service must record class changes, participants and locations with their periods.
   priority: must
   verification: test
+relationships:
+- type: has_one
+  target: stay
+  note: '0..1: the inpatient or observation stay ADT keeps for this encounter'
 ---
 
 Hospital encounters build on the [clinical encounter rules](/docs/healthcare/encounter)

@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments: appointments for patients in an inpatient or observation stay, which belong to the stay, built on the clinical appointment rules.'
 module: appointment
-version: 0.11.6
+version: 0.11.8
 status: draft
 industry: healthcare
 domain: ehr
@@ -37,7 +37,7 @@ dataModel:
   type: enum
   required: false
   description: Why needs_review was set.
-  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged | encounter_entered_in_error | patient_on_leave | resource_unavailable | encounter_moved; set only with needs_review; codes: none standard, local to this specification'
+  constraints: 'stay_ended | previous_cancelled | authorization_denied | patient_merged | encounter_entered_in_error | patient_on_leave | resource_unavailable | encounter_moved | practitioner_unavailable; set only with needs_review; codes: none standard, local to this specification'
 businessRules:
 - id: BR-E5
   text: 'An appointment for a patient in a hospital stay is observation or inpatient, matching the stay, and belongs to it: it records the stay''s encounter_id at booking, and check-in opens no new encounter.'
@@ -194,7 +194,7 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: is this patient in an active stay, of which kind (inpatient or observation), and what is its encounter id?'
-  - 'Receives: the stay ended, or changed from observation to inpatient with its encounter id'
+  - 'Receives: stay.discharged, and stay.class_changed when a stay changes from observation to inpatient, with its encounter id'
   - 'Receives: stay.leave_started, stay.leave_ended and stay.leave_cancelled, with the expected return'
   - Admitting, transferring and discharging patients is ADT's concern
 accessMatrix:
@@ -267,6 +267,16 @@ references:
   title: Medicare, inpatient or outpatient hospital status
   url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
 changelog:
+- version: 0.11.8
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - review_reason gains practitioner_unavailable, matching the healthcare layer (BR-H50).
+- version: 0.11.7
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Dependency contracts name the exact events given and received, matching the other module's contract.
 - version: 0.11.6
   date: '2026-10-09'
   breaking: false

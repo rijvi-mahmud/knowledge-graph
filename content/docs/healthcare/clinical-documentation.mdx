@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.7
+version: 0.3.1
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,16 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.3.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'Relationships match the data model and FHIR R5 cardinalities, each with its cardinality. Fixed: the encounter is optional and the patient is held directly.'
+- version: 0.3.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H57: entries without an encounter follow patient merges, unmerges and records entered in error.'
 - version: 0.2.7
   date: '2026-10-09'
   breaking: false
@@ -498,17 +508,32 @@ dataModel:
   constraints: required with status closed_unresolvable
 relationships:
 - type: belongs_to
-  target: encounter
-  note: every note and observation documents one encounter
-- type: belongs_to
   target: patient
-  note: through the encounter
+  note: '1: patient_id on every note and observation, given directly when there is no encounter (BR-H1)'
+- type: belongs_to
+  target: encounter
+  note: '0..1: encounter_id; remote monitoring and patient-entered entries can stand without one (FHIR Observation.encounter 0..1, DocumentReference.context 0..*)'
+- type: has_many
+  target: practitioner
+  note: '1..*: note authors, the first signs (FHIR Composition.author 1..*); 0..1: cosigner; 1: observation performer'
 - type: has_many
   target: note
-  note: addenda of a note, through parent_note_id
+  note: '0..*: addenda of a note, through parent_note_id'
+- type: has_many
+  target: observation
+  note: '0..*: derived_from, the values a derived value was computed from (FHIR derivedFrom 0..*)'
+- type: belongs_to
+  target: device
+  note: '0..1: observation.device_id'
 - type: belongs_to
   target: order
-  note: optional; the order a measurement carries out
+  note: '0..1: observation.order_id, owned by Orders (FHIR basedOn 0..*, one here)'
+- type: has_many
+  target: deficiency
+  note: '0..*: an encounter''s deficiencies, each owed by one practitioner and optionally on one note'
+- type: belongs_to
+  target: template
+  note: '0..1: note.template_id'
 - type: can_trigger
   target: event:documentation.completed
 businessRules:
@@ -670,6 +695,9 @@ businessRules:
   text: In the European Union, a health professional reads notes and observations only in the categories professional_access_rules allows for their professional category, under the rules of the member state where the care takes place. Entries outside them are not shown, and the access log records that they were withheld.
   rationale: Member states must set rules on the categories of personal electronic health data accessible by different categories of health professionals or for different healthcare tasks, and the rules of the member state of treatment apply (EHDS Article 11(3) and (4)); these apply to discharge reports, results and imaging from 26 March 2031 and to patient summaries from 26 March 2029 (Article 105).
   jurisdiction: eu
+- id: BR-H57
+  text: 'Entries recorded without an encounter, such as remote monitoring readings and patient-entered information, follow the patient record directly: when the Patients module merges two records they move to the remaining one, recorded in moved_from; when it undoes a merge, those recorded since the merge are listed for an HIM specialist; when it marks a record entered in error, they are listed for review and hidden from care views until resolved.'
+  rationale: Encounter-linked entries follow their encounter (BR-H23, BR-H24), but entries without one would otherwise stay on a retired or mistaken record, so a clinician would miss readings or see another person's.
 validations:
 - field: note.encounter_id
   rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
@@ -1086,6 +1114,12 @@ edgeCases:
   covers:
   - BR-H39
   - AC-H63
+- id: EC-H50
+  situation: A home blood pressure cuff has sent readings for a month to a duplicate patient record that is then merged.
+  behaviour: The readings move to the remaining record, so the clinician sees the whole trend.
+  covers:
+  - BR-H57
+  - AC-H67
 functionalRequirements:
 - id: FR-H1
   text: The service must let authors start, edit, sign and discard notes, and cosigners cosign them, following the note lifecycle.
@@ -1674,6 +1708,12 @@ acceptanceCriteria:
   verifies:
   - FR-H18
   jurisdiction: us
+- id: AC-H67
+  given: remote monitoring readings with no encounter on a record later merged into another, and patient-entered information on a record later marked entered in error
+  when: patient.merged and patient.entered_in_error arrive
+  then: the readings move to the remaining record with moved_from set; the patient-entered information is hidden from care views and listed for an HIM specialist
+  verifies:
+  - BR-H57
 operations:
 - name: Start a note
   actor: Clinician
@@ -2761,6 +2801,7 @@ dependencies:
   - 'Asks: correction_deadline, correction_extension, record_retention and access_log_retention for this jurisdiction'
   - 'Asks: is this patient under legal hold?'
   - 'Receives: patient.legal_hold_changed'
+  - 'Receives: patient.merged, patient.unmerged and patient.entered_in_error, for entries recorded without an encounter'
 - service: identity-service
   direction: upstream
   reason: authenticates callers and signers
