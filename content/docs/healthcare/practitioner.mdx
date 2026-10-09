@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.2.1
+version: 0.3.0
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -271,6 +271,12 @@ businessRules:
 - id: BR-H20
   text: Names and identifiers keep their history with periods, so a search by a former name or number still finds the practitioner.
   rationale: Licences and screening lists may show a name or number the practitioner no longer uses.
+- id: BR-H21
+  text: A qualification, privilege or registration with an end date is valid through the whole of that date, and "active on a date" is decided on the local calendar date where the care is given, never a date converted to UTC.
+  rationale: Licences and registrations are issued with end dates that include the last day, as FHIR periods do; a UTC date would end an evening shift's licence early or late depending on the time zone.
+- id: BR-H22
+  text: A request to erase a practitioner's data is refused while credential_retention applies after they leave, or while a legal hold or an open review needs it. When it ends, identifying fields are removed and the id is kept, so records that name the practitioner stay linked.
+  rationale: Credential files show the organization checked who it let practise, which law and accreditation require and which may be needed to defend a malpractice claim; GDPR Article 17(3)(b) and (e) exempt that processing from erasure.
 validations:
 - field: practitioner.identifiers
   rule: An NPI is ten digits whose check digit passes the Luhn check with the prefix 80840
@@ -426,6 +432,12 @@ edgeCases:
   covers:
   - BR-H19
   - AC-H20
+- id: EC-H11
+  situation: A hospitalist works a night shift that starts on the last day of their licence.
+  behaviour: They are licensed until midnight local time; after midnight they can't start new care until the renewal is verified.
+  covers:
+  - BR-H21
+  - AC-H27
 functionalRequirements:
 - id: FR-H1
   text: The service must keep one record per practitioner, search by current and former names and identifiers, and merge duplicates.
@@ -707,6 +719,18 @@ acceptanceCriteria:
   verifies:
   - FR-H10
   jurisdiction: us
+- id: AC-H27
+  given: a licence ending 30 June in a state on Mountain time
+  when: a practitioner is checked at 23:30 local time on 30 June, which is already 1 July in UTC, and again at 00:10 on 1 July
+  then: the first answer is active and the second not
+  verifies:
+  - BR-H21
+- id: AC-H28
+  given: a practitioner who left a year ago, with credential_retention of 10 years
+  when: they ask for their data to be erased
+  then: the request is refused with the retention end date; after retention ends, identifying fields are removed and the id kept
+  verifies:
+  - BR-H22
 operations:
 - name: Create a practitioner
   actor: Credentialing specialist
@@ -1291,6 +1315,12 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.3.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H21: end dates are inclusive and read on the local date where care is given.'
+  - 'BR-H22: erasure after credential_retention, under GDPR Article 17(3).'
 - version: 0.2.1
   date: '2026-10-09'
   breaking: false
@@ -1584,6 +1614,15 @@ compliance:
   covered_by:
   - FR-H10
   jurisdiction: us
+- id: CMP-H9
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17
+  obligation: Erase personal data on request, except where 17(3) applies.
+  how: Erasure waits for credential_retention, then removes identifying fields.
+  status: met
+  covered_by:
+  - BR-H22
+  jurisdiction: eu
 ---
 
 Every module that books, treats or signs asks one question about a

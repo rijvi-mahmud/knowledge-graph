@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.1.4
+version: 0.2.0
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -364,6 +364,12 @@ businessRules:
 - id: BR-H33
   text: A trial code is valid with a warning that it may change. A discouraged code is valid, so existing records and mappings keep working, but validation warns against new use and returns the replacement its publisher names. A deprecated code is inactive.
   rationale: 'LOINC marks terms ACTIVE, TRIAL, DISCOURAGED or DEPRECATED: trial terms may change, discouraged terms are not recommended for new mappings though existing ones may remain valid, and deprecated terms should not be used, with MAP_TO naming a replacement.'
+- id: BR-H34
+  text: The date a caller gives is the local calendar date where care was given, never a date converted to UTC; a release's effective_to is the last day it is in effect, inclusive.
+  rationale: A service at 21:00 in New York is already the next day in UTC, which on 1 October would pick the new ICD-10-CM release for a service given under the old one; inclusive end dates match FHIR periods.
+- id: BR-H35
+  text: A request to erase a staff member's name from the change log is refused while any record coded with the releases it concerns is kept; then the name is replaced with an id that no longer identifies them.
+  rationale: The change log shows who changed what codes meant for patient records, which audit and legal claims may need; GDPR Article 17(3)(b) and (e) exempt that processing from erasure.
 validations:
 - field: code_system.uri
   rule: An absolute URI; local systems start with local_namespace; not already registered
@@ -591,6 +597,12 @@ edgeCases:
   covers:
   - BR-H33
   - AC-H31
+- id: EC-H23
+  situation: A telehealth visit at 22:00 in California on 30 September is coded by a coder in New York the next morning.
+  behaviour: The date of service is 30 September in California, so the release in effect then is used.
+  covers:
+  - BR-H34
+  - AC-H32
 functionalRequirements:
 - id: FR-H1
   text: The service must validate a code on a date against the release in effect, saying whether it exists, is active and is valid for reporting.
@@ -905,6 +917,18 @@ acceptanceCriteria:
   then: the trial term is valid with a warning; the discouraged term is valid with a warning and its MAP_TO replacement; the deprecated term is inactive with its replacement
   verifies:
   - BR-H33
+- id: AC-H32
+  given: an ICD-10-CM release in effect to 30 September and the next from 1 October, and an outpatient service at 21:00 on 30 September in New York
+  when: the code is checked with the local date
+  then: the 30 September release is used, not the 1 October one the UTC date would pick
+  verifies:
+  - BR-H34
+- id: AC-H33
+  given: a terminology manager who left, named in the change log
+  when: they ask for their data to be erased while records coded with those releases are kept
+  then: the request is refused; once no such record is kept, their name is replaced
+  verifies:
+  - BR-H35
 operations:
 - name: Validate a code
   actor: System
@@ -1536,6 +1560,12 @@ references:
   url: https://loinc.org/kb/users-guide/editorial-policies-and-procedures/classification-of-loinc-term-status
   note: ACTIVE, TRIAL, DISCOURAGED and DEPRECATED.
 changelog:
+- version: 0.2.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H34: dates are local dates where care was given; effective_to is inclusive.'
+  - 'BR-H35: erasure of staff names in the change log, under GDPR Article 17(3).'
 - version: 0.1.4
   date: '2026-10-09'
   breaking: false
@@ -1822,6 +1852,15 @@ compliance:
   covered_by:
   - CON-H1
   - BR-H16
+  jurisdiction: eu
+- id: CMP-H6
+  regulation: GDPR (EU) 2016/679
+  provision: Article 17
+  obligation: Erase personal data on request, except where 17(3) applies.
+  how: Staff names in the change log are kept while coded records need them, then replaced.
+  status: met
+  covered_by:
+  - BR-H35
   jurisdiction: eu
 ---
 
