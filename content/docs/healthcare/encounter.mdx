@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.11
+version: 0.1.12
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.12
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'FR-H16: the US Core FHIR R4 API for certification (45 CFR 170.315(g)(10)), with group export through Bulk Data.'
 - version: 0.1.11
   date: '2026-10-09'
   breaking: false
@@ -845,6 +850,11 @@ functionalRequirements:
   text: The service must move an encounter to another patient and merge duplicate encounters, keeping every visit number.
   priority: must
   verification: test
+- id: FR-H16
+  text: 'In the United States, the service must serve Encounter through a FHIR R4.0.1 API conforming to the US Core version 45 CFR 170.215(b)(1) adopts (STU 6.1.0, or a later version ONC approves): the search interactions the US Core Server CapabilityStatement marks mandatory for a single patient, and group export through FHIR Bulk Data Access 1.0.0. This API runs on FHIR R4 even though the module maps to FHIR R5 elsewhere; apps are authorized by Identity with SMART App Launch 2.0.0.'
+  priority: must
+  verification: demonstration
+  jurisdiction: us
 nonFunctionalRequirements:
 - category: compatibility
   text: 'Encounters map onto HL7 FHIR R5 Encounter: status to status, subject_status to subjectStatus, class to class, and class_history to EncounterHistory.'
@@ -858,6 +868,9 @@ nonFunctionalRequirements:
   text: No requirement depends on a particular database, language or framework.
 - category: usability
   text: Patient-facing screens, messages and documents meet WCAG 2.1 Level AA, and work with assistive technology.
+- category: compatibility
+  text: In the United States, a FHIR R4.0.1 API with US Core STU 6.1.0 is served alongside the FHIR R5 mapping, because certification adopts R4 (45 CFR 170.215(a)).
+  jurisdiction: us
 constraints:
 - id: CON-H1
   text: Encounter data is encrypted in transit and at rest.
@@ -1268,6 +1281,13 @@ acceptanceCriteria:
   verifies:
   - BR-H51
   jurisdiction: eu
+- id: AC-H76
+  given: a SMART app authorized for one patient, and a system client authorized for a group
+  when: the app searches Encounter for that patient with the US Core mandatory parameters, and the client starts a group export
+  then: the searches return FHIR R4 resources conforming to the US Core profiles, and the export returns NDJSON files for the group
+  verifies:
+  - FR-H16
+  jurisdiction: us
 operations:
 - name: Open an encounter
   actor: System
@@ -2263,6 +2283,14 @@ references:
   title: 45 CFR 171.206, Protecting care access
   url: https://www.ecfr.gov/current/title-45/section-171.206
   note: Information blocking exception for reproductive health care information.
+- id: REF-H29
+  title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
+  url: https://www.ecfr.gov/current/title-45/section-170.315
+  note: Single-patient and group data through a standards-based API.
+- id: REF-H30
+  title: 45 CFR 170.215, Application programming interface standards
+  url: https://www.ecfr.gov/current/title-45/section-170.215
+  note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 acronyms:
 - term: AMB, EMER, IMP, OBSENC, VR
   definition: 'HL7 encounter classes: ambulatory, emergency, inpatient, observation, virtual'
@@ -2777,6 +2805,15 @@ compliance:
   status: other module
   covered_by:
   - BR-H14
+  jurisdiction: us
+- id: CMP-H31
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(g)(10) and 170.215
+  obligation: Certified health IT serves single-patient searches and group export through a FHIR R4 API with US Core, SMART App Launch and Bulk Data.
+  how: 'FR-H16: the US Core API for this module''s resources; app registration and authorization are Identity''s.'
+  status: partly met
+  covered_by:
+  - FR-H16
   jurisdiction: us
 ---
 

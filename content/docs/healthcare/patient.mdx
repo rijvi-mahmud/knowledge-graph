@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.12.4
+version: 0.12.5
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -1180,6 +1180,11 @@ functionalRequirements:
   text: The service must search across every facility and add a facility MRN to an existing record when mrn_scope is facility.
   priority: must
   verification: test
+- id: FR-H30
+  text: 'In the United States, the service must serve Patient through a FHIR R4.0.1 API conforming to the US Core version 45 CFR 170.215(b)(1) adopts (STU 6.1.0, or a later version ONC approves): the search interactions the US Core Server CapabilityStatement marks mandatory for a single patient, and group export through FHIR Bulk Data Access 1.0.0. This API runs on FHIR R4 even though the module maps to FHIR R5 elsewhere; apps are authorized by Identity with SMART App Launch 2.0.0.'
+  priority: must
+  verification: demonstration
+  jurisdiction: us
 nonFunctionalRequirements:
 - category: security
   text: Only roles that need it can read a patient record, and every read is logged (BR-H19).
@@ -1201,6 +1206,9 @@ nonFunctionalRequirements:
   text: Where the organization shares an enterprise or regional patient index, it is reached through IHE PIXm, PDQm or PMIR (by the Exchange module).
 - category: usability
   text: Patient-facing screens, messages and documents meet WCAG 2.1 Level AA, and work with assistive technology.
+- category: compatibility
+  text: In the United States, a FHIR R4.0.1 API with US Core STU 6.1.0 is served alongside the FHIR R5 mapping, because certification adopts R4 (45 CFR 170.215(a)).
+  jurisdiction: us
 constraints:
 - id: CON-H1
   text: Patient data is encrypted in transit and at rest.
@@ -1888,6 +1896,13 @@ acceptanceCriteria:
   then: the list shows the alias; the opened record shows the official name after a reason is given
   verifies:
   - BR-H55
+- id: AC-H85
+  given: a SMART app authorized for one patient, and a system client authorized for a group
+  when: the app searches Patient for that patient with the US Core mandatory parameters, and the client starts a group export
+  then: the searches return FHIR R4 resources conforming to the US Core profiles, and the export returns NDJSON files for the group
+  verifies:
+  - FR-H30
+  jurisdiction: us
 operations:
 - name: Search patients
   actor: Registrar
@@ -3157,7 +3172,20 @@ references:
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+- id: REF-H51
+  title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
+  url: https://www.ecfr.gov/current/title-45/section-170.315
+  note: Single-patient and group data through a standards-based API.
+- id: REF-H52
+  title: 45 CFR 170.215, Application programming interface standards
+  url: https://www.ecfr.gov/current/title-45/section-170.215
+  note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.12.5
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'FR-H30: the US Core FHIR R4 API for certification (45 CFR 170.315(g)(10)), with group export through Bulk Data.'
 - version: 0.12.4
   date: '2026-10-09'
   breaking: false
@@ -3968,6 +3996,15 @@ compliance:
   covered_by:
   - CON-H1
   jurisdiction: eu
+- id: CMP-H39
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(g)(10) and 170.215
+  obligation: Certified health IT serves single-patient searches and group export through a FHIR R4 API with US Core, SMART App Launch and Bulk Data.
+  how: 'FR-H30: the US Core API for this module''s resources; app registration and authorization are Identity''s.'
+  status: partly met
+  covered_by:
+  - FR-H30
+  jurisdiction: us
 ---
 Every clinical module refers to a patient by id. This module keeps that id
 pointing at one person, and keeps who that person is accurate over the years.

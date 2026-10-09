@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.6
+version: 0.2.7
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.2.7
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'FR-H18: the US Core FHIR R4 API for certification (45 CFR 170.315(g)(10)), with group export through Bulk Data.'
 - version: 0.2.6
   date: '2026-10-09'
   breaking: false
@@ -1150,6 +1155,11 @@ functionalRequirements:
   text: The service must log every read and change of a note or observation, and show the log to privacy officers.
   priority: must
   verification: test
+- id: FR-H18
+  text: 'In the United States, the service must serve Observation (vital signs) and DocumentReference (clinical notes) through a FHIR R4.0.1 API conforming to the US Core version 45 CFR 170.215(b)(1) adopts (STU 6.1.0, or a later version ONC approves): the search interactions the US Core Server CapabilityStatement marks mandatory for a single patient, and group export through FHIR Bulk Data Access 1.0.0. This API runs on FHIR R4 even though the module maps to FHIR R5 elsewhere; apps are authorized by Identity with SMART App Launch 2.0.0.'
+  priority: must
+  verification: demonstration
+  jurisdiction: us
 nonFunctionalRequirements:
 - category: compatibility
   text: 'Notes map onto HL7 FHIR R5 Composition: status to status, type to type, authors to author, cosignature and signature to attester (mode professional or legal), parent_note_id to relatesTo appends, and sections to section. Observations map onto Observation and the vital signs profiles.'
@@ -1170,6 +1180,9 @@ nonFunctionalRequirements:
   text: No requirement depends on a particular database, language or framework.
 - category: usability
   text: Patient-facing screens, messages and documents meet WCAG 2.1 Level AA, and work with assistive technology.
+- category: compatibility
+  text: In the United States, a FHIR R4.0.1 API with US Core STU 6.1.0 is served alongside the FHIR R5 mapping, because certification adopts R4 (45 CFR 170.215(a)).
+  jurisdiction: us
 constraints:
 - id: CON-H1
   text: Notes and observations are encrypted in transit and at rest.
@@ -1654,6 +1667,13 @@ acceptanceCriteria:
   verifies:
   - BR-H56
   jurisdiction: eu
+- id: AC-H66
+  given: a SMART app authorized for one patient, and a system client authorized for a group
+  when: the app searches Observation for that patient with the US Core mandatory parameters, and the client starts a group export
+  then: the searches return FHIR R4 resources conforming to the US Core profiles, and the export returns NDJSON files for the group
+  verifies:
+  - FR-H18
+  jurisdiction: us
 operations:
 - name: Start a note
   actor: Clinician
@@ -3063,6 +3083,14 @@ references:
   title: 45 CFR 171.206, Protecting care access
   url: https://www.ecfr.gov/current/title-45/section-171.206
   note: Information blocking exception for reproductive health care information.
+- id: REF-H46
+  title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
+  url: https://www.ecfr.gov/current/title-45/section-170.315
+  note: Single-patient and group data through a standards-based API.
+- id: REF-H47
+  title: 45 CFR 170.215, Application programming interface standards
+  url: https://www.ecfr.gov/current/title-45/section-170.215
+  note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 acronyms:
 - term: AI
   definition: Artificial intelligence
@@ -3806,6 +3834,15 @@ compliance:
   status: other module
   covered_by:
   - BR-H29
+  jurisdiction: us
+- id: CMP-H45
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(g)(10) and 170.215
+  obligation: Certified health IT serves single-patient searches and group export through a FHIR R4 API with US Core, SMART App Launch and Bulk Data.
+  how: 'FR-H18: the US Core API for this module''s resources; app registration and authorization are Identity''s.'
+  status: partly met
+  covered_by:
+  - FR-H18
   jurisdiction: us
 ---
 

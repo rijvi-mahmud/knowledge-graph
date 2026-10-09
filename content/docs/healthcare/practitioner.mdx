@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.1.0
+version: 0.1.1
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -454,6 +454,11 @@ functionalRequirements:
   text: The service must return practitioners as HL7 FHIR R5 Practitioner, conforming to US Core Practitioner in the United States.
   priority: must
   verification: inspection
+- id: FR-H10
+  text: 'In the United States, the service must serve Practitioner through a FHIR R4.0.1 API conforming to the US Core version 45 CFR 170.215(b)(1) adopts (STU 6.1.0, or a later version ONC approves): the search interactions the US Core Server CapabilityStatement marks mandatory for a single patient, and group export through FHIR Bulk Data Access 1.0.0. This API runs on FHIR R4 even though the module maps to FHIR R5 elsewhere; apps are authorized by Identity with SMART App Launch 2.0.0.'
+  priority: must
+  verification: demonstration
+  jurisdiction: us
 nonFunctionalRequirements:
 - category: compatibility
   text: 'Practitioners map onto FHIR R5 Practitioner: names to name, identifiers to identifier, qualifications to qualification (code, period, issuer), languages to communication.'
@@ -463,6 +468,9 @@ nonFunctionalRequirements:
   text: Licensure checks answer from the last verified state when primary sources are down (BR-H18).
 - category: portability
   text: No requirement depends on a particular database, language or framework.
+- category: compatibility
+  text: In the United States, a FHIR R4.0.1 API with US Core STU 6.1.0 is served alongside the FHIR R5 mapping, because certification adopts R4 (45 CFR 170.215(a)).
+  jurisdiction: us
 constraints:
 - id: CON-H1
   text: Practitioner data is encrypted in transit and at rest.
@@ -683,6 +691,13 @@ acceptanceCriteria:
   then: data is encrypted at rest and connections use TLS
   verifies:
   - CON-H1
+- id: AC-H26
+  given: a SMART app authorized for one patient, and a system client authorized for a group
+  when: the app searches Practitioner for that patient with the US Core mandatory parameters, and the client starts a group export
+  then: the searches return FHIR R4 resources conforming to the US Core profiles, and the export returns NDJSON files for the group
+  verifies:
+  - FR-H10
+  jurisdiction: us
 operations:
 - name: Create a practitioner
   actor: Credentialing specialist
@@ -1255,7 +1270,20 @@ references:
   title: NUCC, Health Care Provider Taxonomy code set
   url: https://www.nucc.org/index.php/code-sets-mainmenu-41/provider-taxonomy-mainmenu-40
   note: Specialty codes used with the NPI.
+- id: REF-H11
+  title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
+  url: https://www.ecfr.gov/current/title-45/section-170.315
+  note: Single-patient and group data through a standards-based API.
+- id: REF-H12
+  title: 45 CFR 170.215, Application programming interface standards
+  url: https://www.ecfr.gov/current/title-45/section-170.215
+  note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.1.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'FR-H10: the US Core FHIR R4 API for certification (45 CFR 170.315(g)(10)), with group export through Bulk Data.'
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false
@@ -1515,6 +1543,15 @@ compliance:
   covered_by:
   - BR-H16
   jurisdiction: eu
+- id: CMP-H8
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(g)(10) and 170.215
+  obligation: Certified health IT serves single-patient searches and group export through a FHIR R4 API with US Core, SMART App Launch and Bulk Data.
+  how: 'FR-H10: the US Core API for this module''s resources; app registration and authorization are Identity''s.'
+  status: partly met
+  covered_by:
+  - FR-H10
+  jurisdiction: us
 ---
 
 Every module that books, treats or signs asks one question about a
