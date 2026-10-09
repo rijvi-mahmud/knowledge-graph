@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.11.0
+version: 0.11.1
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -77,14 +77,8 @@ glossary:
   definition: An appointment recorded by mistake. It is kept, but never counted as a real appointment.
 - term: Outpatient
   definition: A patient who receives care without being formally admitted, even if they stay overnight (Medicare). HL7 class AMB.
-- term: Inpatient
-  definition: A patient formally admitted to the hospital with a doctor's order, with a stay (HL7 class IMP).
-- term: Observation
-  definition: Hospital outpatient services while a doctor decides whether to admit or discharge the patient, even in a hospital bed overnight (Medicare). HL7 class OBSENC.
 - term: Virtual appointment
   definition: Care where the patient and practitioner are not in the same place, such as a video visit. HL7 class VR.
-- term: Stay
-  definition: A patient's time in hospital as an inpatient or under observation, recorded as one encounter until it ends.
 - term: Prior authorization
   definition: A payer's approval, required by some plans before a service is given, for the payer to cover it.
 concepts:
@@ -300,7 +294,7 @@ businessRules:
   text: A new appointment cannot be booked, rebooked or rescheduled for a patient the Patients module records as deceased.
   rationale: BR-H17 cancels a deceased patient's appointments, but a booking made afterwards, such as from an old referral, would send reminders to a grieving family and hold a slot nobody will use.
 - id: BR-H24
-  text: Where no_show_limit is set, a patient, or their representative, cannot book for themselves once the patient has had that many no-shows within no_show_lookback; staff can still book for them. The refusal tells them to contact the hospital.
+  text: Where no_show_limit is set, a patient, or their representative, cannot book for themselves once the patient has had that many no-shows within no_show_lookback; staff can still book for them. The refusal tells them to contact the organization.
   rationale: Many hospitals restrict self-booking after repeated missed appointments, so staff can talk to the patient first. No-show rates are higher for patients facing transport, cost or language barriers, so a blanket refusal can cut off care; the limit is off by default and never stops staff booking.
 - id: BR-H25
   text: A participant's response is exchanged as FHIR participant.status (accepted, declined, tentative, needs-action), and whether they are required as participant.required.
@@ -725,7 +719,7 @@ edgeCases:
   jurisdiction: us
 - id: EC-H22
   situation: A patient cancels because there was no interpreter at their last visit.
-  behaviour: The cancellation records oth-int, so the hospital can count cancellations caused by missing interpreters.
+  behaviour: The cancellation records oth-int, so the organization can count cancellations caused by missing interpreters.
   covers:
   - BR-H22
   - AC-H32
@@ -737,7 +731,7 @@ edgeCases:
   - AC-H33
 - id: EC-H24
   situation: A patient who missed three appointments tries to book online.
-  behaviour: They are asked to contact the hospital, and staff book for them after talking.
+  behaviour: They are asked to contact the organization, and staff book for them after talking.
   covers:
   - BR-H24
   - AC-H34
@@ -828,7 +822,7 @@ edgeCases:
   - BR-H38
   - AC-H55
 - id: EC-H39
-  situation: A patient books at the hospital's addiction medicine clinic.
+  situation: A patient books at the organization's addiction medicine clinic.
   behaviour: The appointment carries SUD sensitivity, appears only to that clinic and the patient, and the reminder gives the address but not the clinic name.
   covers:
   - BR-H39
@@ -995,7 +989,7 @@ settings:
   description: The code system for service_type. HCPCS with CPT-4 in the United States (45 CFR 162.1002); set per member state in the EU.
 - name: no_show_limit
   type: integer
-  description: How many no-shows within no_show_lookback stop a patient booking for themselves (BR-H24). Unset means no limit. Set with the hospital's policy.
+  description: How many no-shows within no_show_lookback stop a patient booking for themselves (BR-H24). Unset means no limit. Set with the organization's policy.
 - name: no_show_lookback
   type: duration
   default: 12 months
@@ -1446,7 +1440,7 @@ operations:
   method: POST
   path: /appointments
   success: 201
-  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient, virtual, observation or inpatient), department, and optional room, equipment, referral, orders and previous appointment
+  input: participants (identity, role, optional time zone and locale), start and end time, time zone, and optional location, notes, reminder offsets, capacity, series and appointment type, and optional service type, reason, priority, patient instruction, virtual service, interpreter language, accommodation needs, patient location and acting representative, care setting (outpatient or virtual), department, and optional room, equipment, referral, orders and previous appointment
   output: the appointment, pending or booked
   errors:
   - APPOINTMENT_INVALID_TIME_RANGE
@@ -1800,7 +1794,7 @@ errors:
   message: The patient is recorded as deceased.
 - code: APPOINTMENT_NO_SHOW_LIMIT
   http: 403
-  message: This patient can't book online right now. Ask them to contact the hospital.
+  message: This patient can't book online right now. Ask them to contact the organization.
 - code: APPOINTMENT_INVALID_DEPARTMENT
   http: 422
   message: That department doesn't exist.
@@ -2070,6 +2064,12 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.11.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Wording names the organization rather than a hospital, so the page reads right for any kind of health application; hospital law is still cited as hospital law.
+  - The glossary terms Inpatient, Observation and Stay, and the inpatient care settings in Book an appointment, are in the EHR layer only.
 - version: 0.11.0
   date: '2026-10-09'
   breaking: false

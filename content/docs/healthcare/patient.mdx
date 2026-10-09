@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.12.0
+version: 0.12.1
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -457,7 +457,7 @@ businessRules:
   text: When a patient dies, their existing representatives' authority ends. After death, a person acts for the patient only as an estate representative (an executor, administrator or other person with authority over the estate), recorded with evidence.
   rationale: HIPAA treats the executor, administrator or other person with authority over the deceased person or their estate as the personal representative (45 CFR 164.502(g)(4)).
 - id: BR-H46
-  text: An address confidentiality program substitute address is recorded as the patient's address with its program and participant number, and is never used for matching. Whether the hospital must accept it is set by acp_acceptance. The real address is not required.
+  text: An address confidentiality program substitute address is recorded as the patient's address with its program and participant number, and is never used for matching. Whether the organization must accept it is set by acp_acceptance. The real address is not required.
   rationale: States such as Washington and California give survivors of abuse a substitute address that state and local agencies must accept, while private businesses may choose to. Many participants share one substitute address, so matching on it would link strangers.
   jurisdiction: us
 - id: BR-H47
@@ -472,7 +472,7 @@ businessRules:
   jurisdiction: eu
 - id: BR-H50
   text: A record is not inactivated automatically while the patient has an appointment that has not started or an encounter that is open.
-  rationale: inactive_after looks back at care. A patient booked for next month, or in hospital now, is in active use whatever their history.
+  rationale: inactive_after looks back at care. A patient booked for next month, or in care now, is in active use whatever their history.
 - id: BR-H51
   text: Each correction request is kept and linked to the record it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the record, and in the United States for at least 6 years from its decision. It moves with the record in a merge.
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). A merge must not lose a disagreement that has to go with later disclosures (BR-H44).
@@ -481,7 +481,7 @@ businessRules:
   rationale: 'GDPR Article 14 applies when personal data is not obtained from the person, and Article 14(3) sets the deadline: within a reasonable period and at the latest one month, or at the first communication. Unidentified, unconscious and newborn patients are always registered by someone else.'
 - id: BR-H53
   text: A contact can be marked as involved in the patient's care, and the patient can object to sharing with any contact. Staff may share with an involved contact only what is relevant to that involvement, and may tell family the patient's location, general condition or death, unless the patient objected. When the patient can't agree or object, because they are incapacitated or it is an emergency, staff decide in the patient's best interest and the decision is recorded.
-  rationale: HIPAA permits these disclosures when the patient agrees, doesn't object, or, if they can't, when professional judgment finds it in their best interest (45 CFR 164.510(b)). In the EU, informing family of someone who can't consent rests on vital interests (GDPR Article 9(2)(c)). Recording objections stops a ward telling an estranged relative where a patient is.
+  rationale: HIPAA permits these disclosures when the patient agrees, doesn't object, or, if they can't, when professional judgment finds it in their best interest (45 CFR 164.510(b)). In the EU, informing family of someone who can't consent rests on vital interests (GDPR Article 9(2)(c)). Recording objections stops staff telling an estranged relative where a patient is.
 - id: BR-H54
   text: Every patient gets an MRN from mrn_system at registration, including its check digit. An MRN is never reused, including after a merge, where it stays on the target marked old.
   rationale: The Joint Commission lists an assigned identification number, such as the MRN, as a patient identifier (NPG.01.01.01), and the ONC SAFER Guide recommends a check digit to catch typing errors. Reusing an MRN would make old documents and labels point at the wrong person.
@@ -943,7 +943,7 @@ edgeCases:
   - BR-H38
   - AC-H45
 - id: EC-H38
-  situation: A registrar searches the surname of a hospital executive who is a patient with a very restricted record.
+  situation: A registrar searches the surname of an executive of the organization who is a patient with a very restricted record.
   behaviour: The record does not appear. A search with the executive's MRN shows it marked restricted.
   covers:
   - BR-H39
@@ -1035,7 +1035,7 @@ edgeCases:
   - AC-H79
   jurisdiction: eu
 - id: EC-H53
-  situation: An estranged parent phones the ward asking whether their adult son was admitted.
+  situation: An estranged parent phones the care team asking whether their adult son was admitted.
   behaviour: The son objected to sharing with them, so nothing is confirmed.
   covers:
   - BR-H53
@@ -1054,7 +1054,7 @@ edgeCases:
   - AC-H82
 - id: EC-H56
   situation: A patient known at facility A arrives at facility B of the same organization, which assigns its own MRNs.
-  behaviour: The enterprise search finds them, and hospital B's MRN is added to the same record.
+  behaviour: The enterprise search finds them, and facility B's MRN is added to the same record.
   covers:
   - BR-H56
   - AC-H83
@@ -1193,7 +1193,7 @@ nonFunctionalRequirements:
 - category: compatibility
   text: 'Events map to HL7 v2 ADT messages for systems that use them: patient.registered to A28, patient.updated to A31, patient.merged to A40, an identifier change to A47. Neither HL7 v2 nor FHIR defines an unmerge, so patient.unmerged is sent as A31 for both records.'
 - category: compatibility
-  text: Where the hospital shares an enterprise or regional patient index, it is reached through IHE PIXm, PDQm or PMIR (by the Exchange module).
+  text: Where the organization shares an enterprise or regional patient index, it is reached through IHE PIXm, PDQm or PMIR (by the Exchange module).
 constraints:
 - id: CON-H1
   text: Patient data is encrypted in transit and at rest.
@@ -1219,7 +1219,7 @@ settings:
   description: How long a record is kept after last_care_at or death. At least 5 years for US hospitals (42 CFR 482.24(b)(1)); set per state or member state law, such as 10 years in Texas. Required.
 - name: identifier_systems
   type: list of identifier systems
-  description: The identifier systems accepted, with their format and which roles see them unmasked, such as the hospital's medical record number or a national health identifier. Required.
+  description: The identifier systems accepted, with their format and which roles see them unmasked, such as the organization's medical record number or a national health identifier. Required.
 - name: collected_fields
   type: list
   default: '[]'
@@ -3147,6 +3147,11 @@ references:
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
 changelog:
+- version: 0.12.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Wording names the organization rather than a hospital, so the page reads right for any kind of health application; hospital law is still cited as hospital law.
 - version: 0.12.0
   date: '2026-10-09'
   breaking: false
@@ -3862,7 +3867,7 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Article 21
   obligation: A right to object where processing is based on a public task or legitimate interests (Article 6(1)(e) or (f)), as at many public hospitals.
-  how: Whether it applies depends on the hospital's lawful basis; the deployment decides how objections are handled, and medical records needed for care usually remain compelling grounds.
+  how: Whether it applies depends on the organization's lawful basis; the deployment decides how objections are handled, and medical records needed for care usually remain compelling grounds.
   status: deployment
   covered_by:
   - AS-H2

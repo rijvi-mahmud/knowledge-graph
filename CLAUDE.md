@@ -200,7 +200,9 @@ Rules:
   free H numbers, and the changelog lists the mapping. To split a module, move whole items, override an item in the domain
   layer by reusing its id when only its wording is hospital-specific, and check
   that the healthcare page never names an id, field, setting, event, error or
-  operation that exists only in the domain layer, and that it passes the
+  operation that exists only in the domain layer, or calls the provider "the
+  hospital" (cite hospital law as hospital law, but say "the organization"
+  otherwise), and that it passes the
   structural audit on its own. Audit with overrides applied: an upper layer that
   replaces an operation or dependency must keep every error and contract line
   of the item it replaces, or they silently disappear.
@@ -748,9 +750,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Terminology (`healthcare/terminology` 0.1.1, healthcare level, and `healthcare/ehr/terminology` 0.1.1, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.0 and `healthcare/ehr/clinical-documentation` 0.4.1; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.1, EHR-only), Encounters (`healthcare/encounter` 0.1.2 and `healthcare/ehr/encounter` 0.13.2), Patients (`healthcare/patient` 0.12.0, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.4.0) and Appointments
-  (`healthcare/appointment` 0.11.0, `healthcare/ehr/appointment` 0.11.0; `core/appointment` 0.12.3). All
+  drafts: Terminology (`healthcare/terminology` 0.1.2, healthcare level, and `healthcare/ehr/terminology` 0.1.2, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.1 and `healthcare/ehr/clinical-documentation` 0.4.2; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.1, EHR-only), Encounters (`healthcare/encounter` 0.1.3 and `healthcare/ehr/encounter` 0.13.3), Patients (`healthcare/patient` 0.12.1, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.4.1) and Appointments
+  (`healthcare/appointment` 0.11.1, `healthcare/ehr/appointment` 0.11.1; `core/appointment` 0.12.3). All
   support the US and EU through the `jurisdiction` setting. Next: Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

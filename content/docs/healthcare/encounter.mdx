@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.2
+version: 0.1.3
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,12 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Wording names the organization rather than a hospital, so the page reads right for any kind of health application; hospital law is still cited as hospital law.
+  - A technical note no longer names ADT, which only the EHR has.
 - version: 0.1.2
   date: '2026-10-09'
   breaking: false
@@ -592,7 +598,7 @@ edgeCases:
   - BR-H10
   - AC-H11
 - id: EC-H11
-  situation: A patient is seen at the hospital's substance use disorder program.
+  situation: A patient is seen at the organization's substance use disorder program.
   behaviour: The encounter carries SUD sensitivity, and its notes and results inherit it.
   covers:
   - BR-H14
@@ -2057,7 +2063,7 @@ decisions:
   date: '2026-10-07'
 - id: ADR-H5
   decision: When an ambulatory encounter opens is a setting (encounter_opens_at).
-  rationale: FHIR's Appointment and Encounter pages describe different moments, and hospitals differ. A setting keeps both correct.
+  rationale: FHIR's Appointment and Encounter pages describe different moments, and providers differ. A setting keeps both correct.
   date: '2026-10-08'
 references:
 - id: REF-H1
@@ -2371,7 +2377,7 @@ technicalNotes:
   text: Load each fiscal year's ICD-10-CM release with its effective dates, and validate a diagnosis against the release in effect on the discharge date for inpatient encounters, or the encounter date otherwise.
 - id: TN-H2
   title: Make event consumers idempotent
-  text: Key encounter creation on the source event (appointment id, emergency arrival id or admission id) as well as the Idempotency-Key, so a replayed event from Appointments or ADT returns the existing encounter.
+  text: Key encounter creation on the source event (appointment id, emergency arrival id or admission id) as well as the Idempotency-Key, so a replayed event from Appointments or another module returns the existing encounter.
 compliance:
 - id: CMP-H2
   regulation: HIPAA Privacy Rule

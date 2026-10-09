@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.0
+version: 0.2.1
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -25,12 +25,17 @@ nonGoals:
 - Problem lists and diagnoses. Encounters records encounter diagnoses; a problem list is a later module.
 - Early warning scores, alerts and escalation such as rapid response calls. Clinical decision support reads the observations this module records.
 - Connecting to monitors and other devices. Device integration delivers readings; this module records and validates them.
-- Scanned paper and documents from outside the hospital. Document imaging owns them.
+- Scanned paper and documents from outside the organization. Document imaging owns them.
 - Consent forms and disclosure decisions, including authorizations for psychotherapy notes and 42 CFR Part 2 records. Consent owns them.
 - Copies of the record, the accounting of disclosures and the US single-patient export. Release of information owns them.
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.2.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Wording names the organization rather than a hospital, so the page reads right for any kind of health application; hospital law is still cited as hospital law.
 - version: 0.2.0
   date: '2026-10-09'
   breaking: false
@@ -73,7 +78,7 @@ assumptions:
   rationale: Scope of practice and supervision come from state law, licences and medical staff bylaws, which Organization holds.
 - id: AS-H4
   text: Medical staff bylaws or hospital policy set the deadlines for signing, cosigning and completing notes, within any limit the law sets.
-  rationale: The law sets outer limits, such as 30 days to complete a US hospital record; hospitals set shorter ones in their bylaws.
+  rationale: The law sets outer limits, such as 30 days to complete a US hospital record; providers set shorter ones in their bylaws.
 glossary:
 - term: Note
   definition: A clinical document written about a patient for an encounter, such as a progress note or discharge summary (FHIR Composition, HL7 v2 MDM document).
@@ -828,7 +833,7 @@ edgeCases:
   - BR-H24
   - AC-H25
 - id: EC-H12
-  situation: A practitioner leaves the hospital with unsigned drafts.
+  situation: A practitioner leaves the organization with unsigned drafts.
   behaviour: An HIM specialist closes each deficiency as unresolvable; the drafts are filed preliminary and shown as unsigned, never as signed.
   covers:
   - BR-H47
@@ -1160,16 +1165,16 @@ settings:
   description: For each note type, whether copying text into it is allowed. Default allowed with attribution for every type.
 - name: drafting_tools
   type: list
-  description: Speech recognition and AI drafting tools the hospital has approved, with their versions, whether each records audio, and how long its vendor keeps audio. Empty by default.
+  description: Speech recognition and AI drafting tools the organization has approved, with their versions, whether each records audio, and how long its vendor keeps audio. Empty by default.
 - name: device_values_need_validation
   type: boolean
   description: Whether device readings need a nurse to accept them before they are final. Default true.
 - name: vital_sign_limits
   type: map
-  description: 'For each vital sign code: plausible limits, outside which a value is refused, and normal ranges by age band, outside which it is flagged. Set by the hospital''s clinical leadership.'
+  description: 'For each vital sign code: plausible limits, outside which a value is refused, and normal ranges by age band, outside which it is flagged. Set by the organization''s clinical leadership.'
 - name: bmi_height_max_age
   type: duration
-  description: How old a height can be for computing a BMI. Default 365 days for adults; the hospital sets it for children.
+  description: How old a height can be for computing a BMI. Default 365 days for adults; the organization sets it for children.
 - name: assessment_instruments
   type: list
   description: Assessment instruments in use, each with its version, items, LOINC codes where they exist, required items and scoring. Includes the 0 to 10 pain severity scale (LOINC 72514-3) by default.
@@ -1186,7 +1191,7 @@ performanceTargets:
   measurement: Share of notes signed within signature_deadline, per month.
 - id: PERF-H2
   indicator: Delinquent records
-  target: Set by the hospital
+  target: Set by the organization
   measurement: Encounters with a delinquent deficiency, per month.
 - id: PERF-H4
   indicator: Release delay
@@ -1849,7 +1854,7 @@ operations:
   - NOTE_FORBIDDEN
 - name: Add a rebuttal
   actor: Health information management (HIM) specialist
-  description: Add the hospital's rebuttal to a statement of disagreement.
+  description: Add the organization's rebuttal to a statement of disagreement.
   method: POST
   path: /note-correction-requests/{id}/rebuttal
   success: 200
@@ -2476,7 +2481,7 @@ personalData:
 - field: deficiency.encounter_id, deficiency.practitioner_id, deficiency.kind, deficiency.note_type, deficiency.note_id, deficiency.due_at, deficiency.status, deficiency.delinquent, deficiency.closed_reason
   category: personal data of staff
   purpose: Completing records on time, and medical staff performance review
-  retention: Set by the hospital; at least until the encounter completes
+  retention: Set by the organization; at least until the encounter completes
 - field: access log
   category: personal
   purpose: Showing who accessed health data
@@ -2795,7 +2800,7 @@ decisions:
   date: '2026-10-09'
 - id: ADR-H5
   decision: Device readings need validation by default.
-  rationale: Artifact-laden readings filed automatically pollute the record; hospitals that trust a device can turn it off.
+  rationale: Artifact-laden readings filed automatically pollute the record; organizations that trust a device can turn it off.
   date: '2026-10-09'
 references:
 - id: REF-H1
@@ -3457,7 +3462,7 @@ compliance:
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.502(e) and 164.504(e)
   obligation: Business associate agreements with vendors that handle health information, such as AI drafting tools.
-  how: Approved tools only; contracts are the hospital's duty.
+  how: Approved tools only; contracts are the organization's duty.
   status: deployment
   covered_by:
   - BR-H7
@@ -3533,7 +3538,7 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Articles 28, 30, 35 and 37
   obligation: Processor contracts (such as with AI drafting vendors), records of processing, impact assessment and a data protection officer.
-  how: The hospital's duties; an impact assessment covers AI drafting before use.
+  how: The organization's duties; an impact assessment covers AI drafting before use.
   status: deployment
   covered_by:
   - BR-H7
@@ -3542,7 +3547,7 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Article 6(1)
   obligation: A lawful basis under Article 6 as well as an Article 9 exception.
-  how: The hospital records its basis.
+  how: The organization records its basis.
   status: deployment
   covered_by:
   - BR-H34
@@ -3551,7 +3556,7 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Articles 44 to 49
   obligation: Transfers outside the EU need an adequacy decision or safeguards, such as for cloud drafting tools.
-  how: The hospital's duty when it approves a tool.
+  how: The organization's duty when it approves a tool.
   status: deployment
   covered_by:
   - BR-H7
@@ -3614,7 +3619,7 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Article 13
   obligation: Tell people about processing, such as recording a consultation, when their data is collected.
-  how: Recording consent before recording; the notice is the hospital's.
+  how: Recording consent before recording; the notice is the organization's.
   status: deployment
   covered_by:
   - BR-H50
@@ -3632,7 +3637,7 @@ compliance:
   regulation: EU AI Act (EU) 2024/1689
   provision: Article 50(2)
   obligation: Providers of AI systems generating text mark the output as AI-generated, in a machine-readable way, from 2 August 2026; tools already on the market before then have until 2 December 2026.
-  how: The tool vendor marks output; this module keeps the marking with the note's provenance; the hospital approves only compliant tools.
+  how: The tool vendor marks output; this module keeps the marking with the note's provenance; the organization approves only compliant tools.
   status: deployment
   covered_by:
   - BR-H7

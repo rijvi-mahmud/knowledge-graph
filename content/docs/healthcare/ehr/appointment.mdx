@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments: appointments for patients in an inpatient or observation stay, which belong to the stay, built on the clinical appointment rules.'
 module: appointment
-version: 0.11.0
+version: 0.11.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -267,6 +267,11 @@ references:
   title: Medicare, inpatient or outpatient hospital status
   url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
 changelog:
+- version: 0.11.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Holds the glossary terms Inpatient, Observation and Stay.
 - version: 0.11.0
   date: '2026-10-09'
   breaking: true
@@ -366,6 +371,13 @@ validations:
 - field: care_setting
   rule: observation or inpatient only while the patient has an active stay of that kind
   error: APPOINTMENT_NO_ACTIVE_STAY
+glossary:
+- term: Inpatient
+  definition: A patient formally admitted to the organization with a doctor's order, with a stay (HL7 class IMP).
+- term: Observation
+  definition: Hospital outpatient services while a doctor decides whether to admit or discharge the patient, even in a hospital bed overnight (Medicare). HL7 class OBSENC.
+- term: Stay
+  definition: A patient's time in hospital as an inpatient or under observation, recorded as one encounter until it ends.
 ---
 
 Appointments build on the

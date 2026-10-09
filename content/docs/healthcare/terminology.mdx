@@ -1,8 +1,8 @@
 ---
 title: Terminology
-description: 'The code systems the hospital uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
+description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.1.1
+version: 0.1.2
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -15,16 +15,16 @@ scope:
 - 'Value sets: the codes a field allows, versioned and bound to the module settings that use them'
 - Maps between code systems, including rule-based maps that need the patient's age or sex, and translation
 - ICD-11 postcoordination clusters
-- Local codes in the hospital's own code systems
+- Local codes in the organization's own code systems
 - Dual coding while moving from one classification to another, such as ICD-10 to ICD-11
-- 'Licences: loading and showing licensed content only where the hospital holds the licence'
+- 'Licences: loading and showing licensed content only where the organization holds the licence'
 - Watching for releases that are due
 nonGoals:
 - 'The content of code systems. Their publishers own it: WHO, CDC and CMS, SNOMED International, Regenstrief, NLM, the AMA and national bodies.'
 - Choosing codes for a claim, payer code edits and grouping. Billing owns coding.
 - Recording diagnoses, results or medications. Each module records its own codes and asks this module whether they are valid.
 - Automatic coding from free text, including by AI.
-- Negotiating licences. The hospital holds them; this module records them.
+- Negotiating licences. The organization holds them; this module records them.
 - Clinical decision rules built on codes. Clinical decision support owns them.
 actors:
 - name: Terminology manager
@@ -37,13 +37,13 @@ actors:
   description: Other modules that validate codes, expand value sets and translate codes.
 assumptions:
 - id: AS-H1
-  text: Publishers distribute releases as files the hospital can download, with dates of effect, and checksums or record counts to check them against.
+  text: Publishers distribute releases as files the organization can download, with dates of effect, and checksums or record counts to check them against.
   rationale: CDC, CMS, NLM, SNOMED International, Regenstrief and WHO publish release files and notes with each release.
 - id: AS-H2
   text: Callers send the date a code applies to, and the patient context a rule-based map needs.
   rationale: Which release applies depends on the date of care, and map rules depend on the patient's age and sex. This module holds no patient data.
 - id: AS-H3
-  text: The hospital holds the licences for the code systems it uses, such as the AMA's for CPT.
+  text: The organization holds the licences for the code systems it uses, such as the AMA's for CPT.
   rationale: Some code systems can't be used without a licence; others are free with attribution.
 glossary:
 - term: Code system
@@ -107,7 +107,7 @@ dataModel:
 - name: code_system.licence
   type: licence
   required: true
-  description: The licence its content needs, whether the hospital holds it, and the attribution it requires.
+  description: The licence its content needs, whether the organization holds it, and the attribution it requires.
   constraints: licence_held must be true before a release is activated, unless the licence is free
 - name: release.id
   type: string
@@ -283,7 +283,7 @@ businessRules:
   rationale: Records coded against a release must stay readable for as long as they are kept.
 - id: BR-H7
   text: When no release covers the date given, validation answers unknown rather than invalid, and names the dates the loaded releases cover.
-  rationale: A record from before the hospital loaded a code system isn't wrong; the caller decides whether to accept it.
+  rationale: A record from before the organization loaded a code system isn't wrong; the caller decides whether to accept it.
 - id: BR-H8
   text: An inactive code is never valid for new use on a date it is inactive, but stays readable with its last display. Validation returns the replacements its publisher names. Recorded codes are never rewritten automatically.
   rationale: SNOMED CT links inactive concepts to active ones through historical associations, and LOINC names a replacement in MAP_TO. Which replacement is right depends on the record, so a person or the owning module decides.
@@ -485,7 +485,7 @@ edgeCases:
   - BR-H6
   - AC-H5
 - id: EC-H6
-  situation: A record from 2009 is checked, before the hospital loaded any ICD-10-CM release.
+  situation: A record from 2009 is checked, before the organization loaded any ICD-10-CM release.
   behaviour: Validation answers unknown and names the dates covered.
   covers:
   - BR-H7
@@ -528,7 +528,7 @@ edgeCases:
   - BR-H16
   - AC-H12
 - id: EC-H13
-  situation: A Terminology manager adds a hospital code to the LOINC code system.
+  situation: A Terminology manager adds a local code to the LOINC code system.
   behaviour: Refused; local codes go in a local code system.
   covers:
   - BR-H20
@@ -624,7 +624,7 @@ constraints:
   text: This module stores no patient data.
   rationale: It answers questions about codes; keeping patient context would make it a store of health data for no purpose (GDPR Article 5(1)(c)).
 - id: CON-H2
-  text: Licensed content is loaded and shown only within the licences the hospital holds.
+  text: Licensed content is loaded and shown only within the licences the organization holds.
   rationale: The AMA requires a licence for CPT, and SNOMED CT is free only under the affiliate licence in member countries.
 settings:
 - name: jurisdiction
@@ -641,7 +641,7 @@ settings:
   description: Pairs of classifications coded side by side, such as ICD-10 and ICD-11, with the period. Empty by default.
 - name: local_namespace
   type: uri
-  description: The URI base for the hospital's local code systems, and its SNOMED CT namespace if it has one. Required.
+  description: The URI base for the organization's local code systems, and its SNOMED CT namespace if it has one. Required.
 - name: release_watch
   type: list
   description: 'For each code system, when the next release is expected and how long before to warn. Defaults: ICD-10-CM and ICD-10-PCS each 1 October, with possible 1 April updates; LOINC February and August; SNOMED CT International Edition and RxNorm monthly; ICD-11 yearly.'
@@ -1103,7 +1103,7 @@ operations:
   - TERMINOLOGY_NOT_FOUND
 - name: Load a map
   actor: Terminology manager
-  description: Load a map from a publisher, a transition table, or the hospital's own.
+  description: Load a map from a publisher, a transition table, or the organization's own.
   method: POST
   path: /maps
   success: 201
@@ -1128,7 +1128,7 @@ operations:
   - TERMINOLOGY_FORBIDDEN
 - name: Add a local code
   actor: Terminology manager
-  description: Add a code to one of the hospital's local code systems, optionally mapped to a standard code.
+  description: Add a code to one of the organization's local code systems, optionally mapped to a standard code.
   method: POST
   path: /code-systems/{id}/concepts
   success: 201
@@ -1224,7 +1224,7 @@ permissions:
 - name: terminology.manage
   description: Register code systems, load and activate releases, and manage value sets, maps and local codes.
 - name: terminology.licensed
-  description: See licensed content, such as CPT descriptions, within the hospital's licence.
+  description: See licensed content, such as CPT descriptions, within the organization's licence.
 accessMatrix:
 - action: Validate, look up, expand, check subsumption, validate clusters, list code systems and releases, get value sets
   roles:
@@ -1269,7 +1269,7 @@ accessMatrix:
     Coder: any
     System: any
   permission: terminology.licensed
-  note: 'any: only users and systems the hospital''s licence covers hold this permission (BR-H21).'
+  note: 'any: only users and systems the organization''s licence covers hold this permission (BR-H21).'
 personalData:
 - field: release.loaded_by
   category: personal data of staff
@@ -1498,6 +1498,11 @@ references:
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Article 5(1)(c), data minimisation.
 changelog:
+- version: 0.1.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Wording names the organization rather than a hospital, so the page reads right for any kind of health application; hospital law is still cited as hospital law.
 - version: 0.1.1
   date: '2026-10-09'
   breaking: false
