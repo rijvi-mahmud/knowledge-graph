@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.11.1
+version: 0.11.2
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -124,6 +124,7 @@ dataModel:
   type: instant
   required: false
   constraints: set when status = checked_in
+  description: When the patient checked in.
 - name: identity_verified_with
   type: string[]
   required: false
@@ -440,7 +441,9 @@ validations:
   rule: Orders confirms each order, open and for the same patient
   error: APPOINTMENT_INVALID_ORDER
 stateMachine:
-  initial: booked
+  initial:
+  - booked
+  - pending
   states:
   - pending
   - booked
@@ -2064,6 +2067,11 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.11.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The state machine starts in booked, or pending when BR-17 needs confirmation; checked_in_at has a description.
 - version: 0.11.1
   date: '2026-10-09'
   breaking: false

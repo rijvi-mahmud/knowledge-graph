@@ -101,7 +101,8 @@ const validationSchema = z.object({
 });
 
 const stateMachineSchema = z.object({
-  initial: z.string(),
+  // One state, or several when how an item starts depends on a setting
+  initial: z.union([z.string(), z.array(z.string()).min(1)]),
   states: z.array(z.string()),
   transitions: z.array(
     z.object({

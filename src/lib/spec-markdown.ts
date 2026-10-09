@@ -177,7 +177,7 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
     section(
       'state-machine',
       [
-        `Initial state: \`${sm.initial}\`. States: ${sm.states.map((s) => `\`${s}\``).join(', ')}.${mark(sm)}`,
+        `Initial state: ${[sm.initial].flat().map((s) => `\`${s}\``).join(' or ')}. States: ${sm.states.map((s) => `\`${s}\``).join(', ')}.${mark(sm)}`,
         'Any transition not listed below is invalid.',
         '',
         table(

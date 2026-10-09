@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.12.2
+version: 0.12.3
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -1058,6 +1058,11 @@ edgeCases:
   covers:
   - BR-H56
   - AC-H83
+- id: EC-H57
+  situation: A patient born on 1 March is registered by a clinic in another time zone, and later viewed from a third.
+  behaviour: birth_date is a date with no time or zone, so it reads 1 March everywhere; it is never stored as an instant and converted.
+  covers:
+  - BR-H4
 functionalRequirements:
 - id: FR-H1
   text: The service must register patients, accepting an Idempotency-Key so a retry never creates a second record.
@@ -3139,6 +3144,11 @@ references:
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
 changelog:
+- version: 0.12.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'EC-H57: a birth date reads the same in every time zone.'
 - version: 0.12.2
   date: '2026-10-09'
   breaking: false

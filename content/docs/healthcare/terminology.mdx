@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.1.2
+version: 0.1.3
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -563,6 +563,25 @@ edgeCases:
   covers:
   - BR-H19
   - AC-H11
+- id: EC-H19
+  situation: A Terminology manager stages the same release twice, once by retrying after a timeout.
+  behaviour: The retry with the same Idempotency-Key returns the release staged first; staging the same version again without the key fails with TERMINOLOGY_RELEASE_EXISTS.
+  covers:
+  - BR-H4
+  - AC-H3
+  - AC-H19
+- id: EC-H20
+  situation: A visit happens at 23:30 Pacific time on 30 September, which is already 1 October in UTC.
+  behaviour: The caller sends the local date of care, 30 September, so the September release applies.
+  covers:
+  - BR-H2
+  - BR-H3
+- id: EC-H21
+  situation: terminology.release_activated for the April update arrives before the one for the October release.
+  behaviour: Consumers rely on each release's effective dates and the release named in every answer, not on the order of events.
+  covers:
+  - BR-H25
+  - BR-H27
 functionalRequirements:
 - id: FR-H1
   text: The service must validate a code on a date against the release in effect, saying whether it exists, is active and is valid for reporting.
@@ -1498,6 +1517,11 @@ references:
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Article 5(1)(c), data minimisation.
 changelog:
+- version: 0.1.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Edge cases for retries, the local date of care, and out-of-order release events.
 - version: 0.1.2
   date: '2026-10-09'
   breaking: false

@@ -74,7 +74,7 @@ interface Validation extends Provenance {
 }
 
 interface StateMachine extends Provenance {
-  initial: string;
+  initial: string | string[];
   states: string[];
   transitions: {
     from: string;
@@ -901,7 +901,14 @@ export function ModuleSpec({
     'state-machine': data.stateMachine && (
       <>
         <p>
-          Starts in <code>{data.stateMachine.initial}</code>. Possible states:{' '}
+          Starts in{' '}
+          {[data.stateMachine.initial].flat().map((st, i, all) => (
+            <span key={st}>
+              {i > 0 && (i === all.length - 1 ? ' or ' : ', ')}
+              <code>{st}</code>
+            </span>
+          ))}
+          . Possible states:{' '}
           {data.stateMachine.states.map((st, i) => (
             <span key={st}>
               {i > 0 && ', '}

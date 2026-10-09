@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.8.1
+version: 0.8.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -672,6 +672,30 @@ edgeCases:
   covers:
   - BR-E43
   - AC-E57
+- id: EC-E26
+  situation: The emergency department retries an admission request after a timeout.
+  behaviour: The retry with the same Idempotency-Key returns the stay admitted the first time; the patient is never admitted twice.
+  covers:
+  - FR-E11
+  - AC-E18
+- id: EC-E27
+  situation: A patient is in a bed from 23:00 to 07:00 across the night clocks go forward, and the midnight census runs.
+  behaviour: Times are UTC instants, so the stay is 7 hours, not 8; the midnight census counts the patient once, from bed_history.
+  covers:
+  - BR-E29
+  - BR-E37
+  - CON-E2
+- id: EC-E28
+  situation: A former patient asks for their stays to be erased while the Patients module's retention still applies, or under legal hold.
+  behaviour: 'Nothing is erased: stays are kept for retention, and never erased under legal hold.'
+  covers:
+  - BR-E27
+- id: EC-E29
+  situation: A bed board receives bed.status_changed at revision 7 after revision 8.
+  behaviour: It keeps revision 8 and ignores 7.
+  covers:
+  - DG-E2
+  - AC-E53
 functionalRequirements:
 - id: FR-E1
   text: The service must record pending admissions, admissions and their cancellations, and report each to Encounters.
@@ -2483,6 +2507,11 @@ compliance:
   covered_by: []
   jurisdiction: us
 changelog:
+- version: 0.8.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Edge cases for retries, daylight saving and the census, erasure under retention or legal hold, and out-of-order events.
 - version: 0.8.1
   date: '2026-10-09'
   breaking: false

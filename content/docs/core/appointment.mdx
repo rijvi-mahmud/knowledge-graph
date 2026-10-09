@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.12.3
+version: 0.12.4
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -100,6 +100,11 @@ dataModel:
   type: string
   required: true
   description: Stable identifier, immutable for the life of the appointment.
+- name: calendar_id
+  type: string
+  required: true
+  description: The calendar the appointment sits on, owned by the Calendar module.
+  constraints: a calendar the requester may book on; never changes after booking
 - name: participants
   type: array<{ identity_id, role, required, response, time_zone?, locale?, attendance? }>
   required: true
@@ -184,6 +189,7 @@ dataModel:
 - name: notes
   type: string
   required: false
+  description: Free text the requester adds, such as what to bring.
 - name: history
   type: array<{ revision, change, actor, at, previous_start_at?, previous_end_at? }>
   required: true
@@ -192,9 +198,11 @@ dataModel:
 - name: created_at
   type: instant
   required: true
+  description: When the appointment was created.
 - name: updated_at
   type: instant
   required: true
+  description: When it last changed.
 - name: cancelled_reason
   type: string
   required: false
@@ -208,10 +216,12 @@ dataModel:
   type: instant
   required: false
   constraints: set when status = cancelled
+  description: When it was cancelled.
 - name: completed_at
   type: instant
   required: false
   constraints: set when status = completed
+  description: When it was completed.
 - name: no_show_recorded_by
   type: string
   required: false
@@ -388,7 +398,9 @@ validations:
   rule: needs_action, accepted, declined or tentative, recorded by the participant or a Scheduler
   error: APPOINTMENT_INVALID_RESPONSE
 stateMachine:
-  initial: booked
+  initial:
+  - booked
+  - pending
   states:
   - pending
   - booked
@@ -2086,6 +2098,11 @@ references:
   title: GDPR (EU) 2016/679 on EUR-Lex (Articles 6 and 44 to 49)
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
 changelog:
+- version: 0.12.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The state machine starts in booked, or pending when BR-17 needs confirmation; calendar_id is in the data model; every field has a description.
 - version: 0.12.3
   date: '2026-10-09'
   breaking: false

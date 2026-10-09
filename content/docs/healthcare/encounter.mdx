@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.5
+version: 0.1.6
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.6
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The order relationship names based_on; edge cases for retries, daylight saving and out-of-order events.
 - version: 0.1.5
   date: '2026-10-09'
   breaking: false
@@ -326,7 +331,7 @@ relationships:
   target: event:encounter.completed
 - type: belongs_to
   target: order
-  note: optional; the orders it carries out
+  note: optional; the orders it carries out, held in based_on (FHIR Encounter.basedOn)
 - type: belongs_to
   target: account
   note: billing accounts, owned by Billing
@@ -709,6 +714,24 @@ edgeCases:
   covers:
   - BR-H47
   - AC-H62
+- id: EC-H41
+  situation: Appointments retries appointment.checked_in after a timeout.
+  behaviour: The retry carries the same Idempotency-Key and returns the encounter opened the first time; no second encounter opens.
+  covers:
+  - FR-H12
+  - AC-H23
+- id: EC-H42
+  situation: An encounter runs from 01:00 to 03:30 local time on the night clocks go back.
+  behaviour: Times are stored as UTC instants, so length is 3 hours 30 minutes of real time, not the 2 hours 30 minutes the wall clock suggests.
+  covers:
+  - BR-H16
+  - CON-H3
+  - AC-H28
+- id: EC-H43
+  situation: A consumer receives encounter.updated at revision 6 after one at revision 7.
+  behaviour: It ignores revision 6, because each event carries the revision and a lower one is older.
+  covers:
+  - DG-H2
 functionalRequirements:
 - id: FR-H1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.

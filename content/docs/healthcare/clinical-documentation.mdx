@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.1
+version: 0.2.2
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.2.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H54: events from Encounters are applied in revision order.'
 - version: 0.2.1
   date: '2026-10-09'
   breaking: false
@@ -623,6 +628,9 @@ businessRules:
 - id: BR-H53
   text: A body weight is recorded in kilograms or grams only, with weight_basis. A stated or estimated weight is used only when the patient can't be weighed, is shown as such, and the encounter is listed until a measured weight replaces it. Each admission and each outpatient or emergency encounter needs a measured weight as soon as possible.
   rationale: The National Coordinating Council for Medication Error Reporting and Prevention recommends measuring and documenting weights in metric units only, avoiding stated, estimated or historical weights, and weighing on admission and at each outpatient or emergency encounter. Pounds entered as kilograms cause serious dosing errors.
+- id: BR-H54
+  text: Events from Encounters about one encounter are applied in revision order; an event with a lower revision than one already applied is ignored.
+  rationale: Encounters sends events at least once and possibly out of order, each with the encounter's revision. Applying an older one, such as discharged after completed, would reopen a finished record.
 validations:
 - field: note.encounter_id
   rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
@@ -1027,6 +1035,12 @@ edgeCases:
   - BR-H1
   - BR-H38
   - AC-H61
+- id: EC-H48
+  situation: encounter.completed arrives before encounter.discharged for the same encounter.
+  behaviour: The completed event is applied; the later-arriving discharged event has a lower revision and is ignored.
+  covers:
+  - BR-H54
+  - AC-H62
 functionalRequirements:
 - id: FR-H1
   text: The service must let authors start, edit, sign and discard notes, and cosigners cosign them, following the note lifecycle.
@@ -1563,6 +1577,12 @@ acceptanceCriteria:
   verifies:
   - BR-H1
   - BR-H38
+- id: AC-H62
+  given: an encounter whose encounter.completed at revision 9 has been applied
+  when: encounter.discharged at revision 8 arrives
+  then: it is ignored, and no deficiency or documentation status changes
+  verifies:
+  - BR-H54
 operations:
 - name: Start a note
   actor: Clinician
