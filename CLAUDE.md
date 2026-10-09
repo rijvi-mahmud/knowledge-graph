@@ -723,7 +723,7 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Clinical documentation (`healthcare/ehr/clinical-documentation` 0.3.0, EHR-only; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.0, EHR-only), Encounters (`healthcare/ehr/encounter` 0.12.0, EHR-only), Patients (`healthcare/patient` 0.11.0, which has no core page by the
+  drafts: Clinical documentation (`healthcare/ehr/clinical-documentation` 0.3.1, EHR-only; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.0, EHR-only), Encounters (`healthcare/ehr/encounter` 0.12.0, EHR-only), Patients (`healthcare/patient` 0.11.0, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.3.6) and Appointments
   (`healthcare/appointment` 0.10.2, `healthcare/ehr/appointment` 0.10.2; `core/appointment` 0.12.2). All
   support the US and EU through the `jurisdiction` setting. Next: Orders and results.

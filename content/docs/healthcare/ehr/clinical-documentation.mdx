@@ -2,7 +2,7 @@
 title: Clinical documentation
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.3.0
+version: 0.3.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -3096,7 +3096,16 @@ references:
   title: 45 CFR 171.103, Information blocking
   url: https://www.ecfr.gov/current/title-45/section-171.103
   note: Practices required by law aren't information blocking.
+- id: REF-E38
+  title: Regulation (EU) 2026/1744, Digital Omnibus on AI
+  url: https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng
+  note: Adds the 2 December 2026 deadline for AI tools on the market before 2 August 2026.
 changelog:
+- version: 0.3.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - CMP-E40 gives the 2 December 2026 deadline for AI tools already on the market, from Regulation (EU) 2026/1744.
 - version: 0.3.0
   date: '2026-10-09'
   breaking: false
@@ -3910,7 +3919,7 @@ compliance:
 - id: CMP-E40
   regulation: EU AI Act (EU) 2024/1689
   provision: Article 50(2)
-  obligation: Providers of AI systems generating text mark the output as AI-generated, in a machine-readable way, from 2 August 2026.
+  obligation: Providers of AI systems generating text mark the output as AI-generated, in a machine-readable way, from 2 August 2026; tools already on the market before then have until 2 December 2026.
   how: The tool vendor marks output; this module keeps the marking with the note's provenance; the hospital approves only compliant tools.
   status: deployment
   covered_by:
