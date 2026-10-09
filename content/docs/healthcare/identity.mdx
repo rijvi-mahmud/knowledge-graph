@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.7.0
+version: 0.7.1
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -262,7 +262,7 @@ businessRules:
   rationale: NIST SP 800-63A-4 sets IAL2 for remote identity proofing; a portal account linked to the wrong patient discloses someone else's record, and a parent's access must end when the law says it does.
 - id: BR-H13
   text: In the European Union, patients and health professionals can authenticate with electronic identification means recognised under eIDAS, including the EU Digital Identity Wallet, at the assurance the member state requires; health professionals reaching national health data access services must use them.
-  rationale: The EHDS makes health professional access services available only to professionals with electronic identification recognised under the eIDAS Regulation (EHDS Article 12; Regulation (EU) No 910/2014).
+  rationale: The EHDS makes health professional access services available only to professionals with electronic identification recognised under the eIDAS Regulation (EHDS Article 12; Regulation (EU) No 910/2014). Article 12 applies from 26 March 2029 for the first priority categories (EHDS Article 105).
   jurisdiction: eu
 - id: BR-H14
   text: In the United States, third-party apps can register, and a patient can authorize one with SMART App Launch 2.0.0 scopes; patient apps that ask for it get a refresh token valid for at least refresh_token_lifetime. A registration or authorization is refused only on a documented security risk.
@@ -1990,6 +1990,11 @@ references:
   url: https://eur-lex.europa.eu/eli/dir/2016/2102/oj/eng
   note: Articles 1, 4 and 6.
 changelog:
+- version: 0.7.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - EHDS items state their application date, 26 March 2029 (Article 105); CMP-H13 for EHDS Article 4(5) accessibility.
 - version: 0.7.0
   date: '2026-10-09'
   breaking: false
@@ -2394,7 +2399,7 @@ compliance:
 - id: CMP-H7
   regulation: European Health Data Space (EU) 2025/327
   provision: Article 12
-  obligation: Health professionals reach access services only with eIDAS-recognised electronic identification.
+  obligation: Health professionals reach access services only with eIDAS-recognised electronic identification. Applies from 26 March 2029 for the first priority categories (Article 105).
   how: eIDAS sign-in for professionals.
   status: met
   covered_by:
@@ -2448,6 +2453,15 @@ compliance:
   covered_by:
   - BR-H34
   - BR-H8
+  jurisdiction: eu
+- id: CMP-H13
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 4(5)
+  obligation: Electronic health data access services and proxy services are easily accessible for persons with disabilities, vulnerable groups and persons with low digital literacy. Applies from 26 March 2029.
+  how: Accessible sign-in, enrolment and recovery, with a way to authenticate that needs no remembering or transcription.
+  status: met
+  covered_by:
+  - BR-H34
   jurisdiction: eu
 ---
 

@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.12.8
+version: 0.13.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -491,6 +491,9 @@ businessRules:
 - id: BR-H56
   text: Where mrn_scope is facility, each facility's MRN is an identifier on the one patient record. Registering at another facility of the organization searches the whole organization and adds that facility's MRN to the existing record instead of creating another. Records found for the same person at two facilities are merged like duplicates.
   rationale: The ONC SAFER Guide calls more than one id for the same person across facilities an overlap, usually after institutions merge, and expects an enterprise index that holds every MRN with one primary key.
+- id: BR-H57
+  text: An adult patient acting for themselves can authorise a proxy of their choice through the portal, setting the scope, period and, if they want, a purpose, and can withdraw it at any time; the proxy is recorded with kind proxy and patient.representative_changed is emitted. Parents, guardians and other legal representatives are still recorded by staff with evidence (BR-H14).
+  rationale: Patients should be able to share access with a carer without visiting the organization, and take it back as easily. In the EU, access services must let people authorise people of their choice, for a limited or unlimited period and a specific purpose, and manage those authorisations (EHDS Article 4(2)(a)).
 validations:
 - field: names
   rule: at least one usual, official or temp name; a name may have only a given name or only a family name
@@ -1185,6 +1188,10 @@ functionalRequirements:
   priority: must
   verification: demonstration
   jurisdiction: us
+- id: FR-H31
+  text: The service must let an adult patient authorise and withdraw proxies of their choice.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Only roles that need it can read a patient record, and every read is logged (BR-H19).
@@ -1903,6 +1910,13 @@ acceptanceCriteria:
   verifies:
   - FR-H30
   jurisdiction: us
+- id: AC-H86
+  given: an adult patient signed in to the portal
+  when: they authorise their daughter as a proxy for appointments for 6 months, then withdraw it, then a representative tries to authorise a proxy
+  then: the proxy is recorded with that scope and period and patient.representative_changed is emitted twice; the representative's attempt fails with PATIENT_INVALID_REPRESENTATIVE
+  verifies:
+  - BR-H57
+  - FR-H31
 operations:
 - name: Search patients
   actor: Registrar
@@ -2138,6 +2152,31 @@ operations:
   - PATIENT_INVALID_REPRESENTATIVE
   - PATIENT_REVISION_CONFLICT
   - PATIENT_DEPENDENCY_UNAVAILABLE
+- name: Authorise a proxy
+  actor: Patient
+  description: Authorise a person of the patient's choice to act for them, within a scope and period they choose.
+  method: POST
+  path: /patients/{id}/proxies
+  success: 201
+  input: patient id, revision, person, scope, period, purpose
+  output: the representative, kind proxy
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_MERGED
+  - PATIENT_INVALID_REPRESENTATIVE
+  - PATIENT_REVISION_CONFLICT
+- name: Withdraw a proxy
+  actor: Patient
+  description: End a proxy the patient authorised.
+  method: DELETE
+  path: /patients/{id}/proxies/{representativeId}
+  success: 200
+  input: patient id, representative id, revision
+  output: the ended authorisation
+  errors:
+  - PATIENT_NOT_FOUND
+  - PATIENT_REPRESENTATIVE_NOT_FOUND
+  - PATIENT_REVISION_CONFLICT
 - name: Check authority to act
   actor: System
   description: Answer whether a person may act for the patient for a purpose, such as booking an appointment.
@@ -2430,6 +2469,8 @@ permissions:
   description: Place and release legal holds.
 - name: patient.import
   description: Import patient records in bulk.
+- name: patient.self
+  description: Act on your own patient record through the portal.
 accessMatrix:
 - action: Search and read a patient
   roles:
@@ -2601,6 +2642,16 @@ accessMatrix:
     Privacy officer: none
     System: none
   permission: patient.import
+- action: Authorise or withdraw a proxy
+  roles:
+    Registrar: none
+    Clinician: none
+    Health information management (HIM) specialist: none
+    Patient: own
+    Privacy officer: none
+    System: none
+  permission: patient.self
+  note: An adult patient acting for themselves; representatives can't authorise proxies.
 personalData:
 - field: names, birth_date, birth_date_estimated, administrative_gender
   category: personal
@@ -3185,6 +3236,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.13.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Patients authorise and withdraw their own proxies in the portal (BR-H57, POST /patients/{id}/proxies, DELETE /patients/{id}/proxies/{representativeId}; EHDS Article 4(2)(a)).
 - version: 0.12.8
   date: '2026-10-09'
   breaking: false
@@ -4024,6 +4080,15 @@ compliance:
   covered_by:
   - FR-H30
   jurisdiction: us
+- id: CMP-H40
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 4(2)(a)
+  obligation: Let natural persons authorise people of their choice, for a limited or unlimited period and a specific purpose, and manage those authorisations. Applies from 26 March 2029 (Article 105).
+  how: Patients authorise and withdraw proxies in the portal.
+  status: met
+  covered_by:
+  - BR-H57
+  jurisdiction: eu
 ---
 Every clinical module refers to a patient by id. This module keeps that id
 pointing at one person, and keeps who that person is accurate over the years.
