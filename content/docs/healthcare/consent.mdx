@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.2.2
+version: 0.3.1
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -247,11 +247,11 @@ businessRules:
   text: 'A patient, or a representative within their scope, can revoke a consent at any time. A HIPAA authorization or Part 2 consent is revoked in writing, which includes the portal; GDPR consent and EHDS opt-outs are withdrawn as easily as they were given. Revocation takes effect when received and stops future uses only: what was already done in reliance on it stands. The consent becomes inactive and is kept.'
   rationale: HIPAA and Part 2 allow written revocation except for action already taken in reliance (45 CFR 164.508(b)(5); 42 CFR 2.31(a)(6)); GDPR requires withdrawal to be as easy as giving and not to affect earlier processing (Article 7(3)); EHDS opt-outs are reversible (Articles 10(1) and 71(1)).
 - id: BR-H12
-  text: A consent with an expiration date becomes inactive at the end of that date where the patient was, and consent.expired is emitted; one ending on an event becomes inactive when staff record the event.
+  text: A consent with an expiration date becomes inactive at the end of that date in the time zone of the organization holding it, and consent.expired is emitted; one ending on an event becomes inactive when staff record the event.
   rationale: An expired authorization is invalid (45 CFR 164.508(b)(2)(i); 42 CFR 2.31(c)(1)); end dates are inclusive, as FHIR periods are.
 - id: BR-H13
-  text: In the United States, a patient can ask to restrict uses or disclosures for treatment, payment or operations, or disclosures to family and friends. The request names the services or encounters it covers. A privacy officer agrees or declines, except that a request not to tell a health plan about a service the patient paid for in full, for payment or operations and where no law requires it, must be agreed. An agreed restriction binds every disclosure check, except emergency treatment and disclosures the law requires or permits without the patient's agreement.
-  rationale: Patients may request restrictions, the self-pay restriction must be agreed, and restrictions don't block required or public-interest disclosures (45 CFR 164.522(a)(1)).
+  text: In the United States, a patient can ask to restrict uses or disclosures for treatment, payment or operations, or disclosures to family and friends. The request names the services or encounters it covers. A privacy officer agrees or declines, except that a request not to tell a health plan about a service the patient paid for in full, for payment or operations and where no law requires it, must be agreed. An agreed restriction binds every disclosure check, including uses for treatment, payment and operations, except emergency treatment, disclosures required to HHS, the facility directory, and the public-interest disclosures of 45 CFR 164.512.
+  rationale: Patients may request restrictions, the self-pay restriction must be agreed, and an agreed restriction doesn't block disclosures to HHS, the directory or the public-interest disclosures (45 CFR 164.522(a)(1)(i) to (vi)).
   jurisdiction: us
 - id: BR-H14
   text: In the United States, an agreed restriction ends when the patient agrees in writing, or orally with that documented, or when the organization tells the patient it is ending it, which then applies only to information created or received after telling them and never to a self-pay restriction.
@@ -270,8 +270,8 @@ businessRules:
   rationale: Providers must give the notice and try to get an acknowledgment (45 CFR 164.520(c)(2)); Part 2 programs must give their notice at admission (42 CFR 2.22(a)).
   jurisdiction: us
 - id: BR-H18
-  text: In the European Union, a patient gets privacy information when their data is collected from them, and when it comes from someone else, such as a relative or emergency staff, within privacy_information_deadline, at most one month, or at first contact if sooner.
-  rationale: GDPR requires information at collection (Article 13) or, for data obtained elsewhere, within a reasonable period and at the latest one month (Article 14(3)).
+  text: In the European Union, a patient gets privacy information when their data is collected from them. When it comes from someone else, such as a relative or emergency staff, they get it within privacy_information_deadline, at most one month, and in any case by the first contact with them or the first disclosure to another recipient, whichever is sooner.
+  rationale: GDPR requires information at collection (Article 13) or, for data obtained elsewhere, within a reasonable period and at the latest one month, at first communication, or at first disclosure to another recipient (Article 14(3)).
   jurisdiction: eu
 - id: BR-H19
   text: In the European Union, a GDPR consent is recorded with the exact text and version the patient agreed to, who agreed, when and how, is explicit for health data, is presented apart from other matters, and is never a condition of care.
@@ -286,11 +286,11 @@ businessRules:
   rationale: Member states may give this right, which must be reversible (EHDS Article 10).
   jurisdiction: eu
 - id: BR-H22
-  text: In the European Union, a patient can opt out of secondary use at any time without giving a reason, and opt back in. consent.opt_out_changed is emitted so their data is left out of datasets for permits approved after the opt-out; permits approved before it are unaffected.
-  rationale: EHDS gives this reversible right and limits its effect to later permits (EHDS Article 71(1) and (3)); Chapter IV applies from 26 March 2029 (Article 105).
+  text: In the European Union, a patient can opt out of secondary use at any time without giving a reason, and opt back in. consent.opt_out_changed is emitted so their data is left out of datasets for permits approved after the opt-out; permits approved before it are unaffected, and so is any use member state law allows under Article 71(4).
+  rationale: EHDS gives this reversible right, limits its effect to later permits, and lets member states make such data available under strict conditions (EHDS Article 71(1), (3) and (4)); Chapter IV applies from 26 March 2029 (Article 105).
   jurisdiction: eu
 - id: BR-H23
-  text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure. A use the law allows without consent, such as treatment within the organization, is permitted with basis law, unless a narrower rule applies to that data. Every check and its answer is logged.
+  text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure or a rule here names an override, such as emergency use. When a patient records a permit that conflicts with a deny they made themselves, they are asked whether to end the deny. A use the law allows without consent, such as treatment within the organization, is permitted with basis law, unless a narrower rule applies to that data. Every check and its answer is logged.
   rationale: Modules need one consistent answer instead of reading forms; the log shows what each disclosure relied on, for audits and the accounting of disclosures.
 - id: BR-H24
   text: 'Restricted data can be used or disclosed in an emergency: under an agreed restriction for emergency treatment, with a request that the receiving provider not redisclose it; for Part 2 records to medical personnel in a bona fide emergency, documented at once with the personnel and their facility, who disclosed, when and the nature of the emergency; and in the EU to protect vital interests, logged for the patient. Each is recorded as an emergency use and reviewed by a privacy officer. While break-the-glass access that the Identity and access module reported is active for a patient, a disclosure check from that user with purpose ETREAT is answered permit for restricted data, and the emergency use is recorded automatically.'
@@ -327,6 +327,10 @@ businessRules:
   text: In the European Union, when a GDPR consent is given through the portal or another online service by a child under gdpr_child_consent_age, a holder of parental responsibility gives or authorises it, and the organization makes reasonable efforts to check that they did.
   rationale: For online services offered directly to a child, consent below 16, or the lower age a member state sets (not below 13), must come from a holder of parental responsibility (GDPR Article 8).
   jurisdiction: eu
+- id: BR-H35
+  text: 'In the United States, a disclosure to a family member, friend or other person the patient identified, for their involvement in the patient''s care or its payment, asks the Patients module whether that person is involved and whether the patient objected. It is permitted only for information directly relevant to that involvement: when the patient is present and agreed or didn''t object, or, when the patient is absent, incapacitated or in an emergency, when a clinician judges it in their best interest and records that judgment.'
+  rationale: HIPAA allows these disclosures without an authorization only on these conditions (45 CFR 164.510(b)(1) to (3)), and an agreed restriction on them binds (BR-H13).
+  jurisdiction: us
 validations:
 - field: consent.patient_id
   rule: A patient record in use, as the Patients module answers
@@ -717,7 +721,7 @@ acceptanceCriteria:
   - FR-H2
 - id: AC-H12
   given: an authorization expiring on 30 June
-  when: the clock passes the end of 30 June where the patient was
+  when: the clock passes the end of 30 June in the organization's time zone
   then: it becomes inactive and consent.expired is emitted
   verifies:
   - BR-H12
@@ -795,7 +799,7 @@ acceptanceCriteria:
   - BR-H22
   jurisdiction: eu
 - id: AC-H23
-  given: a patient with an active authorization and an agreed restriction covering the same disclosure
+  given: a patient with an active authorization for a disclosure to an outside insurer and an agreed restriction on the same disclosure
   when: the disclosure is checked, then a use for treatment inside the organization
   then: the first answer is deny with both consents named as basis; the second is permit with basis law; both are logged with a check id
   verifies:
@@ -921,6 +925,41 @@ acceptanceCriteria:
   then: the consent is not-done with the risks recorded, and consent.refused is emitted
   verifies:
   - BR-H25
+- id: AC-H42
+  given: jurisdiction us, a patient's daughter recorded as involved in their care, and a son the patient objected to
+  when: a disclosure of discharge instructions to each is checked, then one to the daughter while the patient is unconscious
+  then: the daughter is permit for what is relevant to her involvement, the son is deny, and the unconscious case is permit only with a clinician's recorded best-interest judgment
+  verifies:
+  - BR-H35
+  jurisdiction: us
+- id: AC-H43
+  given: jurisdiction us and an agreed restriction on disclosures to a health plan
+  when: a disclosure to HHS for a compliance review and a payment disclosure to the plan are checked
+  then: the HHS disclosure is permit with basis law; the plan disclosure is deny
+  verifies:
+  - BR-H13
+  jurisdiction: us
+- id: AC-H44
+  given: a Part 2 consent ending at the end of treatment
+  when: staff record that treatment ended, then try again
+  then: it becomes inactive with consent.expired emitted; the second attempt fails with CONSENT_INVALID_STATUS and HTTP 409
+  verifies:
+  - BR-H12
+- id: AC-H45
+  given: consents listed for review after a merge, and an emergency use
+  when: a privacy officer resolves the review by keeping one consent, and reviews the emergency use as justified
+  then: the deny no longer applies to the kept consent where it doesn't conflict, and the emergency use records the review; a registrar trying either fails with CONSENT_FORBIDDEN and HTTP 403
+  verifies:
+  - BR-H28
+  - BR-H24
+- id: AC-H46
+  given: jurisdiction us and a patient signed in to the portal
+  when: they request a restriction on disclosures to their employer's health plan
+  then: a draft restriction is recorded for a privacy officer to decide
+  verifies:
+  - BR-H13
+  - FR-H4
+  jurisdiction: us
 operations:
 - name: Record a consent
   actor: Registrar
@@ -1024,6 +1063,20 @@ operations:
   - CONSENT_REASON_REQUIRED
   - CONSENT_REVISION_CONFLICT
   - CONSENT_FORBIDDEN
+- name: Record an expiry event
+  actor: Registrar
+  description: Record that the event a consent ends on has happened, such as the end of treatment; the consent becomes inactive and consent.expired is emitted.
+  method: POST
+  path: /consents/{id}/expiry
+  success: 200
+  input: the event, when it happened, and revision
+  output: the inactive consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
 - name: Mark entered in error
   actor: Registrar
   description: Mark a consent recorded on the wrong patient or twice.
@@ -1031,6 +1084,20 @@ operations:
   path: /consents/{id}/entered-in-error
   success: 200
   input: reason and revision
+  output: the consent
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
+  - CONSENT_REASON_REQUIRED
+  - CONSENT_REVISION_CONFLICT
+  - CONSENT_FORBIDDEN
+- name: Resolve a review
+  actor: Privacy officer
+  description: 'Resolve a consent listed for review after a merge, an unmerge, a record entered in error or a representative''s authority ending: keep it, move it to the right record, or mark it entered in error.'
+  method: POST
+  path: /consents/{id}/review
+  success: 200
+  input: outcome, reason and revision
   output: the consent
   errors:
   - CONSENT_NOT_FOUND
@@ -1094,6 +1161,18 @@ operations:
   errors:
   - CONSENT_INVALID_PATIENT
   - CONSENT_REASON_REQUIRED
+  - CONSENT_FORBIDDEN
+- name: Review an emergency use
+  actor: Privacy officer
+  description: Record whether an emergency use of restricted data was justified.
+  method: POST
+  path: /emergency-uses/{id}/review
+  success: 200
+  input: justified or not, and notes
+  output: the reviewed emergency use
+  errors:
+  - CONSENT_NOT_FOUND
+  - CONSENT_INVALID_STATUS
   - CONSENT_FORBIDDEN
 - name: List notices
   actor: Registrar
@@ -1295,7 +1374,16 @@ accessMatrix:
     System: none
   permission: consent.self
   note: Staff record a paper signature or revocation on the patient's behalf with consent.record.
-- action: Decide or terminate a restriction
+- action: Request a restriction, ask not to share, give or refuse a GDPR consent, or record share_despite_risk, in the portal
+  roles:
+    Registrar: none
+    Clinician: none
+    Privacy officer: none
+    Patient: own
+    System: none
+  permission: consent.self
+  note: Uses Record a consent; staff record the same requests made on paper with consent.record.
+- action: Decide or terminate a restriction; resolve a review; review an emergency use
   roles:
     Registrar: none
     Clinician: none
@@ -1347,7 +1435,7 @@ personalData:
 errors:
 - code: CONSENT_NOT_FOUND
   http: 404
-  message: No consent or notice exists with that id.
+  message: No consent, notice or emergency use exists with that id.
 - code: CONSENT_FORBIDDEN
   http: 403
   message: Your role doesn't allow this.
@@ -1407,6 +1495,7 @@ dependencies:
   contract:
   - 'Asks: is this patient record in use, is the patient alive, and how old are they?'
   - 'Asks: may this person act for this patient, with which scope?'
+  - 'Asks: is this person involved in the patient''s care or payment, and has the patient objected to sharing with them?'
   - 'Asks: is this patient under legal hold?'
   - 'Receives: patient.registered (with informant), patient.merged, patient.unmerged, patient.deceased, patient.representative_changed and patient.entered_in_error'
   - 'Answers: has the patient opted out of this contact channel?'
@@ -1577,6 +1666,20 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-92.201
   note: Language assistance for informed consent.
 changelog:
+- version: 0.3.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Operations for recording an expiry event (BR-H12), resolving a review (BR-H28) and reviewing an emergency use (BR-H24), which the rules required but had no operation for.
+  - Patients can request restrictions, ask not to share and give GDPR consent in the portal.
+- version: 0.3.0
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H13: an agreed restriction binds treatment, payment and operations too; only emergency treatment, HHS, the directory and 164.512 disclosures are exempt (the earlier wording exempted everything the law permits, which emptied the restriction).'
+  - 'BR-H23: named overrides, and a prompt when a patient''s new permit conflicts with their own deny.'
+  - 'BR-H35: disclosures to family and friends follow 45 CFR 164.510(b), asking the Patients module about involvement and objections.'
+  - BR-H12 expiry in the organization's time zone; BR-H18 adds the first-disclosure deadline (GDPR Article 14(3)(c)); BR-H22 adds EHDS Article 71(4).
 - version: 0.2.2
   date: '2026-10-10'
   breaking: false
@@ -1822,13 +1925,14 @@ compliance:
   jurisdiction: us
 - id: CMP-H3
   regulation: HIPAA Privacy Rule
-  provision: 45 CFR 164.522(a)
-  obligation: Accept restriction requests, agree to self-pay restrictions, honour agreed ones, and terminate only as allowed.
+  provision: 45 CFR 164.510(b) and 164.522(a)
+  obligation: Disclose to people involved in care only as allowed, accept restriction requests, agree to self-pay restrictions, honour agreed ones, and terminate only as allowed.
   how: Restriction requests, decisions and terminations.
   status: met
   covered_by:
   - BR-H13
   - BR-H14
+  - BR-H35
   jurisdiction: us
 - id: CMP-H4
   regulation: HIPAA Privacy Rule

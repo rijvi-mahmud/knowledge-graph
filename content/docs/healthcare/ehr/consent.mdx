@@ -2,7 +2,7 @@
 title: Consent
 description: 'Hospital consent rules: informed consent in the chart before surgery, procedures the medical staff require written consent for, and advance directives at inpatient admission, built on the healthcare consent rules.'
 module: consent
-version: 0.1.1
+version: 0.1.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -38,10 +38,10 @@ edgeCases:
 settings:
 - name: consent_required_procedures
   type: code[]
-  description: The treatments and procedures that need written informed consent, as the medical staff specify in their rules and as federal or state law requires (42 CFR 482.24(c)(4)(v)).
+  description: The treatments and procedures that need written informed consent, as the medical staff specify in their rules and as law requires; in the United States, 42 CFR 482.24(c)(4)(v) requires the forms in the record.
 - name: advance_directive_information_at
   type: code
-  description: Inpatient admission (42 CFR 489.102(b)(1)).
+  description: Inpatient admission, which 42 CFR 489.102(b)(1) requires in the United States.
 acceptanceCriteria:
 - id: AC-E1
   given: jurisdiction us and a patient booked for a cholecystectomy with no consent on file
@@ -87,6 +87,11 @@ references:
   url: https://www.ecfr.gov/current/title-42/section-482.24
   note: (c)(4)(v), properly executed informed consent forms.
 changelog:
+- version: 0.1.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Settings name US law as US law, so EU deployments aren't misled.
 - version: 0.1.1
   date: '2026-10-10'
   breaking: false
