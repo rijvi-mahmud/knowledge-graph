@@ -2,7 +2,7 @@
 title: Clinical documentation
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -160,6 +160,11 @@ dataModel:
   required: false
   description: Whether the author confirmed, when signing, that they reviewed drafted or scribed content.
   constraints: set by the service when signing
+- name: note.recording_consent
+  type: consent record
+  required: false
+  description: 'For a drafting tool that records the conversation: who agreed to the recording, when and how.'
+  constraints: required when the tool records audio, from every party recording_consent requires
 - name: note.signed_at
   type: instant
   required: false
@@ -230,6 +235,11 @@ dataModel:
   required: false
   description: 'Why the note, or part of it, is held back from the patient: the grounds, the sections, who decided, when, and when it is reviewed.'
   constraints: set only through the hold operation
+- name: note.withheld_from_representatives
+  type: boolean
+  required: false
+  description: Set when the note is released to the patient but not to their representatives, such as care a minor consented to alone where the law lets them.
+  constraints: set by the author on a draft or through the hold operation
 - name: note.entered_in_error_reason
   type: code and text
   required: false
@@ -443,7 +453,7 @@ relationships:
   target: event:documentation.completed
 businessRules:
 - id: BR-E1
-  text: Every note and observation belongs to one encounter of one patient whose record is in use. The encounter must not be cancelled or entered in error.
+  text: Every note and observation belongs to one encounter of one patient whose record is in use. The encounter must not be cancelled or entered in error. When Encounters reports an encounter cancelled or entered in error, drafts on it are listed for their authors to move or discard.
   rationale: Every entry is found through its encounter (FHIR Composition.encounter, Observation.encounter). An entry on a cancelled encounter documents care that, by the record, never happened.
 - id: BR-E2
   text: A draft note is seen and edited only by its author, and by the scribe or drafting tool that created it. It is not part of the record used for care, it is never released to the patient, and it can be edited freely.
@@ -455,7 +465,7 @@ businessRules:
   text: Only the responsible author signs a note, with their own credential confirmed again at signing. Nobody signs for someone else, signing can't be delegated or automatic, and a stamped or typed name isn't a signature. Signing records signed_at and needs every required section of the note type to have text.
   rationale: Every entry must be dated, timed and authenticated by the person responsible for it, through an author identification system that protects the integrity of authentication (42 CFR 482.24(b) and (c)(1)). Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
 - id: BR-E5
-  text: When cosign_rules say a note type written by an author's role needs a cosignature, signing makes it preliminary and opens an uncosigned deficiency for the cosigner. The cosigner signs it final, optionally with an attestation statement; they can't change the author's text. Changes they want are made by the author as a correction, or by the cosigner as an addendum.
+  text: When cosign_rules say a note type written by an author's role needs a cosignature, the author names the cosigner when signing, signing makes it preliminary and opens an uncosigned deficiency for the cosigner. The cosigner signs it final, optionally with an attestation statement; they can't change the author's text. Changes they want are made by the author as a correction, or by the cosigner as an addendum.
   rationale: Supervising practitioners take responsibility for trainees' notes as medical staff bylaws require. The author's words stay theirs, so the record shows who said what. HL7 v2 marks such a note pre-authenticated until it is authenticated (Table 0271 PA, AU).
 - id: BR-E6
   text: A scribe enters a note for a named practitioner. The note records the scribe as data_enterer and the practitioner as author. Only the practitioner signs it, with their own date and time, and the scribe can never sign or cosign.
@@ -485,8 +495,8 @@ businessRules:
   text: Text copied through the service's copy feature keeps its source note, author and date in copied_text, and is shown as copied. Copying from another patient's record is refused, and copy_paste_policy can block copying into some note types.
   rationale: The Partnership for Health IT Patient Safety recommends making copied material easily identifiable and its source readily available, because copying spreads errors and puts documentation in the wrong patient's chart (Tsou and others, 2017).
 - id: BR-E15
-  text: Each note type in note_types can be required for some encounter classes, with a deadline. When an encounter of that class starts, a missing_note deficiency is opened for the responsible practitioner, due at the deadline.
-  rationale: Hospitals must document certain notes for each patient, such as the discharge summary (42 CFR 482.24(c)(4)). Tracking them per encounter is what lets a record be completed on time.
+  text: Each note type in note_types can be required for some encounter classes, with a deadline. When an encounter of that class starts, or an encounter's class changes to it, a missing_note deficiency is opened for the responsible practitioner, due at the deadline counted from the start or the change.
+  rationale: Hospitals must document certain notes for each patient, such as the discharge summary (42 CFR 482.24(c)(4)). Tracking them per encounter is what lets a record be completed on time. A patient admitted from observation becomes an inpatient at the class change, so the clock starts there.
 - id: BR-E16
   text: In the United States, an inpatient admission or a procedure needing anesthesia needs a history and physical note signed no more than 30 days before or 24 hours after admission or registration, and before the procedure. A note from before admission needs an update note within 24 hours after admission, and before the procedure. The service answers whether an encounter has a current one.
   rationale: The Medicare conditions of participation set these limits (42 CFR 482.22(c)(5) and 482.24(c)(4)(i)). Theatre needs the answer before surgery starts.
@@ -507,7 +517,7 @@ businessRules:
   text: A deficiency is opened for each required note missing, each draft its author hasn't signed within signature_deadline of service_at, and each preliminary note not cosigned within cosign_deadline. It resolves itself when the note is signed or cosigned. It becomes delinquent delinquency_after past due_at, and the practitioner and HIM specialists are told.
   rationale: Records must be promptly completed (42 CFR 482.24(b)), and medical staff bylaws define delinquency. A list per practitioner is how hospitals get records completed.
 - id: BR-E21
-  text: When an encounter is discharged and it has no draft or preliminary note, no open deficiency, and every required note signed, documentation.completed is reported to Encounters. If, before Encounters completes the encounter, a required note is marked entered in error or a new deficiency opens, documentation.reopened is reported.
+  text: When an encounter is discharged and it has no draft or preliminary note, no open deficiency, and every required note signed, documentation.completed is reported to Encounters. If, before Encounters completes the encounter, a required note is marked entered in error or a new deficiency opens, documentation.reopened is reported. A cancelled discharge also reports documentation.reopened when completion was already reported.
   rationale: Encounters completes an encounter only when this module reports its documentation complete. Reporting a reopen keeps the two from drifting apart.
 - id: BR-E22
   text: After an encounter is completed, new notes on it are addenda, corrections or late entries with a reason, and they never reopen its documentation.
@@ -516,7 +526,7 @@ businessRules:
   text: When Encounters reports an encounter moved to another patient, its notes and observations follow it and their patient_id changes. When it reports two encounters merged, the duplicate's entries move to the remaining one and the old encounter id is kept in moved_from.
   rationale: Encounters gives encounter.moved and encounter.merged so linked entries follow it. An entry left on the old encounter would be filed under the wrong patient or a dead record.
 - id: BR-E24
-  text: Patient merges reach this module through the encounters they move. When the Patients module undoes a merge, notes and observations recorded on the patient since the merge are listed for an HIM specialist to check they are on the right patient.
+  text: Patient merges reach this module through the encounters they move. When Encounters reports encounter.patient_review_needed after the Patients module undoes a merge, the notes and observations on that encounter recorded since the merge are listed for an HIM specialist to check they are on the right patient.
   rationale: After a merge, care for either person was recorded on one record. Undoing it can't tell automatically whose care each new entry described.
 - id: BR-E25
   text: In the United States, a signed note is released to the patient's electronic access as soon as it is signed. It is held back only when a licensed professional decides the release is reasonably likely to cause harm (BR-E27), when the patient asked for their own access to be delayed (the Patients module's patient_requested_delay), or when it is a psychotherapy note or was prepared for a legal proceeding. Drafts are not released.
@@ -593,6 +603,20 @@ businessRules:
 - id: BR-E48
   text: Notes can be written after a patient's death, such as a death note or an autopsy addendum.
   rationale: Care documentation continues after death; refusing it would leave the end of the record incomplete.
+- id: BR-E49
+  text: A representative sees a note only within the authority the Patients module records for them, including its scope and exclusions. A note with withheld_from_representatives set is released to the patient but not to representatives. In the United States, the author sets it for care a minor consented to alone where the law lets them, or under a confidentiality agreement the parent agreed to.
+  rationale: HIPAA doesn't treat a parent as the representative for such care (45 CFR 164.502(g)(3)), and rules on minors' confidentiality also vary by EU member state. A note reaching a parent's portal can harm the young person and deter them from care.
+- id: BR-E50
+  text: A drafting tool that records the conversation can start a draft only with recording_consent from every party that recording_consent requires where the care takes place, given before recording. This module never keeps the recording; deleting it is the tool's concern, within the period the hospital agreed with the vendor.
+  rationale: US federal law lets one party consent to recording (18 U.S.C. 2511(2)(d)), but states such as California and Florida require every party's consent (California Penal Code 632(a), Florida Statutes 934.03(2)(d)). GDPR requires telling people about processing (Article 13).
+- id: BR-E51
+  text: In the European Union, a patient can see who accessed their notes and observations and when, through the access service, including by automatic notification where the member state provides it.
+  rationale: The EHDS gives a right to information on access to personal electronic health data, including through automatic notifications (Article 9), applying from 26 March 2029 or 2031 depending on the data category (Article 105).
+  jurisdiction: eu
+- id: BR-E52
+  text: In the United States, each inpatient stay has a nursing care plan, written by the nursing staff and kept current. It is a required note type for inpatient stays, due at nursing_care_plan_deadline after admission, and is corrected or added to as the patient's needs change.
+  rationale: The Medicare conditions of participation require nursing staff to develop and keep current a nursing care plan for each patient (42 CFR 482.23(b)(4)).
+  jurisdiction: us
 validations:
 - field: note.encounter_id
   rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
@@ -660,6 +684,12 @@ validations:
 - field: deficiency.closed_reason
   rule: Present when closing a deficiency as unresolvable
   error: DEFICIENCY_REASON_REQUIRED
+- field: note.recording_consent
+  rule: Present, from every party recording_consent requires, when the drafting tool records audio
+  error: NOTE_RECORDING_CONSENT_MISSING
+- field: note.cosigner_id
+  rule: Named when signing a note whose type and author role need a cosignature
+  error: NOTE_COSIGNER_REQUIRED
 stateMachine:
   initial: draft
   states:
@@ -831,7 +861,7 @@ edgeCases:
   - AC-E24
 - id: EC-E11
   situation: A patient merge is undone after notes were written on the merged record.
-  behaviour: Those notes are listed for an HIM specialist, who moves or marks each one and marks the review done.
+  behaviour: Encounters reports encounter.patient_review_needed; those notes are listed for an HIM specialist, who moves or marks each one and marks the review done.
   covers:
   - BR-E24
   - AC-E25
@@ -842,7 +872,7 @@ edgeCases:
   - BR-E47
   - AC-E19
 - id: EC-E13
-  situation: An encounter is cancelled while a draft exists on it.
+  situation: An encounter is cancelled, or marked entered in error, while a draft exists on it.
   behaviour: No new entries can be started on it; the draft is listed for its author to move or discard.
   covers:
   - BR-E1
@@ -992,6 +1022,30 @@ edgeCases:
   covers:
   - BR-E34
   - AC-E29
+- id: EC-E37
+  situation: A 16-year-old consents alone to care the state lets them consent to, and a parent has proxy access.
+  behaviour: The author sets withheld_from_representatives; the teenager sees the note, the parent doesn't.
+  covers:
+  - BR-E49
+  - AC-E49
+- id: EC-E38
+  situation: An AI scribe records a visit in California and only the clinician agreed.
+  behaviour: The draft is refused with NOTE_RECORDING_CONSENT_MISSING; the patient's agreement is needed before recording.
+  covers:
+  - BR-E50
+  - AC-E50
+- id: EC-E39
+  situation: A patient under observation is admitted on day 2.
+  behaviour: The class change opens deficiencies for the inpatient note types, such as the history and physical, counted from the admission.
+  covers:
+  - BR-E15
+  - AC-E51
+- id: EC-E40
+  situation: A discharge is cancelled after documentation.completed was reported.
+  behaviour: documentation.reopened is reported and new notes can be required again.
+  covers:
+  - BR-E21
+  - AC-E52
 functionalRequirements:
 - id: FR-E1
   text: The service must let authors start, edit, sign and discard notes, and cosigners cosign them, following the note lifecycle.
@@ -1105,7 +1159,7 @@ settings:
   description: Which legal regime applies. Required.
 - name: note_types
   type: list
-  description: The note types in use, each with its LOINC code, HL7 v2 Table 0270 code where one exists, required_sections, the encounter classes it is required for, and its deadline from encounter start, discharge or procedure end. Defaults include a history and physical note due 24 hours after admission for inpatient stays (US), and a discharge summary for inpatient stays.
+  description: The note types in use, each with its LOINC code, HL7 v2 Table 0270 code where one exists, required_sections, the encounter classes it is required for, and its deadline from encounter start, discharge or procedure end. Defaults include a history and physical note due 24 hours after admission for inpatient stays (US), a discharge summary for inpatient stays, and a nursing care plan (LOINC 18776-5 plan of care note) for inpatient stays (US).
 - name: cosign_rules
   type: list
   description: Which author roles need a cosignature for which note types, and which roles may cosign. Set from the medical staff bylaws.
@@ -1144,7 +1198,7 @@ settings:
   description: For each note type, whether copying text into it is allowed. Default allowed with attribution for every type.
 - name: drafting_tools
   type: list
-  description: Speech recognition and AI drafting tools the hospital has approved, with their versions. Empty by default.
+  description: Speech recognition and AI drafting tools the hospital has approved, with their versions, whether each records audio, and how long its vendor keeps audio. Empty by default.
 - name: device_values_need_validation
   type: boolean
   description: Whether device readings need a nurse to accept them before they are final. Default true.
@@ -1160,6 +1214,13 @@ settings:
 - name: draft_reminder_after
   type: duration
   description: Time after which an unsigned draft is listed for its author. Default 24 hours.
+- name: recording_consent
+  type: map
+  description: 'For each US state or EU member state where care takes place: all_parties or one_party consent to recording a conversation. Default all_parties. California and Florida require all parties (verified from statute); US federal law needs one party; the rest need legal advice.'
+- name: nursing_care_plan_deadline
+  type: duration
+  description: Time after admission to start the nursing care plan. Set by hospital policy.
+  jurisdiction: us
 performanceTargets:
 - id: PERF-E1
   indicator: Notes signed on time
@@ -1188,7 +1249,7 @@ performanceTargets:
   measurement: 99th percentile time to record a set of vital signs.
 acceptanceCriteria:
 - id: AC-E1
-  given: an encounter that was cancelled, with a draft on it
+  given: an encounter that was cancelled, and another marked entered in error, each with a draft on it
   when: a clinician starts a note on it, a nurse records a vital sign on it, and the draft author lists their drafts
   then: the note fails with NOTE_INVALID_ENCOUNTER and HTTP 422, the observation fails with OBSERVATION_INVALID_ENCOUNTER and HTTP 422, and the draft is listed for its author to move or discard
   verifies:
@@ -1208,8 +1269,8 @@ acceptanceCriteria:
   - CON-E3
 - id: AC-E3
   given: a trainee's progress note whose type and role need a cosignature
-  when: the trainee signs, an HIM specialist changes the cosigner, a clinician who doesn't supervise the trainee tries to cosign, the new cosigner cosigns with an attestation, and someone tries to cosign again
-  then: signing makes it preliminary and emits deficiency.opened of kind uncosigned; the deficiency moves to the new cosigner; the unrelated clinician gets NOTE_COSIGNER_NOT_PERMITTED and HTTP 403; cosigning makes it final, keeps the trainee's text and emits note.cosigned; the second attempt gets NOTE_NOT_AWAITING_COSIGNATURE and HTTP 409
+  when: the trainee signs without naming a cosigner, then naming one, an HIM specialist changes the cosigner, a clinician who doesn't supervise the trainee tries to cosign, the new cosigner cosigns with an attestation, and someone tries to cosign again
+  then: signing without a cosigner fails with NOTE_COSIGNER_REQUIRED and HTTP 422; signing makes it preliminary and emits deficiency.opened of kind uncosigned; the deficiency moves to the new cosigner; the unrelated clinician gets NOTE_COSIGNER_NOT_PERMITTED and HTTP 403; cosigning makes it final, keeps the trainee's text and emits note.cosigned; the second attempt gets NOTE_NOT_AWAITING_COSIGNATURE and HTTP 409
   verifies:
   - BR-E5
   - FR-E1
@@ -1359,8 +1420,8 @@ acceptanceCriteria:
   - BR-E23
   - FR-E16
 - id: AC-E25
-  given: notes written on a merged patient
-  when: the Patients module reports patient.unmerged
+  given: notes written on a merged patient's encounter
+  when: Encounters reports encounter.patient_review_needed after the merge is undone
   then: those notes are listed for review, and an HIM specialist marks each done after moving or keeping it
   verifies:
   - BR-E24
@@ -1520,6 +1581,46 @@ acceptanceCriteria:
   - BR-E19
   - FR-E19
   jurisdiction: eu
+- id: AC-E49
+  given: a teenager's note with withheld_from_representatives set, and a parent with proxy access
+  when: it is signed and both list the teenager's notes
+  then: note.released carries withheld_from_representatives; the teenager sees the note and the parent doesn't
+  verifies:
+  - BR-E49
+- id: AC-E50
+  given: recording_consent all_parties for California, and an AI scribe that records audio
+  when: it starts a draft with only the clinician's agreement, then with the patient's too
+  then: the first fails with NOTE_RECORDING_CONSENT_MISSING and HTTP 422; the second is saved with recording_consent and no recording is stored
+  verifies:
+  - BR-E50
+- id: AC-E51
+  given: note_types requiring a history and physical for inpatient stays, and an observation encounter
+  when: Encounters reports encounter.class_changed to inpatient
+  then: a missing_note deficiency for the history and physical opens, due counted from the class change
+  verifies:
+  - BR-E15
+  - FR-E6
+- id: AC-E52
+  given: an encounter whose documentation.completed was reported
+  when: Encounters reports encounter.discharge_cancelled
+  then: documentation.reopened is reported
+  verifies:
+  - BR-E21
+  - FR-E7
+- id: AC-E53
+  given: an EU patient whose notes were read by two clinicians
+  when: the patient gets their access log
+  then: it lists both reads with role, time and action
+  verifies:
+  - BR-E51
+  jurisdiction: eu
+- id: AC-E54
+  given: an inpatient admission and nursing_care_plan_deadline of 24 hours
+  when: no care plan is signed within 24 hours
+  then: a missing_note deficiency for the nursing care plan is open and due at the deadline
+  verifies:
+  - BR-E52
+  jurisdiction: us
 operations:
 - name: Start a note
   actor: Clinician
@@ -1527,7 +1628,7 @@ operations:
   method: POST
   path: /notes
   success: 201
-  input: encounter, type, and optional title, sections, service_at, authors, source, drafting_tool, template, copied text, sensitivity and late_entry_reason
+  input: encounter, type, and optional title, sections, service_at, authors, source, drafting_tool, template, copied text, sensitivity, late_entry_reason, withheld_from_representatives and recording_consent
   output: the draft note
   errors:
   - NOTE_INVALID_ENCOUNTER
@@ -1537,6 +1638,7 @@ operations:
   - NOTE_INVALID_TIME
   - NOTE_REASON_REQUIRED
   - NOTE_TOOL_NOT_APPROVED
+  - NOTE_RECORDING_CONSENT_MISSING
   - NOTE_COPY_NOT_ALLOWED
   - NOTE_READ_ONLY_FIELD
   - NOTE_IDEMPOTENCY_KEY_REUSED
@@ -1563,7 +1665,7 @@ operations:
   - NOTE_FORBIDDEN
 - name: Edit a draft
   actor: Clinician
-  description: Change a draft's content, title, service time or authors.
+  description: Change a draft's content, title, service time, authors or withheld_from_representatives.
   method: PATCH
   path: /notes/{id}
   success: 200
@@ -1586,7 +1688,7 @@ operations:
   method: POST
   path: /notes/{id}/sign
   success: 200
-  input: revision, the credential confirmation from Identity, and review confirmation where needed
+  input: revision, the credential confirmation from Identity, the cosigner when one is needed, and review confirmation where needed
   output: the note, final or preliminary
   errors:
   - NOTE_NOT_FOUND
@@ -1595,6 +1697,8 @@ operations:
   - NOTE_SECTIONS_INCOMPLETE
   - NOTE_REAUTHENTICATION_FAILED
   - NOTE_REVIEW_NOT_ATTESTED
+  - NOTE_COSIGNER_REQUIRED
+  - NOTE_COSIGNER_NOT_PERMITTED
   - NOTE_REVISION_CONFLICT
   - NOTE_DEPENDENCY_UNAVAILABLE
 - name: Cosign a note
@@ -1711,11 +1815,11 @@ operations:
   - NOTE_REVISION_CONFLICT
 - name: Hold a note's release
   actor: Clinician
-  description: Hold a note, or some of its sections, back from the patient on allowed grounds.
+  description: Hold a note, or some of its sections, back from the patient on allowed grounds, or withhold it from representatives only.
   method: POST
   path: /notes/{id}/release-hold
   success: 200
-  input: grounds, sections, review date and revision
+  input: grounds, sections, review date or withhold from representatives, and revision
   output: the note
   errors:
   - NOTE_NOT_FOUND
@@ -1890,6 +1994,17 @@ operations:
   errors:
   - NOTE_NOT_FOUND
   - NOTE_FORBIDDEN
+- name: Get the patient's access log
+  actor: Patient
+  description: Who accessed the patient's notes and observations, and when.
+  method: GET
+  path: /access-log
+  success: 200
+  input: limit and cursor
+  output: log entries with role, time and action
+  errors:
+  - NOTE_FORBIDDEN
+  jurisdiction: eu
 - name: Record observations
   actor: Nurse
   description: Record one or more vital signs, or device readings. Accepts a retry key.
@@ -2086,6 +2201,7 @@ events:
   payload:
   - note_id
   - patient_id
+  - withheld_from_representatives
   - revision
 - name: note.release_held
   description: A note, or part of it, is held back from the patient.
@@ -2352,6 +2468,18 @@ accessMatrix:
     System: none
     Patient: none
   permission: note.audit
+- action: Get the patient's own access log
+  roles:
+    Clinician: none
+    Nurse: none
+    Trainee: none
+    Scribe: none
+    Health information management (HIM) specialist: none
+    Privacy officer: none
+    System: none
+    Patient: own
+  permission: patient_entry.write
+  note: Where the jurisdiction gives patients that right.
 - action: Get or list observations
   roles:
     Clinician: own
@@ -2402,7 +2530,7 @@ personalData:
   category: health data
   purpose: Showing how and when the record changed
   retention: record_retention of the Patients module
-- field: note.release_status, note.release_hold
+- field: note.release_status, note.release_hold, note.withheld_from_representatives
   category: health data
   purpose: Managing the patient's access
   retention: record_retention of the Patients module
@@ -2426,6 +2554,10 @@ personalData:
   category: personal
   purpose: Showing who accessed health data
   retention: access_log_retention of the Patients module
+- field: note.recording_consent
+  category: personal
+  purpose: Showing the conversation was recorded lawfully
+  retention: record_retention of the Patients module
 errors:
 - code: NOTE_NOT_FOUND
   http: 404
@@ -2463,6 +2595,9 @@ errors:
 - code: NOTE_TOOL_NOT_APPROVED
   http: 422
   message: The drafting tool isn't on the approved list.
+- code: NOTE_RECORDING_CONSENT_MISSING
+  http: 422
+  message: The drafting tool records the conversation, and the agreement this location requires isn't recorded.
 - code: NOTE_REVIEW_NOT_ATTESTED
   http: 422
   message: Drafted or scribed content needs the author to confirm they reviewed it.
@@ -2475,6 +2610,9 @@ errors:
 - code: NOTE_NOT_AWAITING_COSIGNATURE
   http: 409
   message: The note isn't waiting for a cosignature.
+- code: NOTE_COSIGNER_REQUIRED
+  http: 422
+  message: This note type and role need a cosigner; name one when signing.
 - code: NOTE_INVALID_PARENT
   http: 422
   message: An addendum needs a signed note of the same patient that isn't entered in error.
@@ -2560,8 +2698,9 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: does this encounter exist, for which patient, in which status and class, with which sensitivity codes?'
-  - 'Receives: encounter.started, encounter.discharged, encounter.completed, encounter.cancelled and encounter.amended, so notes open and lock with the encounter'
+  - 'Receives: encounter.started, encounter.class_changed, encounter.discharged, encounter.discharge_cancelled, encounter.completed, encounter.cancelled, encounter.entered_in_error and encounter.amended, so notes open, are required and lock with the encounter'
   - 'Receives: encounter.moved and encounter.merged, so notes and observations follow the encounter'
+  - 'Receives: encounter.patient_review_needed, to list entries for review after an undone patient merge'
   - 'Receives: encounter.record_overdue, shown on the responsible practitioner''s deficiency list'
   - 'Gives: documentation.data_recorded, documentation.completed and documentation.reopened'
   - Completing and locking encounters is Encounters' concern
@@ -2571,10 +2710,10 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: is this patient''s record in use, and is it restricted?'
-  - 'Asks: may this person act for this patient, and has the patient asked for their own access to be delayed (patient_requested_delay)?'
+  - 'Asks: may this person act for this patient, with which scope and exclusions, and has the patient asked for their own access to be delayed (patient_requested_delay)?'
   - 'Asks: correction_deadline, correction_extension, record_retention and access_log_retention for this jurisdiction'
   - 'Asks: is this patient under legal hold?'
-  - 'Receives: patient.unmerged and patient.legal_hold_changed'
+  - 'Receives: patient.legal_hold_changed'
 - service: identity-service
   direction: upstream
   reason: authenticates callers and signers
@@ -2618,13 +2757,16 @@ dependencies:
   contract:
   - 'Receives: drafts with the tool name and version, for the named author to review'
   - Drafting is the tool's concern; this module accepts only tools in drafting_tools
+  - 'Receives: the recording consent it collected before recording, with who agreed and when'
+  - Deleting recordings is the tool's concern
 - service: orders-service
   direction: upstream
   reason: owns orders
   criticality: soft
   contract:
   - 'Asks: does this order exist for this patient?'
-  - Order status is Orders' concern
+  - 'Gives: observation.recorded with order_id, so Orders can see ordered measurements that are overdue'
+  - Order status and tracking an order's schedule are Orders' concern
 - service: release-of-information-service
   direction: downstream
   reason: copies, disclosures and exports
@@ -2641,6 +2783,8 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: note.released and note.release_held, so the patient sees released notes and is told what is held'
+  - 'Gives: withheld_from_representatives with note.released, so representatives don''t see those notes'
+  - 'Gives: the access log entries for a patient, where the jurisdiction gives patients that right'
   - Presenting the record to patients is the access service's concern
 - service: consent-service
   direction: downstream
@@ -2843,7 +2987,36 @@ references:
   title: RFC 9457, Problem details for HTTP APIs
   url: https://www.rfc-editor.org/rfc/rfc9457
   note: Error format.
+- id: REF-E29
+  title: '45 CFR 164.502, Uses and disclosures: general rules'
+  url: https://www.ecfr.gov/current/title-45/section-164.502
+  note: Personal representatives of unemancipated minors, (g)(3).
+- id: REF-E30
+  title: 18 U.S.C. 2511, Interception of communications
+  url: https://www.law.cornell.edu/uscode/text/18/2511
+  note: One-party consent under federal law, (2)(d).
+- id: REF-E31
+  title: California Penal Code 632
+  url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=632.
+  note: Consent of all parties to record a confidential communication.
+- id: REF-E32
+  title: Florida Statutes 934.03
+  url: http://www.leg.state.fl.us/statutes/index.cfm?App_mode=Display_Statute&URL=0900-0999/0934/Sections/0934.03.html
+  note: All parties' prior consent to intercept a communication.
+- id: REF-E33
+  title: '42 CFR 482.23, Condition of participation: Nursing services'
+  url: https://www.ecfr.gov/current/title-42/section-482.23
+  note: Nursing care plan, (b)(4).
 changelog:
+- version: 0.2.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Representatives see notes only within their authority, and notes of care a minor consented to alone can be withheld from them (BR-E49).
+  - Drafting tools that record the conversation need the recording consent the location requires (BR-E50, recording_consent).
+  - EU patients can see who accessed their notes (BR-E51); US inpatient stays need a nursing care plan (BR-E52).
+  - Class changes open required notes, cancelled discharges reopen documentation, encounters entered in error list their drafts, and the unmerge review follows encounter.patient_review_needed.
+  - The author names the cosigner when signing (NOTE_COSIGNER_REQUIRED).
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false
@@ -2913,6 +3086,10 @@ tables:
   - name: review_attested
     type: boolean
     default: '''false'''
+  - name: recording_consent
+    type: jsonb
+    nullable: true
+    note: who agreed, when and how
   - name: signed_at
     type: timestamptz
     nullable: true
@@ -2946,6 +3123,9 @@ tables:
   - name: release_hold
     type: jsonb
     nullable: true
+  - name: withheld_from_representatives
+    type: boolean
+    default: '''false'''
   - name: entered_in_error_reason
     type: jsonb
     nullable: true
@@ -3571,6 +3751,51 @@ compliance:
   covered_by:
   - BR-E19
   jurisdiction: eu
+- id: CMP-E34
+  regulation: HIPAA Privacy Rule
+  provision: 45 CFR 164.502(g)(3)
+  obligation: A parent isn't a minor's representative for care the minor lawfully consented to alone.
+  how: withheld_from_representatives and representative scope.
+  status: met
+  covered_by:
+  - BR-E49
+  jurisdiction: us
+- id: CMP-E35
+  regulation: US federal and state recording laws
+  provision: 18 U.S.C. 2511(2)(d); California Penal Code 632(a); Florida Statutes 934.03(2)(d)
+  obligation: Recording a conversation needs the consent the law of the place requires, from one or all parties.
+  how: recording_consent per state, checked before a recording tool drafts.
+  status: met
+  covered_by:
+  - BR-E50
+  jurisdiction: us
+- id: CMP-E36
+  regulation: GDPR (EU) 2016/679
+  provision: Article 13
+  obligation: Tell people about processing, such as recording a consultation, when their data is collected.
+  how: Recording consent before recording; the notice is the hospital's.
+  status: deployment
+  covered_by:
+  - BR-E50
+  jurisdiction: eu
+- id: CMP-E37
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 9
+  obligation: Information on access to the patient's data, including automatic notifications.
+  how: The patient's access log, through the access service.
+  status: partly met
+  covered_by:
+  - BR-E51
+  jurisdiction: eu
+- id: CMP-E38
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.23(b)(4)
+  obligation: A current nursing care plan for each patient.
+  how: A required note type with a deadline.
+  status: met
+  covered_by:
+  - BR-E52
+  jurisdiction: us
 ---
 
 Every note, vital sign and assessment about a patient is recorded here,

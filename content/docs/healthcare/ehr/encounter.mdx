@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.11.3
+version: 0.12.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -1234,7 +1234,7 @@ acceptanceCriteria:
 - id: AC-E23
   given: an encounter that opened successfully
   when: the same event is retried with the same Idempotency-Key, and the key is reused with different details
-  then: the first returns the same encounter; the second fails with ENCOUNTER_IDEMPOTENCY_KEY_REUSED (409)
+  then: the first returns the same encounter; the second fails with ENCOUNTER_IDEMPOTENCY_KEY_REUSED (422)
   verifies:
   - FR-E12
 - id: AC-E24
@@ -2365,7 +2365,7 @@ errors:
   http: 409
   message: The encounter changed since you read it. Read it again and retry.
 - code: ENCOUNTER_IDEMPOTENCY_KEY_REUSED
-  http: 409
+  http: 422
   message: That Idempotency-Key was used for a different request.
 - code: ENCOUNTER_INVALID_TRANSITION
   http: 409
@@ -2489,7 +2489,8 @@ dependencies:
   contract:
   - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
   - 'Receives: documentation.completed, documentation.reopened and documentation.data_recorded'
-  - 'Gives: encounter.started, encounter.discharged, encounter.completed, encounter.cancelled and encounter.amended, so notes open and lock with the encounter'
+  - 'Gives: encounter.started, encounter.class_changed, encounter.discharged, encounter.discharge_cancelled, encounter.completed, encounter.cancelled, encounter.entered_in_error and encounter.amended, so notes open, are required and lock with the encounter'
+  - 'Gives: encounter.patient_review_needed after an undone patient merge'
   - 'Gives: encounter.record_overdue, for the responsible practitioner''s deficiency list'
   - Discharge summaries and the EU discharge report are Clinical documentation's concern
 - service: clinical-modules
@@ -2662,6 +2663,12 @@ references:
   title: HL7 v2 Table 0003, event types (A42 merge visit, A45 move visit)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 changelog:
+- version: 0.12.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - A retry key reused with a different request now returns HTTP 422, not 409, as the IETF Idempotency-Key draft says.
+  - Clinical documentation receives encounter.class_changed, encounter.discharge_cancelled, encounter.entered_in_error and encounter.patient_review_needed.
 - version: 0.11.3
   date: '2026-10-09'
   breaking: false

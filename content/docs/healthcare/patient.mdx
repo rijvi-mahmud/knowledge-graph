@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.10.2
+version: 0.11.0
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -1390,7 +1390,7 @@ acceptanceCriteria:
 - id: AC-H17
   given: a registration that succeeded
   when: it is retried with the same Idempotency-Key, then with the same key and a different body
-  then: the first retry returns the original record; the second fails with PATIENT_IDEMPOTENCY_KEY_REUSED
+  then: the first retry returns the original record; the second fails with PATIENT_IDEMPOTENCY_KEY_REUSED and HTTP 422
   verifies:
   - FR-H1
 - id: AC-H18
@@ -2638,7 +2638,7 @@ errors:
   http: 422
   message: This deployment doesn't collect that field.
 - code: PATIENT_IDEMPOTENCY_KEY_REUSED
-  http: 409
+  http: 422
   message: That Idempotency-Key was used for a different request.
 - code: PATIENT_REVISION_CONFLICT
   http: 409
@@ -3064,6 +3064,11 @@ references:
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
 changelog:
+- version: 0.11.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - A retry key reused with a different request now returns HTTP 422, not 409, as the IETF Idempotency-Key draft says.
 - version: 0.10.2
   date: '2026-10-09'
   breaking: false

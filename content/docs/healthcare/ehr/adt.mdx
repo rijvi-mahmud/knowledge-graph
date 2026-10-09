@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.7.2
+version: 0.8.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -932,7 +932,7 @@ acceptanceCriteria:
 - id: AC-E18
   given: a stay at revision 4
   when: two changes send revision 4, one sends admitted_at, and a retried admission reuses its key with different details
-  then: one change succeeds; the others fail with STAY_REVISION_CONFLICT (409), STAY_READ_ONLY_FIELD (422) and STAY_IDEMPOTENCY_KEY_REUSED (409)
+  then: one change succeeds; the others fail with STAY_REVISION_CONFLICT (409), STAY_READ_ONLY_FIELD (422) and STAY_IDEMPOTENCY_KEY_REUSED (422)
   verifies:
   - BR-E20
   - FR-E11
@@ -1986,7 +1986,7 @@ errors:
   http: 422
   message: That field is set by the service and can't be written.
 - code: STAY_IDEMPOTENCY_KEY_REUSED
-  http: 409
+  http: 422
   message: That Idempotency-Key was used for a different request.
 - code: STAY_DEPENDENCY_UNAVAILABLE
   http: 503
@@ -2475,6 +2475,11 @@ compliance:
   covered_by: []
   jurisdiction: us
 changelog:
+- version: 0.8.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - A retry key reused with a different request now returns HTTP 422, not 409, as the IETF Idempotency-Key draft says.
 - version: 0.7.2
   date: '2026-10-09'
   breaking: false
