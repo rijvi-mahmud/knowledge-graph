@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Hospital sign-in: shared clinical workstations with badge tap, and read-only access during downtime, built on the healthcare identity rules.'
 module: identity
-version: 0.2.0
+version: 0.2.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -14,6 +14,7 @@ scope:
 - Access to the read-only backup during a downtime
 nonGoals:
 - Badge hardware and printing. Facilities and security own them.
+- Clinical privileges. The Practitioners module owns them, and the modules that need them, such as theatre and orders, ask it directly; roles aren't changed when privileges change.
 businessRules:
 - id: BR-E1
   text: On a shared clinical workstation, a staff member's first sign-in of a session is at their role's required_aal. Within session_max_duration, a badge tap with their PIN resumes their own session on any shared workstation; the badge only identifies them and counts as a factor only if it is a cryptographic smart card. The next user's tap hides the previous user's work on that workstation, and one user's screen never carries over to another.
@@ -65,12 +66,21 @@ decisions:
   decision: A badge tap with a PIN resumes a session on shared clinical workstations; the first sign-in of a session is a full one.
   rationale: It takes a few seconds, which clinicians signing in dozens of times a shift will actually use, and NIST allows it as an AAL2 reauthentication.
   date: '2026-10-09'
+- id: ADR-E2
+  decision: Clinical privileges aren't copied into roles.
+  rationale: Privileges are granted one procedure at a time and change with every appraisal; copying them into roles would give one fact two owners that drift apart, so modules ask the Practitioners module whether a practitioner is privileged.
+  date: '2026-10-09'
 references:
 - id: REF-E1
   title: ONC, SAFER Guides (2025)
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: 'Contingency Planning: read-only backup during downtime.'
 changelog:
+- version: 0.2.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'ADR-E2: clinical privileges stay with the Practitioners module and aren''t copied into roles.'
 - version: 0.2.0
   date: '2026-10-09'
   breaking: true

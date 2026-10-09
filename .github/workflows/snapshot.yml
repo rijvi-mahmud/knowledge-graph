@@ -40,7 +40,13 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add content/versions
             git commit -m "chore: save spec version snapshots"
-            git push
+            # Another push can land while this job runs, so rebase and retry.
+            pushed=no
+            for attempt in 1 2 3; do
+              if git pull --rebase origin main && git push; then pushed=yes; break; fi
+              sleep 10
+            done
+            [ "$pushed" = yes ]
           else
             echo "No new versions to save."
           fi

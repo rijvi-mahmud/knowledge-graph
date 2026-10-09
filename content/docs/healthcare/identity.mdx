@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.6.1
+version: 0.7.0
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -188,6 +188,16 @@ dataModel:
   required: false
   description: Whether the practitioner may sign controlled substance prescriptions, with the two approvers, when, and any revocation and its reason.
   jurisdiction: us
+- name: account.time_zone
+  type: code
+  required: false
+  description: The time zone the account holder wants times shown in.
+  constraints: 'codes: IANA time zone database names, such as Europe/Berlin'
+- name: account.locale
+  type: code
+  required: false
+  description: The language and regional format of screens and messages for the account holder. A patient's languages for care and interpreters are the Patients module's.
+  constraints: 'codes: BCP 47 tags (RFC 5646)'
 relationships:
 - type: belongs_to
   target: practitioner, staff record, patient, representative relationship or system
@@ -320,6 +330,9 @@ businessRules:
 - id: BR-H34
   text: 'Sign-in, enrolment, recovery, step-up and app approval screens meet WCAG 2.1 Level AA, including in the authenticators offered: at least one way to authenticate doesn''t depend on remembering, transcribing or solving a puzzle.'
   rationale: People with disabilities must be able to reach their own care and do their jobs; US recipients of federal funds with 15 or more employees must meet WCAG 2.1 AA from 11 May 2027 (45 CFR 84.84), and EU public sector bodies must make their websites and apps accessible (Directive (EU) 2016/2102). Passkeys and security keys need no memory or transcription.
+- id: BR-H35
+  text: An account holder can set their own time zone and locale, which other modules read to show times and text; unset means each module uses its own default. The locale sets the language of screens and messages only, never the language a patient is cared for in.
+  rationale: Showing a time in the wrong zone causes missed appointments; keeping the screen language apart from the patient's care language, which the Patients module owns, gives each fact one owner.
 validations:
 - field: account.subject
   rule: An existing practitioner, staff record, patient, representative relationship or registered system
@@ -354,6 +367,12 @@ validations:
 - field: enrolment date of birth
   rule: For a patient's own account, at least minor_own_account_age, or age_of_majority when unset (BR-H33)
   error: IDENTITY_UNDER_ACCOUNT_AGE
+- field: account.time_zone
+  rule: A name in the IANA time zone database
+  error: IDENTITY_INVALID_PREFERENCE
+- field: account.locale
+  rule: A well-formed BCP 47 tag
+  error: IDENTITY_INVALID_PREFERENCE
 stateMachine:
   initial: pending
   states:
@@ -630,6 +649,10 @@ functionalRequirements:
   verification: test
 - id: FR-H15
   text: The service must throttle and disable authenticators after repeated failures without locking the account, warn before timeouts, and keep its screens accessible.
+  priority: must
+  verification: test
+- id: FR-H16
+  text: The service must hold each account holder's time zone and locale and give them to other modules.
   priority: must
   verification: test
 nonFunctionalRequirements:
@@ -1013,6 +1036,13 @@ acceptanceCriteria:
   verifies:
   - BR-H34
   - FR-H15
+- id: AC-H46
+  given: a staff member
+  when: they set time zone Europe/Berlin and locale de-DE, then time zone Berlin
+  then: the first is saved and returned when another module reads the account; the second fails with IDENTITY_INVALID_PREFERENCE and HTTP 422
+  verifies:
+  - BR-H35
+  - FR-H16
 operations:
 - name: Create an account
   actor: Account administrator
@@ -1048,9 +1078,22 @@ operations:
   - IDENTITY_REVISION_CONFLICT
   - IDENTITY_FORBIDDEN
   - IDENTITY_DEPENDENCY_UNAVAILABLE
+- name: Set my preferences
+  actor: Staff member
+  description: Set your own time zone and locale.
+  method: PUT
+  path: /accounts/{id}/preferences
+  success: 200
+  input: time_zone, locale and revision
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_INVALID_PREFERENCE
+  - IDENTITY_REVISION_CONFLICT
+  - IDENTITY_FORBIDDEN
 - name: Get an account
   actor: System
-  description: An account's kind, subject, status, roles and authenticator types.
+  description: An account's kind, subject, status, roles, authenticator types, time zone and locale.
   method: GET
   path: /accounts/{id}
   success: 200
@@ -1583,7 +1626,7 @@ accessMatrix:
     App: none
     System: none
   permission: identity.admin
-- action: Register and remove own authenticators, sign in, step up, sign out, list and revoke own app grants, close own patient or representative account
+- action: Register and remove own authenticators, sign in, step up, sign out, list and revoke own app grants, close own patient or representative account, set own time zone and locale
   roles:
     Account administrator: own
     Staff member: own
@@ -1704,6 +1747,10 @@ personalData:
   purpose: Showing who may sign controlled substance prescriptions and who approved it
   retention: As long as the account, then audit_log_retention
   jurisdiction: us
+- field: account.time_zone, account.locale
+  category: personal
+  purpose: Showing times and text the way the holder wants
+  retention: As long as the account
 errors:
 - code: IDENTITY_NOT_FOUND
   http: 404
@@ -1771,6 +1818,9 @@ errors:
 - code: IDENTITY_UNDER_ACCOUNT_AGE
   http: 422
   message: You can have your own account from a later age; a parent or guardian can ask for access for you.
+- code: IDENTITY_INVALID_PREFERENCE
+  http: 422
+  message: The time zone isn't an IANA name, or the locale isn't a BCP 47 tag.
 dependencies:
 - service: practitioner-service
   direction: upstream
@@ -1816,6 +1866,7 @@ dependencies:
   - 'Gives: identity.epcs_access_changed, so prescribing stops offering controlled substance signing at once'
   - 'Gives: token introspection, so a module can check a token it received'
   - 'Gives: identity.app_status_changed, so modules stop serving a suspended or revoked app at once'
+  - 'Gives: whether an account exists and is active, and its time zone and locale'
 - service: notification-service
   direction: downstream
   reason: alerts
@@ -1939,6 +1990,11 @@ references:
   url: https://eur-lex.europa.eu/eli/dir/2016/2102/oj/eng
   note: Articles 1, 4 and 6.
 changelog:
+- version: 0.7.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Accounts hold a time zone and locale that other modules read (BR-H35, PUT /accounts/{id}/preferences); the Appointments specification already relied on them. The patient's care language stays the Patients module's.
 - version: 0.6.1
   date: '2026-10-09'
   breaking: false
@@ -2044,6 +2100,12 @@ tables:
     nullable: true
     note: United States only
   - name: locked_reason
+    type: text
+    nullable: true
+  - name: time_zone
+    type: text
+    nullable: true
+  - name: locale
     type: text
     nullable: true
   indexes: []
