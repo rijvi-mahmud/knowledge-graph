@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -173,6 +173,11 @@ dataModel:
   type: text
   required: true
   description: Why emergency access was used, for which patient, when, how long it lasted, and the review outcome.
+- name: account.epcs_access
+  type: object
+  required: false
+  description: Whether the practitioner may sign controlled substance prescriptions, with the two approvers, when, and any revocation and its reason.
+  jurisdiction: us
 relationships:
 - type: has_many
   target: session
@@ -211,8 +216,8 @@ businessRules:
   text: A module can ask for a fresh authentication before a sensitive action, such as signing a note or a prescription; the answer says whether the user authenticated at the required level within the freshness it asked for.
   rationale: A signature or prescription must be made by the person themselves at that moment, not by whoever finds an open session.
 - id: BR-H10
-  text: In the United States, a practitioner can sign controlled substance prescriptions only with a two-factor credential issued after identity proofing by an approved credential service provider, and only after two designated people, one a registrant with such a credential, have granted that access.
-  rationale: DEA requires two-factor authentication to sign controlled substance prescriptions, identity proofing for the credential, and logical access granted by two designated individuals (21 CFR 1311.105, 1311.115 and 1311.125).
+  text: In the United States, a practitioner can sign controlled substance prescriptions only with a two-factor credential issued after identity proofing by an approved credential service provider, after one designated person confirms with the Practitioners module that their DEA registration and state authorization are current, and after two designated people, one a registrant using their own two-factor credential, have granted that access.
+  rationale: DEA requires identity-proofed two-factor credentials, a check that registration and state authorization are current, and logical access set by two designated individuals (21 CFR 1311.105, 1311.125(a) to (c)).
   jurisdiction: us
 - id: BR-H11
   text: In an emergency, a user with a clinical role can break the glass to reach a patient's information they wouldn't otherwise see, giving a reason. The access lasts break_glass_duration, is logged, emits identity.break_glass_used, and is reviewed by the privacy officer within break_glass_review_deadline.
@@ -229,8 +234,8 @@ businessRules:
   rationale: Certified health IT must let apps register and issue refresh tokens of at least three months (45 CFR 170.315(g)(10)); refusing an app for other reasons is likely information blocking unless the security exception applies (45 CFR 171.203).
   jurisdiction: us
 - id: BR-H15
-  text: A patient sees every app they have authorized and can revoke any grant at once; revoking ends its tokens.
-  rationale: Patients must stay in control of who reads their record.
+  text: A patient sees every app they have authorized and can revoke any grant at once; revoking ends its tokens immediately, and never later than 1 hour after the request.
+  rationale: Patients must stay in control of who reads their data; certified US health IT must revoke an app at the patient's direction within 1 hour (45 CFR 170.315(g)(10)(vi)).
 - id: BR-H16
   text: Backend systems, such as a population health platform using bulk export, authenticate with their own registered keys and system scopes, never with a person's account.
   rationale: SMART Backend Services and Bulk Data use system scopes so a machine's access is separate from any person's and can be revoked on its own.
@@ -238,14 +243,28 @@ businessRules:
   text: Every sign-in, failed attempt, step-up, role change, emergency access, app registration and grant is logged with who, when, from where and the outcome. The log can't be changed and is kept for audit_log_retention.
   rationale: HIPAA requires audit controls that record and examine activity (45 CFR 164.312(b)).
 - id: BR-H18
-  text: When the Patients module merges two records, portal accounts linked to the source are linked to the target; when it undoes a merge, they are listed for review. When it records a patient's death, the patient's own account is disabled.
-  rationale: A portal account must open the right record, and a deceased patient's account mustn't stay open for anyone to use.
+  text: When the Patients module merges two records, portal accounts linked to the source are linked to the target; when it undoes a merge, they are listed for review. When it records a patient's death, the patient's own account is disabled, and representatives keep only the scope it records, such as an executor's; when it retracts the death, the account is re-enabled. When it marks a record entered in error, accounts linked to that record are disabled and listed for review. When the Practitioners module merges two practitioners, accounts follow the remaining one, and if both had an account, the source's is disabled.
+  rationale: Accounts must point at the record in use and the person who is real; a portal that opens a merged-away or mistaken record shows the wrong person's data, and one account per person keeps the audit trail whole (BR-H1).
 - id: BR-H19
   text: Recovering an account needs the same identity assurance as creating it, and every authenticator change is told to the account holder through a channel already on file.
   rationale: Account recovery is a common way to take over an account; telling the holder lets them catch it.
 - id: BR-H20
   text: Every change sends the revision it read; a stale revision fails.
   rationale: Two administrators changing one account must not overwrite each other.
+- id: BR-H21
+  text: In the United States, the authorization server publishes its SMART configuration at .well-known/smart-configuration and validates tokens it issued for the modules that receive them, by token introspection.
+  rationale: SMART App Launch 2.0.0 requires discovery, and certified health IT must receive and validate tokens it issued (45 CFR 170.315(g)(10)(vii), 170.215(c)).
+  jurisdiction: us
+- id: BR-H22
+  text: 'In the United States, a practitioner''s controlled substance prescribing access is revoked on the date any of these is discovered: an authenticator in their two-factor credential is lost, stolen or compromised (immediately on their report); their DEA registration expires unrenewed, or is terminated, revoked or suspended; or they may no longer use the application, such as on leaving. A revocation an administrator enters is confirmed by a second designated registrant with their two-factor credential.'
+  rationale: DEA lists these revocation triggers and requires the second designated individual for revocations as for grants (21 CFR 1311.125(c) and (d)).
+  jurisdiction: us
+- id: BR-H23
+  text: Staff and system accounts with no sign-in for dormant_account_period are disabled. Patient and representative accounts aren't, because patients sign in rarely.
+  rationale: Unused accounts are a common way in for attackers and nobody notices their misuse; NIST SP 800-53 Rev. 5 (account management, control enhancement 3) disables accounts inactive for a set period, and HIPAA requires access management (45 CFR 164.308(a)(4)).
+- id: BR-H24
+  text: An administrator can suspend and reinstate an account, giving a reason. A disabled staff account is re-enabled, not recreated, when its person returns, and comes back with no roles, so every role is authorized again (BR-H2, BR-H3).
+  rationale: Re-enabling keeps one account per person and their history in one place (BR-H1), while clearing roles stops a returning worker getting their old access by default.
 validations:
 - field: account.subject
   rule: An existing practitioner, staff record, patient or representative relationship, or a registered system, with no other active account of the same kind
@@ -288,13 +307,13 @@ stateMachine:
     trigger: unlocked after verification
   - from: active
     to: suspended
-    trigger: practitioner suspended or an administrator suspends it (BR-H4)
+    trigger: practitioner suspended or an administrator suspends it (BR-H4, BR-H24)
   - from: suspended
     to: active
-    trigger: reinstated
+    trigger: reinstated (BR-H24)
   - from: active
     to: disabled
-    trigger: person left, patient died or account closed (BR-H4, BR-H18)
+    trigger: person left, dormant, patient died or record entered in error (BR-H4, BR-H18, BR-H23)
   - from: suspended
     to: disabled
     trigger: person left
@@ -304,6 +323,9 @@ stateMachine:
   - from: pending
     to: disabled
     trigger: enrolment abandoned
+  - from: disabled
+    to: active
+    trigger: person returns, with no roles, or a death is retracted (BR-H24, BR-H18)
 workflows:
 - name: Give a new staff member access
   trigger: Practitioners reports a practitioner credentialed, or a staff member starts
@@ -388,6 +410,38 @@ edgeCases:
   covers:
   - BR-H19
   - AC-H20
+- id: EC-H8
+  situation: A patient dies and their executor asks for portal access to settle the estate.
+  behaviour: The patient's own account is disabled; the executor gets a representative account with the scope the Patients module records, because HIPAA treats them as a personal representative (45 CFR 164.502(g)(4)).
+  covers:
+  - BR-H12
+  - BR-H18
+  jurisdiction: us
+- id: EC-H9
+  situation: A nurse leaves and is rehired a year later.
+  behaviour: The old account is re-enabled with no roles, and their roles are authorized again.
+  covers:
+  - BR-H24
+  - AC-H29
+- id: EC-H10
+  situation: A prescriber's DEA registration lapses on a Saturday.
+  behaviour: Their controlled substance prescribing access ends that day; other prescribing continues.
+  covers:
+  - BR-H22
+  - AC-H27
+  jurisdiction: us
+- id: EC-H11
+  situation: A death is recorded on the wrong patient and the patient tries to sign in.
+  behaviour: Their account was disabled; when the Patients module retracts the death, it is re-enabled.
+  covers:
+  - BR-H18
+  - AC-H30
+- id: EC-H12
+  situation: A contractor's account isn't used for months after their project ends, and nobody reported them leaving.
+  behaviour: It is disabled after dormant_account_period.
+  covers:
+  - BR-H23
+  - AC-H28
 functionalRequirements:
 - id: FR-H1
   text: The service must create, disable and lock accounts, one per person or system.
@@ -422,6 +476,15 @@ functionalRequirements:
   text: The service must log every sign-in, failure, step-up, role change, emergency access and grant.
   priority: must
   verification: test
+- id: FR-H9
+  text: The service must suspend, reinstate and re-enable accounts, and disable dormant staff and system accounts.
+  priority: must
+  verification: test
+- id: FR-H10
+  text: The service must publish its SMART configuration and introspect the tokens it issued.
+  priority: must
+  verification: test
+  jurisdiction: us
 nonFunctionalRequirements:
 - category: security
   text: Authenticators are verified with phishing-resistant protocols where the authenticator supports them, and secrets never leave the service.
@@ -470,6 +533,9 @@ settings:
 - name: audit_log_retention
   type: duration
   description: How long the sign-in and access log is kept. Set from law and policy; needs legal advice.
+- name: dormant_account_period
+  type: duration
+  description: How long a staff or system account can go without a sign-in before it is disabled. Set by the organization, such as 90 days.
 performanceTargets:
 - id: PERF-H1
   indicator: Permission check latency
@@ -483,6 +549,10 @@ performanceTargets:
   indicator: Emergency access reviewed on time
   target: 100%
   measurement: Share of emergency accesses reviewed within break_glass_review_deadline.
+- id: PERF-H4
+  indicator: App revocation time
+  target: At most 1 hour; immediate is the goal
+  measurement: Time from a patient revoking a grant to the app's last accepted request.
 acceptanceCriteria:
 - id: AC-H1
   given: a practitioner with an active staff account
@@ -648,6 +718,48 @@ acceptanceCriteria:
   then: each is a salted hash from a memory-hard function, never the password
   verifies:
   - CON-H1
+- id: AC-H26
+  given: the authorization server
+  when: an app reads .well-known/smart-configuration, and a module introspects an active token and a revoked one
+  then: the configuration is JSON with the authorization and token endpoints; the first token is active with its scopes and subject, the second inactive
+  verifies:
+  - BR-H21
+  - FR-H10
+  jurisdiction: us
+- id: AC-H27
+  given: a practitioner with controlled substance prescribing access
+  when: they report a lost security key, and another's DEA registration expires unrenewed (practitioner.credential_expired), and an administrator revokes a third's access without a second registrant
+  then: the first two lose access that day with identity.epcs_access_changed emitted; the third fails with IDENTITY_EPCS_REQUIREMENTS_UNMET and HTTP 409
+  verifies:
+  - BR-H22
+  - BR-H10
+  jurisdiction: us
+- id: AC-H28
+  given: a staff account and a patient account, neither used for longer than dormant_account_period
+  when: the dormancy check runs
+  then: the staff account is disabled with identity.account_disabled emitted; the patient account stays active
+  verifies:
+  - BR-H23
+  - FR-H9
+- id: AC-H29
+  given: an active account, and a disabled account of a nurse who returns
+  when: the first is suspended and reinstated, the second re-enabled, and an active account is re-enabled
+  then: identity.account_suspended then identity.account_reactivated are emitted; the nurse's account is active with no roles; the last fails with IDENTITY_INVALID_STATUS and HTTP 409
+  verifies:
+  - BR-H24
+  - FR-H9
+- id: AC-H30
+  given: a patient whose death was recorded, a record marked entered in error, and two merged practitioners with an account each
+  when: patient.death_retracted, patient.entered_in_error and practitioner.merged arrive
+  then: the patient's account is re-enabled; accounts linked to the mistaken record are disabled and listed; the source practitioner's account is disabled and the other remains
+  verifies:
+  - BR-H18
+- id: AC-H31
+  given: a patient who revokes an app grant
+  when: the app sends a request with its old access token and tries its refresh token
+  then: both are refused at once, and in any case within 1 hour
+  verifies:
+  - BR-H15
 operations:
 - name: Create an account
   actor: Account administrator
@@ -850,6 +962,38 @@ operations:
   - IDENTITY_INVALID_STATUS
   - IDENTITY_REASON_REQUIRED
   - IDENTITY_FORBIDDEN
+- name: Suspend an account
+  actor: Account administrator
+  description: Suspend an account, ending its sessions.
+  method: POST
+  path: /accounts/{id}/suspend
+  success: 200
+  input: account id, revision and reason
+  output: the account
+  errors: &id001
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_INVALID_STATUS
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_REVISION_CONFLICT
+  - IDENTITY_FORBIDDEN
+- name: Reinstate an account
+  actor: Account administrator
+  description: Reinstate a suspended account.
+  method: POST
+  path: /accounts/{id}/reinstate
+  success: 200
+  input: account id, revision and reason
+  output: the account
+  errors: *id001
+- name: Re-enable an account
+  actor: Account administrator
+  description: Re-enable a disabled account for a returning person, with no roles.
+  method: POST
+  path: /accounts/{id}/enable
+  success: 200
+  input: account id, revision and reason
+  output: the account
+  errors: *id001
 - name: Break the glass
   actor: Staff member
   description: Gain emergency access to a patient's information, with a reason.
@@ -906,6 +1050,27 @@ operations:
   errors:
   - IDENTITY_INVALID_CREDENTIAL
   - IDENTITY_INVALID_SCOPE
+- name: Get the SMART configuration
+  actor: App
+  description: Publish the authorization endpoints and capabilities apps discover.
+  method: GET
+  path: /.well-known/smart-configuration
+  success: 200
+  input: none
+  output: the SMART configuration as JSON
+  errors: []
+  jurisdiction: us
+- name: Introspect a token
+  actor: System
+  description: Say whether a token this service issued is active, and for whom and which scopes (RFC 7662).
+  method: POST
+  path: /oauth/introspect
+  success: 200
+  input: the token
+  output: active, and when active the scopes, client, subject and expiry
+  errors:
+  - IDENTITY_INVALID_CREDENTIAL
+  jurisdiction: us
 - name: List my app grants
   actor: Patient
   description: The apps the account has authorized, with scopes and dates.
@@ -931,10 +1096,25 @@ operations:
   method: POST
   path: /accounts/{id}/epcs-access
   success: 200
-  input: the two approvers and the credential's identity proofing record
+  input: the two approvers, the credential's identity proofing record, and the confirmation that DEA registration and state authorization are current
   output: the account
   errors:
   - IDENTITY_NOT_FOUND
+  - IDENTITY_EPCS_REQUIREMENTS_UNMET
+  - IDENTITY_DEPENDENCY_UNAVAILABLE
+  - IDENTITY_FORBIDDEN
+  jurisdiction: us
+- name: Revoke controlled substance prescribing
+  actor: Account administrator
+  description: Revoke a practitioner's controlled substance prescribing access, confirmed by a second designated registrant.
+  method: DELETE
+  path: /accounts/{id}/epcs-access
+  success: 200
+  input: the reason and the confirming registrant
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_REASON_REQUIRED
   - IDENTITY_EPCS_REQUIREMENTS_UNMET
   - IDENTITY_FORBIDDEN
   jurisdiction: us
@@ -1016,6 +1196,26 @@ events:
   payload:
   - client_id
   - account_id
+- name: identity.account_suspended
+  description: An account was suspended.
+  payload:
+  - account_id
+  - revision
+  - reason
+- name: identity.account_reactivated
+  description: A suspended or disabled account became active again.
+  payload:
+  - account_id
+  - revision
+  - from_status
+- name: identity.epcs_access_changed
+  description: Controlled substance prescribing access was granted or revoked.
+  payload:
+  - account_id
+  - revision
+  - granted
+  - reason
+  jurisdiction: us
 deliveryGuarantees:
 - id: DG-H1
   text: Events are published at least once; consumers drop one with a source and id they have seen.
@@ -1035,7 +1235,7 @@ permissions:
 - name: identity.check
   description: Ask whether a caller holds a permission.
 accessMatrix:
-- action: Create, search, disable and unlock accounts, assign and define roles, run access reviews, grant controlled substance prescribing
+- action: Create, search, suspend, reinstate, re-enable, disable and unlock accounts, assign and define roles, run access reviews, grant and revoke controlled substance prescribing
   roles:
     Account administrator: any
     Staff member: none
@@ -1091,6 +1291,26 @@ accessMatrix:
     System: none
   permission: identity.self
   note: Apps act only within the scopes a person granted, or their own system scopes.
+- action: Introspect tokens
+  roles:
+    Account administrator: none
+    Staff member: none
+    Patient: none
+    Privacy officer: none
+    App: none
+    System: any
+  permission: identity.check
+  note: Only the modules that receive tokens.
+- action: Read the SMART configuration
+  roles:
+    Account administrator: any
+    Staff member: any
+    Patient: any
+    Privacy officer: any
+    App: any
+    System: any
+  permission: none
+  note: Public, needs no token.
 personalData:
 - field: account.subject, account.username, account.kind, account.status, account.roles, account.revision
   category: personal
@@ -1120,6 +1340,11 @@ personalData:
   category: health data; names the patient
   purpose: Accounting for emergency access
   retention: audit_log_retention
+- field: account.epcs_access
+  category: personal
+  purpose: Showing who may sign controlled substance prescriptions and who approved it
+  retention: As long as the account, then audit_log_retention
+  jurisdiction: us
 errors:
 - code: IDENTITY_NOT_FOUND
   http: 404
@@ -1184,6 +1409,8 @@ dependencies:
   - 'Asks: is this practitioner active?'
   - 'Receives: practitioner.credentialed, practitioner.suspended, practitioner.reinstated and practitioner.inactivated'
   - 'Gives: the practitioner id an account belongs to'
+  - 'Asks: are this practitioner''s DEA registration and state authorization current?'
+  - 'Receives: practitioner.credential_expired and practitioner.merged'
 - service: patient-service
   direction: upstream
   reason: owns patients and their representatives
@@ -1192,6 +1419,7 @@ dependencies:
   - 'Asks: does this enrolment match a patient record in use?'
   - 'Asks: who represents this patient, with what scope?'
   - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.representative_changed'
+  - 'Receives: patient.death_retracted and patient.entered_in_error'
 - service: organization-service
   direction: upstream
   reason: owns departments and job roles
@@ -1213,6 +1441,8 @@ dependencies:
   - 'Gives: whether the caller holds a permission, with their AAL and authentication time'
   - 'Gives: identity.break_glass_used, so modules allow the emergency access and log it'
   - Which permission each action needs is each module's concern
+  - 'Gives: identity.epcs_access_changed, so prescribing stops offering controlled substance signing at once'
+  - 'Gives: token introspection, so a module can check a token it received'
 - service: notification-service
   direction: downstream
   reason: alerts
@@ -1221,6 +1451,7 @@ dependencies:
   - 'Gives: identity.signin_anomaly, identity.account_locked and identity.break_glass_used, for the privacy officer'
   - 'Gives: identity.break_glass_reviewed, so the person who broke the glass learns the outcome'
   - 'Gives: identity.account_created, identity.account_disabled, identity.role_changed, identity.app_registered and identity.grant_revoked, so holders are told of changes'
+  - 'Gives: identity.account_suspended, identity.account_reactivated and identity.epcs_access_changed, so holders are told of changes'
 risks:
 - id: RISK-H1
   risk: An account is taken over by phishing.
@@ -1289,7 +1520,28 @@ references:
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Article 21(2)(j), multi-factor authentication.
+- id: REF-H12
+  title: NIST SP 800-53 Rev. 5, Security and privacy controls
+  url: https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final
+  note: Account management, control enhancement 3, disable inactive accounts.
+- id: REF-H13
+  title: RFC 7662, OAuth 2.0 Token Introspection
+  url: https://www.rfc-editor.org/rfc/rfc7662
+  note: Token introspection, as SMART App Launch 2.0.0 profiles it.
+- id: REF-H14
+  title: 45 CFR 164.502, Uses and disclosures of protected health information
+  url: https://www.ecfr.gov/current/title-45/section-164.502
+  note: (g)(4), executors of a deceased individual as personal representatives.
 changelog:
+- version: 0.2.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Suspend, reinstate and re-enable accounts (BR-H24), and dormant staff and system accounts disabled (BR-H23, dormant_account_period).
+  - 'US: SMART configuration discovery and token introspection (BR-H21, 45 CFR 170.315(g)(10)(vii)); revocation within 1 hour (BR-H15, (g)(10)(vi)).'
+  - 'US: controlled substance prescribing checks DEA registration and state authorization, and is revoked on each 21 CFR 1311.125(d) trigger (BR-H10, BR-H22).'
+  - Accounts follow patient.death_retracted, patient.entered_in_error and practitioner.merged (BR-H18).
+  - New events identity.account_suspended, identity.account_reactivated and identity.epcs_access_changed.
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false
@@ -1336,6 +1588,10 @@ tables:
   - name: revision
     type: integer
     default: '0'
+  - name: epcs_access
+    type: jsonb
+    nullable: true
+    note: United States only
   indexes: []
   constraints:
   - name: accounts_pkey
@@ -1559,22 +1815,25 @@ compliance:
   jurisdiction: us
 - id: CMP-H4
   regulation: DEA electronic prescriptions for controlled substances
-  provision: 21 CFR 1311.105, 1311.115 and 1311.125
-  obligation: Identity-proofed two-factor credentials and logical access granted by two designated individuals.
-  how: Controlled substance prescribing access needs both.
+  provision: 21 CFR 1311.105 and 1311.125
+  obligation: Identity-proofed two-factor credentials, a check that registration and state authorization are current, logical access granted and revoked by two designated individuals, and revocation on the date a trigger is discovered.
+  how: Controlled substance prescribing access needs all of these, and ends on each trigger.
   status: met
   covered_by:
   - BR-H10
+  - BR-H22
   jurisdiction: us
 - id: CMP-H5
   regulation: ONC Health IT Certification
-  provision: 45 CFR 170.315(g)(10)
-  obligation: App registration, SMART App Launch authorization and refresh tokens of at least three months.
+  provision: 45 CFR 170.315(g)(10)(v) to (vii)
+  obligation: SMART App Launch authorization, refresh tokens of at least three months, revocation at the patient's direction within 1 hour, and token introspection.
   how: App registration and authorization server.
   status: met
   covered_by:
   - BR-H14
+  - BR-H15
   - BR-H16
+  - BR-H21
   jurisdiction: us
 - id: CMP-H6
   regulation: 21st Century Cures Act information blocking

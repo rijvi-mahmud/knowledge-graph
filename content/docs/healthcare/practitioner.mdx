@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.1.2
+version: 0.1.3
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -1156,6 +1156,8 @@ dependencies:
   - 'Asks: who is the caller, and do they hold this permission?'
   - 'Gives: the practitioner id an account belongs to'
   - 'Gives: practitioner.credentialed, practitioner.suspended, practitioner.reinstated and practitioner.inactivated, so accounts and roles follow'
+  - 'Gives: practitioner.credential_expired and practitioner.merged, so controlled substance prescribing and accounts follow'
+  - 'Answers: are this practitioner''s DEA registration and state authorization current?'
   - Accounts, sign-in and permissions are Identity's concern
 - service: primary-sources
   direction: upstream
@@ -1280,6 +1282,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.1.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - The Identity dependency also gives credential expiry and merges, and answers whether DEA registration and state authorization are current.
 - version: 0.1.2
   date: '2026-10-09'
   breaking: false
