@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.10.1
+version: 0.10.2
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -1081,6 +1081,14 @@ personalData:
   category: personal
   purpose: Checking where a virtual appointment may lawfully be held
   retention: the Patients module's record retention for the patient
+- field: acting_representative
+  category: personal
+  purpose: Recording which personal representative acted for the patient
+  retention: the Patients module's record retention for the patient
+- field: identity_verified_with, checked_in_at
+  category: personal
+  purpose: Showing how and when the patient's identity was checked at check-in
+  retention: the Patients module's record retention for the patient
 risks:
 - id: RISK-H1
   risk: A reminder reveals a sensitive condition to someone else.
@@ -1205,6 +1213,12 @@ references:
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
 changelog:
+- version: 0.10.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Privacy and retention covers acting_representative, identity_verified_with and checked_in_at.
+  - The storage design adds an appointment_clinical table for the healthcare fields.
 - version: 0.10.1
   date: '2026-10-09'
   breaking: false
@@ -1506,6 +1520,56 @@ compliance:
   covered_by: []
   jurisdiction: eu
 tables:
+- name: appointment_clinical
+  description: One row per appointment, holding the healthcare fields beside the core appointments table. The core appointments_status check widens to the healthcare states, checked_in and entered_in_error.
+  columns:
+  - name: appointment_id
+    type: uuid
+  - name: service_type
+    type: text
+    nullable: true
+  - name: reason
+    type: jsonb
+    nullable: true
+    note: code and text
+  - name: priority
+    type: smallint
+    nullable: true
+  - name: patient_instruction
+    type: text
+    nullable: true
+  - name: virtual_service
+    type: jsonb
+    nullable: true
+    note: connection details
+  - name: interpreter_language
+    type: text
+    nullable: true
+    note: BCP 47 tag
+  - name: acting_representative
+    type: uuid
+    nullable: true
+  - name: checked_in_at
+    type: timestamptz
+    nullable: true
+  - name: identity_verified_with
+    type: text[]
+    default: '''{}'''
+  - name: accommodation_needs
+    type: text[]
+    default: '''{}'''
+  - name: patient_location
+    type: text
+    nullable: true
+    note: US state or EU member state code
+  indexes: []
+  constraints:
+  - name: appointment_clinical_pkey
+    definition: PRIMARY KEY (appointment_id)
+  - name: appointment_clinical_appointment
+    definition: FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+  - name: appointment_clinical_priority
+    definition: CHECK (priority IS NULL OR priority BETWEEN 1 AND 9)
 - name: appointment_access_log
   description: Every view of an appointment, with the reason given for restricted patients. Append-only; nobody it records can change it.
   columns:

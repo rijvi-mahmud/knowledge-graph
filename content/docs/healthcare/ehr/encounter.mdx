@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.11.1
+version: 0.11.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -2305,7 +2305,7 @@ personalData:
   category: personal
   purpose: Joining and licensing a virtual encounter
   retention: record_retention of the Patients module
-- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, status_reason
+- field: documentation_complete, record_due_at, locked_at, amendments, has_clinical_data, revision, status_reason, merged_into
   category: record metadata about the patient's care
   purpose: Record completion and integrity
   retention: record_retention of the Patients module
@@ -2662,6 +2662,12 @@ references:
   title: HL7 v2 Table 0003, event types (A42 merge visit, A45 move visit)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 changelog:
+- version: 0.11.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Privacy and retention covers merged_into.
+  - 'The storage design holds every field: planned_start, identifiers, episode_of_care_ids, directory_status, health_plan_restriction, access_denial, accuracy_contested, merged_into and an encounter_departments table.'
 - version: 0.11.1
   date: '2026-10-09'
   breaking: false
@@ -2788,9 +2794,10 @@ tables:
   - name: actual_period
     type: tstzrange
     nullable: true
+    note: actual_start and actual_end; length is derived from it, less time on leave
   - name: details
     type: jsonb
-    note: type, priority, reasons, admission, virtual service, patient location, sensitivity
+    note: type, priority, reasons, admission, departure_reason, virtual_service, patient_location, sensitivity
   - name: documentation_complete
     type: boolean
     default: 'false'
@@ -2808,6 +2815,10 @@ tables:
     default: '0'
   - name: visit_number
     type: text
+    note: The visit number; other identifiers go in identifiers
+  - name: planned_start
+    type: timestamptz
+    nullable: true
   - name: planned_end
     type: timestamptz
     nullable: true
@@ -2817,6 +2828,29 @@ tables:
   - name: account_ids
     type: uuid[]
     default: '''{}'''
+  - name: identifiers
+    type: jsonb
+    default: '''[]'''
+    note: system and value of each other identifier
+  - name: episode_of_care_ids
+    type: uuid[]
+    default: '''{}'''
+  - name: directory_status
+    type: text
+    default: '''not_asked'''
+  - name: health_plan_restriction
+    type: boolean
+    default: '''false'''
+  - name: access_denial
+    type: jsonb
+    nullable: true
+  - name: accuracy_contested
+    type: boolean
+    default: '''false'''
+  - name: merged_into
+    type: uuid
+    nullable: true
+    note: Set only when status is entered_in_error (BR-E48)
   indexes:
   - name: encounters_by_patient
     definition: (patient_id, lower(actual_period))
@@ -2826,6 +2860,8 @@ tables:
   - name: unique_visit_number
     definition: UNIQUE (visit_number)
     note: BR-E34
+  - name: encounters_merged_into
+    definition: CHECK (merged_into IS NULL OR status = 'entered_in_error')
 - name: encounter_class_history
   description: Every class, with when it began (BR-E5).
   columns:
@@ -2835,6 +2871,19 @@ tables:
     type: text
   - name: from
     type: timestamptz
+- name: encounter_departments
+  description: 'department_history: one row each time a department takes over the encounter. Append-only (BR-E25).'
+  columns:
+  - name: encounter_id
+    type: uuid
+  - name: department_id
+    type: uuid
+  - name: from
+    type: timestamptz
+  indexes: []
+  constraints:
+  - name: encounter_departments_pkey
+    definition: PRIMARY KEY (encounter_id, "from")
 - name: encounter_participants
   description: Practitioners with role and period.
   columns:
@@ -2901,7 +2950,7 @@ tables:
   - name: at
     type: timestamptz
 - name: encounter_appointments
-  description: Appointments each encounter fulfils.
+  description: 'appointment_ids: the appointments each encounter fulfils.'
   columns:
   - name: encounter_id
     type: uuid

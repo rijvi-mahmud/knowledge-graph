@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.10.1
+version: 0.10.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -1215,6 +1215,12 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.10.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Privacy and retention covers the EHR fields, with sensitivity as special category data.
+  - The storage design adds an appointment_hospital table for the EHR fields.
 - version: 0.10.1
   date: '2026-10-09'
   breaking: false
@@ -1332,6 +1338,97 @@ compliance:
   covered_by:
   - BR-E17
   jurisdiction: us
+personalData:
+- field: sensitivity
+  category: special category; reveals the kind of care, such as substance use treatment
+  purpose: Applying extra protection
+  retention: the Patients module's record retention for the patient
+- field: department_id, location_id, equipment_ids, care_setting, walk_in
+  category: health data
+  purpose: Arranging where and how the patient is seen; a department can reveal a condition
+  retention: the Patients module's record retention for the patient
+- field: encounter_id, referral_id, order_ids, previous_appointment_id
+  category: health data
+  purpose: Linking the appointment to the care it is part of
+  retention: the Patients module's record retention for the patient
+- field: authorization_status, authorization_id, financial_clearance, pre_registered_at
+  category: personal (financial)
+  purpose: Checking that payment is arranged before the visit
+  retention: the Patients module's record retention for the patient
+tables:
+- name: appointment_hospital
+  description: One row per appointment, holding the EHR fields beside the core appointments and healthcare appointment_clinical tables.
+  columns:
+  - name: appointment_id
+    type: uuid
+  - name: care_setting
+    type: text
+  - name: department_id
+    type: uuid
+  - name: location_id
+    type: uuid
+    nullable: true
+  - name: referral_id
+    type: uuid
+    nullable: true
+  - name: encounter_id
+    type: uuid
+    nullable: true
+  - name: walk_in
+    type: boolean
+    default: '''false'''
+  - name: overbooked
+    type: boolean
+    default: '''false'''
+  - name: needs_review
+    type: boolean
+    default: '''false'''
+  - name: review_reason
+    type: text
+    nullable: true
+  - name: equipment_ids
+    type: uuid[]
+    default: '''{}'''
+  - name: previous_appointment_id
+    type: uuid
+    nullable: true
+  - name: authorization_status
+    type: text
+    nullable: true
+  - name: authorization_id
+    type: text
+    nullable: true
+  - name: sensitivity
+    type: text[]
+    default: '''{}'''
+  - name: order_ids
+    type: uuid[]
+    default: '''{}'''
+  - name: financial_clearance
+    type: text
+    nullable: true
+  - name: pre_registered_at
+    type: timestamptz
+    nullable: true
+  indexes:
+  - name: appointment_hospital_encounter
+    definition: CREATE INDEX ON appointment_hospital (encounter_id) WHERE encounter_id IS NOT NULL
+    note: Finds the appointments of an encounter when it is merged, moved or entered in error.
+  - name: appointment_hospital_review
+    definition: CREATE INDEX ON appointment_hospital (department_id) WHERE needs_review
+    note: Lists appointments a Scheduler must review.
+  - name: appointment_hospital_orders
+    definition: CREATE INDEX ON appointment_hospital USING gin (order_ids)
+    note: Finds appointments carrying out an order.
+  constraints:
+  - name: appointment_hospital_pkey
+    definition: PRIMARY KEY (appointment_id)
+  - name: appointment_hospital_appointment
+    definition: FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+  - name: appointment_hospital_care_setting
+    definition: CHECK (care_setting IN ('outpatient', 'virtual', 'observation', 'inpatient'))
+  - name: appointment_hospital_review_reason
+    definition: CHECK (needs_review OR review_reason IS NULL)
 ---
 Appointments build on the
 [clinical appointment rules](/docs/healthcare/appointment), which build on the

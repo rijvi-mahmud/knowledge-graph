@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.7.1
+version: 0.7.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -1937,7 +1937,7 @@ personalData:
   category: health data; can reveal an infection
   purpose: Safe bed placement
   retention: Until discharge
-- field: id, revision, access log
+- field: id, revision, merged_into, access log
   category: record metadata
   purpose: Integrity and access review
   retention: record_retention, and access_log_retention for the log
@@ -2475,6 +2475,12 @@ compliance:
   covered_by: []
   jurisdiction: us
 changelog:
+- version: 0.7.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Privacy and retention covers merged_into.
+  - 'The storage design holds every field: level_of_care, shares_mother_location, accuracy_contested and merged_into get columns, and the details note names each field it holds.'
 - version: 0.7.1
   date: '2026-10-09'
   breaking: false
@@ -2569,7 +2575,7 @@ tables:
     nullable: true
   - name: details
     type: jsonb
-    note: admission type, source, pre-admission, orders, expected times, leave, pending transfer, discharge details, readmission, isolation, temporary location
+    note: admission_type, admit_source, pre_admission, admission_order_id, expected_admission_at, expected_discharge_at, leave, pending_transfer, temporary_location, discharge_order_id, discharge_disposition, discharge_destination_id, readmission, isolation_required
   - name: admitted_at
     type: timestamptz
     nullable: true
@@ -2585,10 +2591,26 @@ tables:
   - name: revision
     type: integer
     default: '0'
+  - name: level_of_care
+    type: text
+    nullable: true
+  - name: shares_mother_location
+    type: boolean
+    default: '''false'''
+  - name: accuracy_contested
+    type: boolean
+    default: '''false'''
+  - name: merged_into
+    type: uuid
+    nullable: true
+    note: Set only on a duplicate stay, cancelled when merged (BR-E42)
   indexes:
   - name: one_open_stay
     definition: UNIQUE (patient_id) WHERE status IN ('pending_admission', 'admitted')
     note: BR-E2
+  constraints:
+  - name: stays_merged_into
+    definition: CHECK (merged_into IS NULL OR status = 'cancelled')
 - name: beds
   description: Bed board state; the beds themselves are defined by Organization.
   columns:
@@ -2605,6 +2627,7 @@ tables:
   - name: reserved_for
     type: uuid
     nullable: true
+    note: 'bed_reserved_for: the stay the bed is held for'
   - name: updated_at
     type: timestamptz
   constraints:

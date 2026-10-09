@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.12.1
+version: 0.12.2
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -1703,6 +1703,10 @@ personalData:
   category: personal
   purpose: Who attended. In a healthcare or similar setting this can reveal sensitive information, so treat it as the deployment's most sensitive category.
   retention: Same as identity_id
+- field: cancelled_by, no_show_recorded_by, history actors
+  category: pseudonymous
+  purpose: Who changed the appointment, for accountability
+  retention: Same as identity_id; erasure replaces these identity ids too (BR-11)
 - field: location
   category: personal
   purpose: Where to meet, which can be a home address or a private meeting link
@@ -2082,6 +2086,11 @@ references:
   title: GDPR (EU) 2016/679 on EUR-Lex (Articles 6 and 44 to 49)
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
 changelog:
+- version: 0.12.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Privacy and retention covers the identity ids of who cancelled, recorded a no-show or changed the appointment.
 - version: 0.12.1
   date: '2026-10-09'
   breaking: false

@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.10.1
+version: 0.10.2
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -2510,7 +2510,7 @@ accessMatrix:
     System: none
   permission: patient.import
 personalData:
-- field: names, birth_date, administrative_gender
+- field: names, birth_date, birth_date_estimated, administrative_gender
   category: personal
   purpose: Identifying the patient
   retention: record_retention
@@ -3064,6 +3064,11 @@ references:
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
 changelog:
+- version: 0.10.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Privacy and retention covers birth_date_estimated; the storage design names each optional demographic field.
 - version: 0.10.1
   date: '2026-10-09'
   breaking: false
@@ -3222,7 +3227,7 @@ tables:
     default: '0'
   - name: details
     type: jsonb
-    note: telecoms, addresses, languages, interpreter_needed, contacts, confidential_communication, general_practitioner, multiple_birth, recorded_sex, external_links and collected fields
+    note: 'telecoms, addresses, languages, interpreter_needed, contacts, confidential_communication, general_practitioner, multiple_birth, recorded_sex, external_links, and the fields collected where the deployment allows: marital_status, occupation, race_ethnicity, gender_identity, pronouns, tribal_affiliation'
   - name: deceased
     type: boolean
     default: 'false'
