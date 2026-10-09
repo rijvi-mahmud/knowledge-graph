@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the hospital uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.1.0
+version: 0.1.1
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -1498,6 +1498,11 @@ references:
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Article 5(1)(c), data minimisation.
 changelog:
+- version: 0.1.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - An access row for terminology.licensed.
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false

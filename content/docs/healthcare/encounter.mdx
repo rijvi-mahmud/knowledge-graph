@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.1
+version: 0.1.2
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,12 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Acceptance criteria name the HTTP status with each error code.
+  - AC-H71 tests ENCOUNTER_INVALID_DEPARTMENT and ENCOUNTER_INVALID_PARENT.
 - version: 0.1.1
   date: '2026-10-09'
   breaking: false
