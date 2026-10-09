@@ -723,10 +723,10 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Admission, discharge and transfer (`healthcare/ehr/adt` 0.7.2, EHR-only), Encounters (`healthcare/ehr/encounter` 0.11.2, EHR-only), Patients (`healthcare/patient` 0.10.2, which has no core page by the
+  drafts: Clinical documentation (`healthcare/ehr/clinical-documentation` 0.1.0, EHR-only; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.7.2, EHR-only), Encounters (`healthcare/ehr/encounter` 0.11.3, EHR-only), Patients (`healthcare/patient` 0.10.2, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.3.5) and Appointments
   (`healthcare/appointment` 0.10.2, `healthcare/ehr/appointment` 0.10.2; `core/appointment` 0.12.2). All
-  support the US and EU through the `jurisdiction` setting. Next: Clinical documentation.
+  support the US and EU through the `jurisdiction` setting. Next: Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like
   `healthcare/patient`) use `-H` ids and must be complete on their own: API

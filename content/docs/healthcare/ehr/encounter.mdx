@@ -2,7 +2,7 @@
 title: Encounters
 description: 'The record of each visit or hospital stay: when it started and ended, who cared for the patient and where, its diagnoses, and when its record is complete.'
 module: encounter
-version: 0.11.2
+version: 0.11.3
 status: draft
 industry: healthcare
 domain: ehr
@@ -225,7 +225,7 @@ dataModel:
 - name: documentation_complete
   type: boolean
   required: false
-  description: Set when Clinical documentation reports the documentation is complete.
+  description: Set when Clinical documentation reports the documentation is complete, and cleared if it reports it reopened before the encounter completes.
   constraints: set by the service
 - name: record_due_at
   type: instant
@@ -346,7 +346,7 @@ businessRules:
   text: An encounter part of another has the same patient, except that a newborn's encounter can be part of its mother's encounter. A part's period is within its parent's, and the parent cannot be completed while a part is still open.
   rationale: FHIR groups encounters with partOf, such as a consultation during a stay, and says a child's encounter should reference the mother's encounter with partOf. A parent closed over an open part leaves care outside any complete record.
 - id: BR-E7
-  text: A discharged encounter becomes completed only when Clinical documentation reports its documentation complete and a final diagnosis is recorded. It must happen within record_completion_deadline of actual_end; encounters past that are listed as overdue.
+  text: A discharged encounter becomes completed only when Clinical documentation reports its documentation complete and a final diagnosis is recorded. It must happen within record_completion_deadline of actual_end; encounters past that are listed as overdue. If Clinical documentation reports documentation reopened before then, documentation_complete is cleared.
   rationale: US hospitals must record the final diagnosis and complete the medical record within 30 days after discharge (42 CFR 482.24(c)(4)(viii)). FHIR uses discharged for care that is over while the record is still being completed.
 - id: BR-E8
   text: A completed encounter is locked. Any later change is an amendment that records who, when, why and the previous value, and emits encounter.amended.
@@ -1131,8 +1131,8 @@ acceptanceCriteria:
   variant: emergency
 - id: AC-E8
   given: a discharged encounter without a final diagnosis
-  when: it is completed, then a discharge diagnosis is added and documentation reported complete
-  then: the first fails with ENCOUNTER_RECORD_INCOMPLETE and HTTP 409; then it completes, is locked and encounter.completed is emitted; past record_due_at an incomplete one emits encounter.record_overdue
+  when: it is completed, then a discharge diagnosis is added and documentation reported complete, reopened and complete again
+  then: the first fails with ENCOUNTER_RECORD_INCOMPLETE and HTTP 409; the reopen clears documentation_complete; then it completes, is locked and encounter.completed is emitted; past record_due_at an incomplete one emits encounter.record_overdue
   verifies:
   - BR-E7
   - FR-E5
@@ -2488,8 +2488,8 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: encounter.moved and encounter.merged, so linked entries follow the encounter'
-  - 'Receives: documentation complete, and data recorded against the encounter'
-  - 'Gives: encounter.started, encounter.discharged, encounter.completed and encounter.amended, so notes open and lock with the encounter'
+  - 'Receives: documentation.completed, documentation.reopened and documentation.data_recorded'
+  - 'Gives: encounter.started, encounter.discharged, encounter.completed, encounter.cancelled and encounter.amended, so notes open and lock with the encounter'
   - 'Gives: encounter.record_overdue, for the responsible practitioner''s deficiency list'
   - Discharge summaries and the EU discharge report are Clinical documentation's concern
 - service: clinical-modules
@@ -2662,6 +2662,11 @@ references:
   title: HL7 v2 Table 0003, event types (A42 merge visit, A45 move visit)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 changelog:
+- version: 0.11.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'Clinical documentation is specified: Encounters receives documentation.completed, documentation.reopened and documentation.data_recorded, and a reopen clears documentation_complete (BR-E7).'
 - version: 0.11.2
   date: '2026-10-09'
   breaking: false

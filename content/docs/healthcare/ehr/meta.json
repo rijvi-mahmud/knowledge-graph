@@ -6,6 +6,7 @@
     "patient",
     "appointment",
     "encounter",
-    "adt"
+    "adt",
+    "clinical-documentation"
   ]
 }
