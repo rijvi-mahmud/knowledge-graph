@@ -181,12 +181,20 @@ Rules:
   (`healthcare/patient`, no core page) and for Terminology
   (`healthcare/terminology`, with an EHR page that adds nothing). Add a core
   page only when a second industry needs the concept.
-- **Concepts every health application shares start at the healthcare level**,
-  even with one domain, so other health tech domains can reuse them. The user
-  asked for this on 2026-10-09: Terminology moved up, and Encounters and
-  Clinical documentation are to be split into a healthcare layer plus an EHR
-  layer holding the hospital-only rules (inpatient stays, US hospital
-  conditions of participation). ADT stays EHR-only. Ask before doing the split.
+- **Reusable modules live in the healthcare core; each domain holds only its
+  own rules.** The user will add many kinds of health application later (EMR,
+  mental health, dental, pharmacy, laboratory, telehealth and more). So any
+  module or rule that another kind of application could reuse goes at the
+  healthcare level, even while EHR is the only domain, and each domain page
+  holds only what is specific to that kind of application: EHR rules stay in
+  EHR, EMR rules in EMR, dental rules in dental. A module whose whole job is
+  specific to one kind of application (ADT for hospitals) stays in that
+  domain. Before writing a module, decide which of its rules are reusable and
+  which are domain-only, and split it into a healthcare page and a domain
+  layer. Set by the user on 2026-10-09: Terminology moved up; Encounters and
+  Clinical documentation still need splitting into a healthcare layer plus an
+  EHR layer (inpatient stays, US hospital conditions of participation stay in
+  EHR).
 - **Cap at three levels.** Needing a fourth usually means a concept deserves its
   own module.
 - **"Reviewed, nothing to add" gets a page.** Where a domain needs nothing extra
