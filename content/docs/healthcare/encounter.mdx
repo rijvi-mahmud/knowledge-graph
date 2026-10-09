@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.2.1
+version: 0.2.2
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.2.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Reference URLs updated where the publisher moved them (REF-H23).
 - version: 0.2.1
   date: '2026-10-09'
   breaking: false
@@ -2303,7 +2308,7 @@ references:
   note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
 - id: REF-H23
   title: ONC, United States Core Data for Interoperability, Version 5
-  url: https://www.healthit.gov/isp/sites/isp/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
+  url: https://isp.healthit.gov/sites/default/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
   note: 'Encounter information: type, identifier, diagnosis, time, location and disposition.'
 - id: REF-H24
   title: 45 CFR 84.84, Requirements for web and mobile accessibility

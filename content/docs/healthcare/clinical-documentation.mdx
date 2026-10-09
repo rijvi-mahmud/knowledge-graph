@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.4.1
+version: 0.4.2
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.4.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Reference URLs updated where the publisher moved them (REF-H32, REF-H39, REF-H40).
 - version: 0.4.1
   date: '2026-10-09'
   breaking: false
@@ -3110,7 +3115,7 @@ references:
   note: Consent of all parties to record a confidential communication.
 - id: REF-H32
   title: Florida Statutes 934.03
-  url: http://www.leg.state.fl.us/statutes/index.cfm?App_mode=Display_Statute&URL=0900-0999/0934/Sections/0934.03.html
+  url: https://www.leg.state.fl.us/statutes/index.cfm?App_mode=Display_Statute&URL=0900-0999/0934/Sections/0934.03.html
   note: All parties' prior consent to intercept a communication.
 - id: REF-H34
   title: NCC MERP, Recommendations to weigh patients and document metric weights
@@ -3130,11 +3135,11 @@ references:
   note: Adds the 2 December 2026 deadline for AI tools on the market before 2 August 2026.
 - id: REF-H39
   title: ONC, Conceptualizing a data infrastructure for patient-generated health data
-  url: https://www.healthit.gov/sites/default/files/onc_pghd_final_white_paper.pdf
+  url: https://aspe.hhs.gov/sites/default/files/private/pdf/259016/ConceptualizingDataInfrastructure.pdf
   note: Patient-generated health data recorded outside the clinical setting.
 - id: REF-H40
   title: ONC, United States Core Data for Interoperability, Version 5
-  url: https://www.healthit.gov/isp/sites/isp/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
+  url: https://isp.healthit.gov/sites/default/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
   note: Vital signs, including inhaled oxygen concentration, average blood pressure and paediatric percentiles.
 - id: REF-H41
   title: CDC, Using the WHO growth charts

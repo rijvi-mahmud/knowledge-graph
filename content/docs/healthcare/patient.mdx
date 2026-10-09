@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.13.5
+version: 0.13.6
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -1279,7 +1279,7 @@ settings:
   description: For a patient who was a minor at their last care, the age before which the record is never erased, such as 20 in Texas (verified from Health and Safety Code 241.103(b)). Other states must be checked with legal advice. Unset means no age rule.
 - name: age_of_majority
   type: integer
-  description: When a parent's authority ends (BR-H25). 18 in most US states; 19 in Nebraska (verified from Revised Statutes 43-2101). Other states and EU member states must be checked with legal advice. Required.
+  description: When a parent's authority ends (BR-H25). 18 in most US states; 19 in Nebraska, where marriage also ends minority and anyone 18 or older may consent to their own mental health services without a parent (Revised Statutes 43-2101(2)(b), last amended 2019, verified). Service-specific exceptions like that one are recorded as exclusions from the parent's authority (BR-H15). Other states and EU member states must be checked with legal advice. Required.
 - name: max_age
   type: integer
   default: '122'
@@ -3249,6 +3249,12 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.13.6
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Reference URLs updated where the publisher moved them ().
+  - age_of_majority notes Nebraska's mental health consent at 18 and that marriage ends minority (43-2101).
 - version: 0.13.5
   date: '2026-10-09'
   breaking: false
