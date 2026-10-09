@@ -2,7 +2,7 @@
 title: Clinical documentation
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.0
+version: 0.3.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -304,7 +304,7 @@ dataModel:
   type: code
   required: false
   description: The unit of a quantity.
-  constraints: 'codes: UCUM, limited per code as the FHIR vital signs profiles: /min, mm[Hg], Cel or [degF], %, cm or [in_i], g, kg or [lb_av], kg/m2'
+  constraints: 'codes: UCUM, limited per code as the FHIR vital signs profiles: /min, mm[Hg], Cel or [degF], %, cm or [in_i], kg/m2; body weight only kg or g (BR-E53)'
 - name: observation.components
   type: component[]
   required: false
@@ -345,6 +345,11 @@ dataModel:
   required: false
   description: Method, body site and position where they matter, such as an oral temperature or a standing blood pressure.
   constraints: 'codes: SNOMED CT body site and method, as the deployment lists'
+- name: observation.weight_basis
+  type: enum
+  required: false
+  description: For a body weight, whether it was measured, stated by the patient or estimated.
+  constraints: 'required for body weight; measured | stated | estimated; codes: none standard, local to this specification'
 - name: observation.status
   type: enum
   required: true
@@ -471,7 +476,7 @@ businessRules:
   text: A scribe enters a note for a named practitioner. The note records the scribe as data_enterer and the practitioner as author. Only the practitioner signs it, with their own date and time, and the scribe can never sign or cosign.
   rationale: The practitioner's signature affirms that the note documents the care (Medicare Program Integrity Manual chapter 3, 3.3.2.4). The Joint Commission expects the scribe to be identifiable and the practitioner to authenticate the entry.
 - id: BR-E7
-  text: Content drafted by speech recognition or an AI tool starts as a draft with source and drafting_tool recorded. The author can sign it only by confirming they reviewed it, which sets review_attested, and the provenance stays with the note.
+  text: Content drafted by speech recognition or an AI tool starts as a draft with source and drafting_tool recorded. The author can sign it only by confirming they reviewed it, which sets review_attested, and the provenance stays with the note, including any marking the tool adds to show content is AI-generated.
   rationale: Medicare requires the practitioner's concurrence when AI technology captures medical record entries (Program Integrity Manual chapter 3, 3.3.2.4). Drafting tools can invent or misattribute findings, so nothing they write reaches the record unreviewed.
 - id: BR-E8
   text: 'Every note and observation keeps two times: when the care or measurement happened (service_at, effective_at) and when it was recorded. Neither can be later than now plus clock_tolerance. An entry recorded more than late_entry_threshold after the care is a late entry: it needs a reason and is shown as late.'
@@ -514,7 +519,7 @@ businessRules:
   rationale: Discharge reports are a priority category of electronic health data (EHDS Article 14(1)(f)); healthcare providers must register them in an EHR system (Article 13), and these articles apply to discharge reports from 26 March 2031 (Article 105).
   jurisdiction: eu
 - id: BR-E20
-  text: A deficiency is opened for each required note missing, each draft its author hasn't signed within signature_deadline of service_at, and each preliminary note not cosigned within cosign_deadline. It resolves itself when the note is signed or cosigned. It becomes delinquent delinquency_after past due_at, and the practitioner and HIM specialists are told.
+  text: A deficiency is opened for each required note missing, each draft its author hasn't signed within signature_deadline of service_at, and each preliminary note not cosigned within cosign_deadline. It resolves itself when the note is signed or cosigned. It becomes delinquent delinquency_after past due_at, and the practitioner and HIM specialists are told. When Encounters reports encounter.record_overdue, the encounter's open deficiencies are marked delinquent. When it reports encounter.amended with a changed start or discharge time, due dates counted from them are recomputed.
   rationale: Records must be promptly completed (42 CFR 482.24(b)), and medical staff bylaws define delinquency. A list per practitioner is how hospitals get records completed.
 - id: BR-E21
   text: When an encounter is discharged and it has no draft or preliminary note, no open deficiency, and every required note signed, documentation.completed is reported to Encounters. If, before Encounters completes the encounter, a required note is marked entered in error or a new deficiency opens, documentation.reopened is reported. A cancelled discharge also reports documentation.reopened when completion was already reported.
@@ -529,15 +534,15 @@ businessRules:
   text: Patient merges reach this module through the encounters they move. When Encounters reports encounter.patient_review_needed after the Patients module undoes a merge, the notes and observations on that encounter recorded since the merge are listed for an HIM specialist to check they are on the right patient.
   rationale: After a merge, care for either person was recorded on one record. Undoing it can't tell automatically whose care each new entry described.
 - id: BR-E25
-  text: In the United States, a signed note is released to the patient's electronic access as soon as it is signed. It is held back only when a licensed professional decides the release is reasonably likely to cause harm (BR-E27), when the patient asked for their own access to be delayed (the Patients module's patient_requested_delay), or when it is a psychotherapy note or was prepared for a legal proceeding. Drafts are not released.
-  rationale: A delay for review is likely information blocking (45 CFR 171.103) unless an exception applies, such as preventing harm (171.201) or the patient's own request (171.202(e)). The right of access excludes psychotherapy notes and information compiled for legal proceedings (164.524(a)(1)). Notes not yet finalized need not be released unless used to make decisions (ONC information blocking FAQ).
+  text: In the United States, a signed note is released to the patient's electronic access as soon as it is signed. It is held back only when a licensed professional decides the release is reasonably likely to cause harm (BR-E27), when a law requires a delay, named in the hold, when the patient asked for their own access to be delayed (the Patients module's patient_requested_delay), or when it is a psychotherapy note or was prepared for a legal proceeding. Drafts are not released.
+  rationale: A delay for review is likely information blocking unless a law requires it (45 CFR 171.103(a)) or an exception applies, such as preventing harm (171.201) or the patient's own request (171.202(e)). The right of access excludes psychotherapy notes and information compiled for legal proceedings (164.524(a)(1)). Notes not yet finalized need not be released unless used to make decisions (ONC information blocking FAQ).
   jurisdiction: us
 - id: BR-E26
   text: In the European Union, a signed note is released to the patient's access as soon as it is signed. A delay is allowed only where the member state's law provides one, until a health professional can explain the information (eu_release_delay).
   rationale: Patients have the right to access their priority-category data immediately after it is registered (EHDS Article 3(1)); member states may restrict it by delaying access until a professional can explain it (Article 3(3)), and GDPR gives a right of access (Article 15).
   jurisdiction: eu
 - id: BR-E27
-  text: A hold names its grounds, the sections it covers, the professional who decided and when, and a review date. It covers no more than the grounds require. The patient is told what is held and can ask for the decision to be reviewed by another licensed professional who didn't make it. A hold ends at its review date unless renewed.
+  text: A hold names its grounds, and the law when the grounds are that a law requires it, the sections it covers, the professional who decided and when, and a review date. It covers no more than the grounds require. The patient is told what is held and can ask for the decision to be reviewed by another licensed professional who didn't make it. A hold ends at its review date unless renewed.
   rationale: HIPAA allows denial of access only on narrow grounds, with a right to review by another licensed professional (45 CFR 164.524(a)(3) and (4)), and the information blocking exception for preventing harm requires an individual decision no broader than necessary (45 CFR 171.201).
 - id: BR-E28
   text: 'In the United States, note types in psychotherapy_note_types are psychotherapy notes: kept apart from the rest of the record, read only by their author, never released, copied into other notes, exported or exchanged, and never required for documentation to be complete. Disclosing one needs a specific authorization, which is Consent''s concern. Medication monitoring, session times, test results and summaries of diagnosis, status, plan, symptoms and progress go in ordinary notes.'
@@ -565,7 +570,7 @@ businessRules:
   text: When a note that was sent outside the hospital is corrected or marked entered in error, note.corrected or note.entered_in_error tells Release of information, which tells the recipients it sent it to.
   rationale: HIPAA requires telling people the amended information was shared with (45 CFR 164.526(c)(3)). A recipient acting on a wrong note can harm the patient.
 - id: BR-E36
-  text: Vital signs use the LOINC code and the UCUM units of the FHIR vital signs profiles, and the value is kept in the unit it was entered in. A blood pressure is recorded as one observation with systolic and diastolic components.
+  text: Vital signs use the LOINC code and the UCUM units of the FHIR vital signs profiles, except that body weight is metric only (BR-E53), and the value is kept in the unit it was entered in. A blood pressure is recorded as one observation with systolic and diastolic components.
   rationale: The FHIR vital signs profiles fix the codes and units every exchange partner expects. Converting on entry loses precision and hides what the nurse saw.
 - id: BR-E37
   text: A value outside the plausible limits in vital_sign_limits is refused. A value outside the normal range for the patient's age is accepted and flagged with an interpretation code.
@@ -617,6 +622,9 @@ businessRules:
   text: In the United States, each inpatient stay has a nursing care plan, written by the nursing staff and kept current. It is a required note type for inpatient stays, due at nursing_care_plan_deadline after admission, and is corrected or added to as the patient's needs change.
   rationale: The Medicare conditions of participation require nursing staff to develop and keep current a nursing care plan for each patient (42 CFR 482.23(b)(4)).
   jurisdiction: us
+- id: BR-E53
+  text: A body weight is recorded in kilograms or grams only, with weight_basis. A stated or estimated weight is used only when the patient can't be weighed, is shown as such, and the encounter is listed until a measured weight replaces it. Each admission and each outpatient or emergency encounter needs a measured weight as soon as possible.
+  rationale: The National Coordinating Council for Medication Error Reporting and Prevention recommends measuring and documenting weights in metric units only, avoiding stated, estimated or historical weights, and weighing on admission and at each outpatient or emergency encounter. Pounds entered as kilograms cause serious dosing errors.
 validations:
 - field: note.encounter_id
   rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
@@ -649,7 +657,7 @@ validations:
   rule: Organization confirms the cosigner may supervise the author on service_at, and the cosigner isn't a scribe
   error: NOTE_COSIGNER_NOT_PERMITTED
 - field: note.release_hold
-  rule: Grounds allowed in this jurisdiction, at least one section or the whole note, the deciding professional, and a review date no later than hold_review_after
+  rule: Grounds allowed in this jurisdiction, the law named when the grounds are a legal requirement, at least one section or the whole note, the deciding professional, and a review date no later than hold_review_after
   error: NOTE_INVALID_HOLD
 - field: note.status
   rule: Fields the service sets, such as status, signed_at, version, versions, release_status and revision, can't be written by clients
@@ -661,7 +669,7 @@ validations:
   rule: A LOINC code listed for vital signs, or an item of an assessment_instruments entry
   error: OBSERVATION_INVALID_CODE
 - field: observation.unit
-  rule: A UCUM unit allowed for the code
+  rule: A UCUM unit allowed for the code; kg or g for body weight
   error: OBSERVATION_INVALID_UNIT
 - field: observation.value
   rule: Within the plausible limits in vital_sign_limits for the code, after converting to its canonical unit
@@ -690,6 +698,9 @@ validations:
 - field: note.cosigner_id
   rule: Named when signing a note whose type and author role need a cosignature
   error: NOTE_COSIGNER_REQUIRED
+- field: observation.weight_basis
+  rule: Present for a body weight
+  error: OBSERVATION_INVALID_UNIT
 stateMachine:
   initial: draft
   states:
@@ -1046,6 +1057,32 @@ edgeCases:
   covers:
   - BR-E21
   - AC-E52
+- id: EC-E41
+  situation: A nurse enters a child's weight as 44 lb.
+  behaviour: Refused with OBSERVATION_INVALID_UNIT; the nurse weighs and enters it in kg.
+  covers:
+  - BR-E53
+  - AC-E55
+- id: EC-E42
+  situation: An unconscious trauma patient can't be weighed.
+  behaviour: An estimated weight is recorded with weight_basis estimated, shown as estimated, and the encounter is listed until a measured weight is recorded.
+  covers:
+  - BR-E53
+  - AC-E55
+- id: EC-E43
+  situation: A state law requires a delay before a kind of result is shown to patients electronically.
+  behaviour: A hold with grounds required by law names the law; without it, the note is released.
+  covers:
+  - BR-E25
+  - BR-E27
+  - AC-E56
+  jurisdiction: us
+- id: EC-E44
+  situation: Encounters corrects a discharge time by a day.
+  behaviour: Due dates of open deficiencies counted from discharge move by a day.
+  covers:
+  - BR-E20
+  - AC-E57
 functionalRequirements:
 - id: FR-E1
   text: The service must let authors start, edit, sign and discard notes, and cosigners cosign them, following the note lifecycle.
@@ -1621,6 +1658,34 @@ acceptanceCriteria:
   verifies:
   - BR-E52
   jurisdiction: us
+- id: AC-E55
+  given: a patient in the emergency department
+  when: a nurse records a weight of 44 [lb_av], then 20 kg estimated, then 19.6 kg measured
+  then: the first fails with OBSERVATION_INVALID_UNIT and HTTP 422; the estimated weight is saved, shown as estimated, and documentation status lists the measured weight as missing; after the measured weight it no longer does
+  verifies:
+  - BR-E53
+  - BR-E36
+  - FR-E13
+- id: AC-E56
+  given: a signed note
+  when: a clinician places a hold with grounds required by law without naming the law, then naming it
+  then: the first fails with NOTE_INVALID_HOLD and HTTP 422; the second holds the note and emits note.release_held
+  verifies:
+  - BR-E25
+  - BR-E27
+  jurisdiction: us
+- id: AC-E57
+  given: an open deficiency due 30 days after discharge
+  when: Encounters reports encounter.amended moving the discharge a day earlier, then encounter.record_overdue
+  then: due_at moves a day earlier; then the deficiency is delinquent and deficiency.delinquent is emitted
+  verifies:
+  - BR-E20
+- id: AC-E58
+  given: an AI scribe that marks its output as AI-generated
+  when: its draft is signed
+  then: the note keeps the marking with source ai_draft and drafting_tool
+  verifies:
+  - BR-E7
 operations:
 - name: Start a note
   actor: Clinician
@@ -1819,7 +1884,7 @@ operations:
   method: POST
   path: /notes/{id}/release-hold
   success: 200
-  input: grounds, sections, review date or withhold from representatives, and revision
+  input: grounds, the law when a law requires the hold, sections, review date or withhold from representatives, and revision
   output: the note
   errors:
   - NOTE_NOT_FOUND
@@ -1927,7 +1992,7 @@ operations:
   path: /documentation-status/{encounter_id}
   success: 200
   input: encounter id
-  output: complete or not, open deficiencies, drafts and preliminary notes
+  output: complete or not, open deficiencies, drafts, preliminary notes, and whether a measured weight is missing
   errors:
   - NOTE_INVALID_ENCOUNTER
 - name: Check for a current history and physical
@@ -2011,7 +2076,7 @@ operations:
   method: POST
   path: /observations
   success: 201
-  input: 'encounter, and for each: code, value or data_absent_reason, unit, components, effective_at, source, device, method and late_entry_reason'
+  input: 'encounter, and for each: code, value or data_absent_reason, unit, components, effective_at, source, device, method, weight_basis and late_entry_reason'
   output: the observations, with interpretation and any derived values
   errors:
   - OBSERVATION_INVALID_ENCOUNTER
@@ -2542,7 +2607,7 @@ personalData:
   category: health data
   purpose: The record of care
   retention: record_retention of the Patients module
-- field: observation.performer_id, observation.source, observation.device_id, observation.late_entry_reason, observation.history, observation.revision
+- field: observation.performer_id, observation.source, observation.device_id, observation.weight_basis, observation.late_entry_reason, observation.history, observation.revision
   category: health data and staff personal data
   purpose: Showing who measured what, how and when
   retention: record_retention of the Patients module
@@ -2663,7 +2728,7 @@ errors:
   message: That code isn't a vital sign or assessment item in use here.
 - code: OBSERVATION_INVALID_UNIT
   http: 422
-  message: That unit isn't allowed for this code.
+  message: That unit isn't allowed for this code; body weight is kg or g, with whether it was measured, stated or estimated.
 - code: OBSERVATION_IMPLAUSIBLE
   http: 422
   message: The value is outside the plausible limits for this code. Check the value and unit.
@@ -2756,6 +2821,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Receives: drafts with the tool name and version, for the named author to review'
+  - 'Receives: any machine-readable marking that content is AI-generated, kept with the note''s provenance'
   - Drafting is the tool's concern; this module accepts only tools in drafting_tools
   - 'Receives: the recording consent it collected before recording, with who agreed and when'
   - Deleting recordings is the tool's concern
@@ -2827,6 +2893,13 @@ dependencies:
   contract:
   - 'Gives: the note ids that scanned downtime pages belong to'
   - Scanning and storing paper is Document imaging's concern
+- service: care-management-service
+  direction: downstream
+  reason: discharge planning and the information sent to follow-up providers
+  criticality: soft
+  contract:
+  - 'Gives: the notes signed so far for a stay, at discharge, for the information sent to follow-up providers at the time of discharge'
+  - Sending discharge information and discharge planning are Care management's concern
 risks:
 - id: RISK-E1
   risk: A note is written on the wrong patient.
@@ -3007,7 +3080,31 @@ references:
   title: '42 CFR 482.23, Condition of participation: Nursing services'
   url: https://www.ecfr.gov/current/title-42/section-482.23
   note: Nursing care plan, (b)(4).
+- id: REF-E34
+  title: NCC MERP, Recommendations to weigh patients and document metric weights
+  url: https://www.nccmerp.org/recommendations-weigh-patients-and-document-metric-weights-ensure-accurate-medication-dosing-adopted
+  note: Metric weights only; avoid stated or estimated weights; weigh at each encounter.
+- id: REF-E35
+  title: '42 CFR 482.43, Condition of participation: Discharge planning'
+  url: https://www.ecfr.gov/current/title-42/section-482.43
+  note: Information sent at the time of discharge, (b).
+- id: REF-E36
+  title: Regulation (EU) 2024/1689, Artificial Intelligence Act
+  url: https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng
+  note: Article 50 transparency; Article 113 application from 2 August 2026.
+- id: REF-E37
+  title: 45 CFR 171.103, Information blocking
+  url: https://www.ecfr.gov/current/title-45/section-171.103
+  note: Practices required by law aren't information blocking.
 changelog:
+- version: 0.3.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Body weight is metric only, with whether it was measured, stated or estimated (BR-E53, NCC MERP).
+  - A note can be held because a law requires it, naming the law (BR-E25, BR-E27, 45 CFR 171.103(a)).
+  - encounter.record_overdue marks deficiencies delinquent and encounter.amended recomputes due dates (BR-E20).
+  - AI-generated markings are kept (BR-E7, EU AI Act Article 50(2)); signed notes are available to Care management at discharge (42 CFR 482.43(b)).
 - version: 0.2.0
   date: '2026-10-09'
   breaking: false
@@ -3273,6 +3370,9 @@ tables:
   - name: method
     type: jsonb
     nullable: true
+  - name: weight_basis
+    type: text
+    nullable: true
   - name: status
     type: text
   - name: interpretation
@@ -3310,6 +3410,8 @@ tables:
     definition: CHECK (value IS NOT NULL OR data_absent_reason IS NOT NULL OR components <> '[]')
   - name: observations_device
     definition: CHECK (source <> 'device' OR device_id IS NOT NULL)
+  - name: observations_weight_metric
+    definition: CHECK (code <> '29463-7' OR (unit IN ('kg', 'g') AND weight_basis IS NOT NULL))
 - name: observation_history
   description: 'history: every earlier value of an observation. Insert-only.'
   columns:
@@ -3796,6 +3898,24 @@ compliance:
   covered_by:
   - BR-E52
   jurisdiction: us
+- id: CMP-E39
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.43(b)
+  obligation: Send the necessary medical information to follow-up providers at the time of discharge.
+  how: Signed notes are available at discharge; sending them is Care management's.
+  status: other module
+  covered_by:
+  - BR-E21
+  jurisdiction: us
+- id: CMP-E40
+  regulation: EU AI Act (EU) 2024/1689
+  provision: Article 50(2)
+  obligation: Providers of AI systems generating text mark the output as AI-generated, in a machine-readable way, from 2 August 2026.
+  how: The tool vendor marks output; this module keeps the marking with the note's provenance; the hospital approves only compliant tools.
+  status: deployment
+  covered_by:
+  - BR-E7
+  jurisdiction: eu
 ---
 
 Every note, vital sign and assessment about a patient is recorded here,
