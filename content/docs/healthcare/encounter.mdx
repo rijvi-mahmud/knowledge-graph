@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.14
+version: 0.2.0
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,13 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.2.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - 'Breaking: ENCOUNTER_PATIENT_DECEASED is HTTP 422, matching the other modules.'
+  - diagnosis_code_system and professional_access_rules are read from Terminology and Identity, which own them.
+  - API conventions for dates, personal data in URLs and rate limits.
 - version: 0.1.14
   date: '2026-10-09'
   breaking: false
@@ -134,7 +141,7 @@ assumptions:
   text: Clinical documentation reports when an encounter's documentation is complete.
   rationale: Only the module holding the notes knows whether the record is complete (BR-H7).
 - id: AS-H3
-  text: The jurisdiction, record_completion_deadline and diagnosis_code_system settings are set with legal advice before go-live.
+  text: The jurisdiction, record_completion_deadline and Terminology's diagnosis_code_system settings are set with legal advice before go-live.
   rationale: Completion deadlines and code systems differ by US state, by payer and by EU member state.
 glossary:
 - term: Encounter
@@ -266,7 +273,7 @@ dataModel:
   type: diagnosis[]
   required: false
   description: Diagnoses relevant to the encounter, each a code or a Condition reference, with role and rank.
-  constraints: 'codes: diagnosis_code_system for the code; role from HL7 diagnosis-role: AD admission, DD discharge, CC chief complaint, CM comorbidity, pre-op, post-op, billing'
+  constraints: 'codes: Terminology''s diagnosis_code_system for the code; role from HL7 diagnosis-role: AD admission, DD discharge, CC chief complaint, CM comorbidity, pre-op, post-op, billing'
 - name: virtual_service
   type: connection details
   required: false
@@ -425,7 +432,7 @@ businessRules:
   text: An encounter can be marked entered in error only while no clinical data has been recorded against it (has_clinical_data unset). Otherwise its data is moved to the right encounter first.
   rationale: Discarding an encounter that holds notes or results would hide that care. Each clinical module moves its own entries.
 - id: BR-H13
-  text: Each diagnosis has a role and a rank, and a code valid in diagnosis_code_system on the date Terminology's code_date_rule picks for diagnoses. A completed encounter has at least one discharge or billing diagnosis.
+  text: Each diagnosis has a role and a rank, and a code valid in Terminology's diagnosis_code_system on the date Terminology's code_date_rule picks for diagnoses. A completed encounter has at least one discharge or billing diagnosis.
   rationale: CMS applies each fiscal year's ICD-10-CM codes to discharges and encounters from October 1 (the FY 2027 files to those from October 1, 2026). A code valid at admission may be retired by discharge.
 - id: BR-H14
   text: An encounter carries the sensitivity codes Organization gives for its department, such as SUD for a substance use disorder program. Data attached to it carries the same codes, and disclosure follows the Consent module.
@@ -508,7 +515,7 @@ businessRules:
   text: A practitioner is added as a participant only while the Practitioners module reports them active on the date. When it reports practitioner.suspended, their participations already recorded stay as they are, but they can't be added to encounters or start one until reinstated.
   rationale: Care by a practitioner whose licence lapsed or who is excluded is unlawful and unpaid; what they already did stays part of the record.
 - id: BR-H51
-  text: In the European Union, a health professional reads encounters only in the categories professional_access_rules allows for their professional category, under the rules of the member state where the care takes place. Entries outside them are not shown, and the access log records that they were withheld.
+  text: In the European Union, a health professional reads encounters only in the categories Identity's professional_access_rules allows for their professional category, under the rules of the member state where the care takes place. Entries outside them are not shown, and the access log records that they were withheld.
   rationale: Member states must set rules on the categories of personal electronic health data accessible by different categories of health professionals or for different healthcare tasks, and the rules of the member state of treatment apply (EHDS Article 11(3) and (4)); these apply to discharge reports, results and imaging from 26 March 2031 and to patient summaries from 26 March 2029 (Article 105).
   jurisdiction: eu
 validations:
@@ -913,12 +920,9 @@ settings:
 - name: record_completion_deadline
   type: duration
   description: Time after actual_end to complete the record. 30 days for US hospitals (42 CFR 482.24(c)(4)(viii)); stricter where state law or medical staff bylaws require; set per member state in the EU. Required.
-- name: diagnosis_code_system
-  type: code system
-  description: ICD-10-CM in the United States, using the fiscal year release in effect on the date that applies (FY 2027 from October 1, 2026); ICD-10 or ICD-11 per EU member state. Required.
 - name: reason_code_system
   type: code system
-  description: Code system for reasons, such as SNOMED CT or diagnosis_code_system. Required.
+  description: Code system for reasons, such as SNOMED CT or Terminology's diagnosis_code_system. Required.
 - name: encounter_type_codes
   type: code list
   description: The deployment's encounter types, such as follow-up or day surgery. Required.
@@ -940,10 +944,6 @@ settings:
   type: code list
   default: patient_request, scheduled_in_error, duplicate, other
   description: Reasons staff can give when cancelling an encounter or marking it entered in error. other needs text.
-- name: professional_access_rules
-  type: map
-  description: Which categories of health data each category of health professional may read, such as physicians, nurses or physiotherapists, as the member state of treatment sets. Empty by default, meaning every professional caring for the patient may read everything their role allows.
-  jurisdiction: eu
 performanceTargets:
 - id: PERF-H1
   indicator: Records completed on time
@@ -1103,7 +1103,7 @@ acceptanceCriteria:
 - id: AC-H33
   given: a patient who died yesterday
   when: an encounter is opened for them starting today
-  then: it fails with ENCOUNTER_PATIENT_DECEASED and HTTP 409
+  then: it fails with ENCOUNTER_PATIENT_DECEASED and HTTP 422
   verifies:
   - BR-H22
 - id: AC-H36
@@ -1300,7 +1300,7 @@ acceptanceCriteria:
   - BR-H50
   variant: ambulatory
 - id: AC-H75
-  given: professional_access_rules letting physiotherapists read progress notes but not psychiatric notes
+  given: Identity's professional_access_rules letting physiotherapists read progress notes but not psychiatric notes
   when: a physiotherapist caring for the patient lists the patient's records, then opens a psychiatric note directly
   then: the list omits the psychiatric note, and opening it fails with ENCOUNTER_NOT_FOUND and HTTP 404; the access log records the withheld read
   verifies:
@@ -1669,6 +1669,14 @@ apiConventions:
 - topic: Versioning
   text: Additive changes don't change the version. A breaking change ships as a new major version with Deprecation and Sunset headers.
   reference: RFC 9745, RFC 8594
+- topic: Dates
+  text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
+  reference: ISO 8601
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
+- topic: Rate limits
+  text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
+  reference: RFC 6585, RFC 9110
 events:
 - name: encounter.created
   description: An encounter was opened.
@@ -2051,7 +2059,7 @@ errors:
   http: 503
   message: A service this request needs is unavailable. Retry later.
 - code: ENCOUNTER_PATIENT_DECEASED
-  http: 409
+  http: 422
   message: The encounter can't start after the patient's recorded death.
 - code: ENCOUNTER_NOT_AUTHORISED_FOR_PATIENT
   http: 403
@@ -2117,6 +2125,7 @@ dependencies:
   contract:
   - 'Asks: is this code valid in this code system on this date?'
   - 'Asks: which codes the value set bound to each coded setting allows on this date'
+  - 'Asks: diagnosis_code_system, the code system for diagnoses'
 - service: clinical-documentation-service
   direction: downstream
   reason: holds notes and reports when documentation is complete
@@ -2165,6 +2174,7 @@ dependencies:
   criticality: hard
   contract:
   - 'Asks: who is the caller, and do they hold this permission?'
+  - 'Asks: in the EU, may this professional category read this category of data (professional_access_rules)?'
 - service: episode-service
   direction: upstream
   reason: owns episodes of care
@@ -2818,7 +2828,7 @@ compliance:
   regulation: European Health Data Space (EU) 2025/327
   provision: Article 11(3) and (4)
   obligation: Health professionals access only the categories of health data member-state rules allow for their professional category, under the rules of the member state of treatment.
-  how: professional_access_rules applied to every read.
+  how: Identity's professional_access_rules applied to every read.
   status: met
   covered_by:
   - BR-H51

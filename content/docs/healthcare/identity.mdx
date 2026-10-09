@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.7.2
+version: 0.8.0
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -336,6 +336,10 @@ businessRules:
 - id: BR-H36
   text: In the European Union, each emergency access is recorded clearly enough for the patient to understand, given to the Patients module for the patient's access report, and kept at least 3 years from the access.
   rationale: EHDS Article 11(5) lets a professional reach restricted data to protect the patient's vital interests only if each case is logged clearly and is easily accessible to the patient, and Article 9(2) keeps access information available for at least three years; both apply from 26 March 2029.
+  jurisdiction: eu
+- id: BR-H37
+  text: In the European Union, a permission check names the category of health data asked for, and the answer applies professional_access_rules for the caller's professional category, under the rules of the member state where care takes place.
+  rationale: Member states set which categories of electronic health data each category of health professional may access, and the rules of the member state of treatment apply (EHDS Article 11(3) and (4)); one setting here keeps every module answering the same way.
   jurisdiction: eu
 validations:
 - field: account.subject
@@ -719,6 +723,9 @@ settings:
 - name: max_failed_attempts
   type: integer
   description: Consecutive failures before an authenticator is disabled. At most 100 (NIST SP 800-63B-4); default 100, because lower values make it easier for an attacker to lock a real user out.
+- name: professional_access_rules
+  type: map
+  description: Which categories of health data each category of health professional may read, such as physicians, nurses or physiotherapists, as the EU member state of treatment sets. Empty by default, meaning every professional caring for the patient may read everything their role allows.
 performanceTargets:
 - id: PERF-H1
   indicator: Permission check latency
@@ -1053,6 +1060,13 @@ acceptanceCriteria:
   then: the emergency access is listed with who, when, which data and the reason, in plain language
   verifies:
   - BR-H36
+  jurisdiction: eu
+- id: AC-H48
+  given: jurisdiction eu and professional_access_rules letting physiotherapists read progress notes but not psychiatric notes
+  when: a physiotherapist's permission is checked for each category
+  then: progress notes are allowed and psychiatric notes refused
+  verifies:
+  - BR-H37
   jurisdiction: eu
 operations:
 - name: Create an account
@@ -1528,6 +1542,17 @@ apiConventions:
   reference: IETF draft-ietf-httpapi-idempotency-key-header
 - topic: Secrets
   text: No operation returns a password, key or token after it is issued; passwords are stored only as salted, slow hashes.
+- topic: Dates
+  text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
+  reference: ISO 8601
+- topic: Times
+  text: Instants are RFC 3339 timestamps with an offset, stored in UTC; time zones are IANA names.
+  reference: RFC 3339
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
+- topic: Rate limits
+  text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
+  reference: RFC 6585, RFC 9110
 events:
 - name: identity.account_created
   description: An account was created.
@@ -1879,6 +1904,7 @@ dependencies:
   - 'Gives: token introspection, so a module can check a token it received'
   - 'Gives: identity.app_status_changed, so modules stop serving a suspended or revoked app at once'
   - 'Gives: whether an account exists and is active, and its time zone and locale'
+  - 'Gives: in the EU, whether a professional category may read a category of health data (professional_access_rules)'
 - service: notification-service
   direction: downstream
   reason: alerts
@@ -2006,6 +2032,12 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.210
   note: (a)(2), NIST-approved encryption algorithms.
 changelog:
+- version: 0.8.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H37: professional_access_rules moves here from Encounters and Clinical documentation, so one setting decides it (EHDS Article 11(3)).'
+  - API conventions for dates, times, personal data in URLs and rate limits.
 - version: 0.7.2
   date: '2026-10-09'
   breaking: false

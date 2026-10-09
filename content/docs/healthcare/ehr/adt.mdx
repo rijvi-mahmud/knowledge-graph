@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.9.1
+version: 0.9.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -1689,6 +1689,14 @@ apiConventions:
 - topic: Versioning
   text: Additive changes don't change the version; a breaking change ships as a new major version with Deprecation and Sunset headers.
   reference: RFC 9745, RFC 8594
+- topic: Dates
+  text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
+  reference: ISO 8601
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
+- topic: Rate limits
+  text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
+  reference: RFC 6585, RFC 9110
 events:
 - name: stay.admission_requested
   description: A pending admission was recorded.
@@ -2646,6 +2654,11 @@ compliance:
   - BR-E47
   jurisdiction: us
 changelog:
+- version: 0.9.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - API conventions for dates, personal data in urls, rate limits, matching the other modules.
 - version: 0.9.1
   date: '2026-10-09'
   breaking: false

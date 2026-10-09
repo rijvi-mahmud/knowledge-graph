@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.13.2
+version: 0.13.3
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -2358,6 +2358,9 @@ apiConventions:
 - topic: Versioning
   text: Additive changes don't change the version. A breaking change ships as a new major version, announced with Deprecation and Sunset headers.
   reference: RFC 9745, RFC 8594
+- topic: Times
+  text: Instants are RFC 3339 timestamps with an offset, stored in UTC; time zones are IANA names.
+  reference: RFC 3339
 events:
 - name: patient.registered
   description: A new record was created.
@@ -3246,6 +3249,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.13.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - API conventions for times, matching the other modules.
 - version: 0.13.2
   date: '2026-10-09'
   breaking: false

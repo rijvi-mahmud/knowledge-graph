@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.3.0
+version: 0.3.1
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -964,6 +964,17 @@ apiConventions:
   reference: IETF draft-ietf-httpapi-idempotency-key-header
 - topic: FHIR
   text: Practitioners are returned as HL7 FHIR R5 Practitioner, conforming to US Core Practitioner in the United States, when the request asks for application/fhir+json (FR-H9).
+- topic: Dates
+  text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
+  reference: ISO 8601
+- topic: Times
+  text: Instants are RFC 3339 timestamps with an offset, stored in UTC; time zones are IANA names.
+  reference: RFC 3339
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
+- topic: Rate limits
+  text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
+  reference: RFC 6585, RFC 9110
 events:
 - name: practitioner.created
   description: A practitioner record was created.
@@ -1315,6 +1326,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.3.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - API conventions for dates, times, personal data in urls, rate limits, matching the other modules.
 - version: 0.3.0
   date: '2026-10-09'
   breaking: false

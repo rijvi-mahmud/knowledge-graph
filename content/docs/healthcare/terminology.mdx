@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.2.0
+version: 0.3.0
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -691,6 +691,9 @@ settings:
 - name: search_result_limit
   type: integer
   description: The most results a search returns. Default 50.
+- name: diagnosis_code_system
+  type: code
+  description: 'The code system for diagnoses and reasons for care: ICD-10-CM in the United States (45 CFR 162.1002), using the release code_date_rule picks; ICD-10, a national version or ICD-11 per EU member state. Required. Every module that codes a diagnosis or reason reads it here.'
 performanceTargets:
 - id: PERF-H1
   indicator: Validation latency
@@ -1233,6 +1236,17 @@ apiConventions:
   text: Validate, look up, expand, subsumes and translate are also served as the FHIR R5 operations $validate-code, $lookup, $expand, $subsumes and $translate on CodeSystem, ValueSet and ConceptMap (FR-H9).
 - topic: Caching
   text: Answers carry the releases used and an ETag; callers may cache them until terminology.release_activated or terminology.value_set_activated (BR-H25, BR-H27).
+- topic: Dates
+  text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
+  reference: ISO 8601
+- topic: Times
+  text: Instants are RFC 3339 timestamps with an offset, stored in UTC; time zones are IANA names.
+  reference: RFC 3339
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
+- topic: Rate limits
+  text: A caller over its limit gets 429 Too Many Requests with a Retry-After header.
+  reference: RFC 6585, RFC 9110
 events:
 - name: terminology.release_activated
   description: A release was activated, effective from its date.
@@ -1425,6 +1439,7 @@ dependencies:
   - 'Gives: value set expansions for the settings bound to them'
   - 'Gives: terminology.release_activated, terminology.release_withdrawn, terminology.value_set_activated and terminology.map_activated, to refresh caches and re-check settings'
   - Which codes each module accepts is that module's concern
+  - 'Gives: diagnosis_code_system, so every module codes diagnoses and reasons with one code system'
 - service: billing-service
   direction: downstream
   reason: coding and claims
@@ -1560,6 +1575,12 @@ references:
   url: https://loinc.org/kb/users-guide/editorial-policies-and-procedures/classification-of-loinc-term-status
   note: ACTIVE, TRIAL, DISCOURAGED and DEPRECATED.
 changelog:
+- version: 0.3.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - diagnosis_code_system moves here from Appointments and Encounters, so one setting decides it.
+  - API conventions for dates, times, personal data in URLs and rate limits.
 - version: 0.2.0
   date: '2026-10-09'
   breaking: false

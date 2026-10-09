@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.12.1
+version: 0.13.0
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -98,7 +98,7 @@ dataModel:
 - name: reason
   type: code or text
   required: false
-  description: Why the appointment was booked, coded with diagnosis_code_system. Clinical, so it is health information (FHIR Appointment.reason).
+  description: Why the appointment was booked, coded with Terminology's diagnosis_code_system. Clinical, so it is health information (FHIR Appointment.reason).
 - name: priority
   type: integer
   required: false
@@ -262,7 +262,7 @@ businessRules:
   text: When a patient needs a disability accommodation, such as a sign-language interpreter or an accessible room, the appointment records it so it can be arranged at no cost to the patient.
   rationale: In the United States, covered entities must provide auxiliary aids and services at no cost so communication with people with disabilities is as effective as with others (45 CFR 92.202). In the EU this depends on member state law.
 - id: BR-H12
-  text: 'A patient, or their personal representative, can obtain a copy of their appointment data. The request is answered within access_request_deadline: 30 days in the United States, extendable once by 30 days with written notice; one month in the EU, extendable by two months. In the EU the first copy is free.'
+  text: 'A patient, or their personal representative, can obtain a copy of their appointment data. The request is answered within the Patients module''s access_request_deadline: 30 days in the United States, extendable once by 30 days with written notice; one month in the EU, extendable by two months. In the EU the first copy is free.'
   rationale: HIPAA gives individuals the right to inspect and obtain a copy of their health information (45 CFR 164.524). GDPR gives a right of access and a free first copy (Article 15) within one month (Article 12(3)).
 - id: BR-H13
   text: In the United States, automated reminder texts and calls go only to the number the patient provided, name the provider and how to contact them, are limited to one a day and three a week per patient, keep texts to 160 characters and calls to one minute, and offer an opt-out in every message, honoured immediately.
@@ -394,7 +394,7 @@ validations:
   rule: an integer from 1 to 9
   error: APPOINTMENT_INVALID_PRIORITY
 - field: reason
-  rule: a code valid in diagnosis_code_system on the appointment date
+  rule: a code valid in Terminology's diagnosis_code_system on the appointment date
   error: APPOINTMENT_INVALID_CODE
 - field: service_type
   rule: a code valid in service_code_system on the appointment date
@@ -923,7 +923,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-H9
-  text: The service must accept requests for a copy of a patient's appointment data and track them against access_request_deadline.
+  text: The service must accept requests for a copy of a patient's appointment data and track them against the Patients module's access_request_deadline.
   priority: must
   verification: test
 - id: FR-H10
@@ -1008,12 +1008,6 @@ settings:
 - name: check_in_window
   type: duration
   description: How long before the start a patient can check in. No standard sets this, so each department chooses it. Required.
-- name: access_request_deadline
-  type: duration
-  description: 'How long to answer a request for a copy of appointment data. Defaults by jurisdiction: 30 days in the US (45 CFR 164.524), one month in the EU (GDPR Article 12(3)).'
-- name: diagnosis_code_system
-  type: code system
-  description: The code system for reason. ICD-10-CM in the United States (45 CFR 162.1002); set per member state in the EU, such as ICD-10 or ICD-11.
 - name: service_code_system
   type: code system
   description: The code system for service_type. HCPCS with CPT-4 in the United States (45 CFR 162.1002); set per member state in the EU.
@@ -1577,7 +1571,7 @@ operations:
   - APPOINTMENT_NOT_FOUND
 - name: Request a copy of appointment data
   actor: Patient
-  description: A patient or their representative asks for a copy of their appointment data. Answered within access_request_deadline.
+  description: A patient or their representative asks for a copy of their appointment data. Answered within the Patients module's access_request_deadline.
   method: POST
   path: /appointment-access-requests
   success: 202
@@ -2138,6 +2132,12 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-171.206
   note: Information blocking exception for reproductive health care information.
 changelog:
+- version: 0.13.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - access_request_deadline and diagnosis_code_system are read from the Patients and Terminology modules, which own them, instead of being set here twice.
+  - API conventions for dates and personal data in URLs.
 - version: 0.12.1
   date: '2026-10-09'
   breaking: false
@@ -2305,6 +2305,7 @@ dependencies:
   - 'Gives: details confirmed at check-in, recorded with the Patients module''s Confirm details'
   - 'Asks: has the patient confirmed their details since booking? (for pre-registration)'
   - Registering patients and deciding who may act for them is the Patients module's concern
+  - 'Asks: access_request_deadline for this jurisdiction'
 - service: terminology-service
   direction: upstream
   reason: validates codes against code systems
@@ -2312,6 +2313,7 @@ dependencies:
   contract:
   - 'Asks: is this code valid in this code system on this date?'
   - 'Asks: which codes the value set bound to each coded setting allows on this date'
+  - 'Asks: diagnosis_code_system, the code system for reasons'
 - service: notification-service
   direction: downstream
   reason: delivers reminders and tells Schedulers what needs a decision
@@ -2444,7 +2446,7 @@ compliance:
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.524
   obligation: Give individuals access to their information within 30 days.
-  how: Copy requests are tracked against access_request_deadline.
+  how: Copy requests are tracked against the Patients module's access_request_deadline.
   status: met
   covered_by:
   - BR-H12
@@ -2518,7 +2520,7 @@ compliance:
   regulation: GDPR (EU) 2016/679
   provision: Articles 12(3) and 15
   obligation: Give a copy of personal data within one month, extendable by two.
-  how: Copy requests are tracked against access_request_deadline.
+  how: Copy requests are tracked against the Patients module's access_request_deadline.
   status: met
   covered_by:
   - BR-H12
@@ -2818,6 +2820,12 @@ relationships:
 - type: belongs_to
   target: authorization
   note: '0..1: authorization_id, owned by Authorization'
+apiConventions:
+- topic: Dates
+  text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
+  reference: ISO 8601
+- topic: Personal data in URLs
+  text: Names, birth dates and identifiers are sent in request bodies or query parameters over TLS, never in paths, and are never written to request logs.
 ---
 
 A clinical appointment is still an appointment: everything in the
