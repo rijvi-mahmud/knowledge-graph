@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.7.1
+version: 0.7.2
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -333,6 +333,10 @@ businessRules:
 - id: BR-H35
   text: An account holder can set their own time zone and locale, which other modules read to show times and text; unset means each module uses its own default. The locale sets the language of screens and messages only, never the language a patient is cared for in.
   rationale: Showing a time in the wrong zone causes missed appointments; keeping the screen language apart from the patient's care language, which the Patients module owns, gives each fact one owner.
+- id: BR-H36
+  text: In the European Union, each emergency access is recorded clearly enough for the patient to understand, given to the Patients module for the patient's access report, and kept at least 3 years from the access.
+  rationale: EHDS Article 11(5) lets a professional reach restricted data to protect the patient's vital interests only if each case is logged clearly and is easily accessible to the patient, and Article 9(2) keeps access information available for at least three years; both apply from 26 March 2029.
+  jurisdiction: eu
 validations:
 - field: account.subject
   rule: An existing practitioner, staff record, patient, representative relationship or registered system
@@ -667,8 +671,8 @@ nonFunctionalRequirements:
   text: No requirement depends on a particular identity provider, database or framework.
 constraints:
 - id: CON-H1
-  text: Passwords are stored only as salted hashes from a slow, memory-hard function, and keys only as public keys where possible.
-  rationale: A stolen database must not reveal anyone's password; NIST SP 800-63B requires salted, cost-hardened storage.
+  text: Passwords are stored only as salted hashes from a slow, memory-hard function, keys only as public keys where possible, and any other stored secret, such as a one-time-password seed, encrypted with an algorithm NIST approves.
+  rationale: A stolen database must not reveal anyone's credentials; NIST SP 800-63B requires salted, cost-hardened password storage, and US certified health IT attests whether it encrypts stored credentials with a NIST-approved algorithm (45 CFR 170.315(d)(12), 170.210(a)(2)).
 settings:
 - name: jurisdiction
   type: us | eu
@@ -702,7 +706,7 @@ settings:
   description: How long a patient app's refresh token lasts. At least 3 months in the United States (45 CFR 170.315(g)(10)).
 - name: audit_log_retention
   type: duration
-  description: How long the sign-in and access log is kept. Set from law and policy; needs legal advice.
+  description: How long the sign-in and access log is kept. Set from law and policy; in the EU, emergency access records at least 3 years (EHDS Article 9(2)). Other periods need legal advice.
 - name: dormant_account_period
   type: duration
   description: How long a staff or system account can go without a sign-in before it is disabled. Set by the organization, such as 90 days.
@@ -895,7 +899,7 @@ acceptanceCriteria:
 - id: AC-H25
   given: stored passwords
   when: the store is inspected
-  then: each is a salted hash from a memory-hard function, never the password
+  then: each password is a salted hash from a memory-hard function, never the password, and each one-time-password seed is encrypted
   verifies:
   - CON-H1
 - id: AC-H26
@@ -1043,6 +1047,13 @@ acceptanceCriteria:
   verifies:
   - BR-H35
   - FR-H16
+- id: AC-H47
+  given: jurisdiction eu and a clinician who broke the glass to reach a patient's restricted data
+  when: the patient reads their access report 2 years later
+  then: the emergency access is listed with who, when, which data and the reason, in plain language
+  verifies:
+  - BR-H36
+  jurisdiction: eu
 operations:
 - name: Create an account
   actor: Account administrator
@@ -1842,6 +1853,7 @@ dependencies:
   - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.representative_changed'
   - 'Receives: patient.death_retracted and patient.entered_in_error'
   - 'Asks: what is age_of_majority here?'
+  - 'Gives: identity.break_glass_used, so the patient''s access report shows each emergency access'
 - service: organization-service
   direction: upstream
   reason: owns departments and job roles
@@ -1989,7 +2001,17 @@ references:
   title: Directive (EU) 2016/2102, accessibility of public sector websites and mobile applications
   url: https://eur-lex.europa.eu/eli/dir/2016/2102/oj/eng
   note: Articles 1, 4 and 6.
+- id: REF-H22
+  title: 45 CFR 170.210, Standards for health information technology to protect electronic health information
+  url: https://www.ecfr.gov/current/title-45/section-170.210
+  note: (a)(2), NIST-approved encryption algorithms.
 changelog:
+- version: 0.7.2
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'EU: emergency access records are clear, given to the patient''s access report and kept at least 3 years (BR-H36, EHDS Articles 9(2) and 11(5)).'
+  - CON-H1 encrypts other stored secrets such as one-time-password seeds; CMP-H14 for ONC 170.315(d)(1), (d)(5), (d)(6), (d)(12) and (d)(13).
 - version: 0.7.1
   date: '2026-10-09'
   breaking: false
@@ -2462,6 +2484,30 @@ compliance:
   status: met
   covered_by:
   - BR-H34
+  jurisdiction: eu
+- id: CMP-H14
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.315(d)(1), (d)(5), (d)(6), (d)(12) and (d)(13)
+  obligation: Unique user authentication and access control, automatic access time-out, emergency access, attesting to encrypted stored credentials, and attesting to multi-factor authentication.
+  how: One account per person with roles, session pauses, break the glass, credential storage, and multi-factor authentication.
+  status: met
+  covered_by:
+  - BR-H1
+  - BR-H3
+  - BR-H8
+  - BR-H11
+  - BR-H5
+  - CON-H1
+  jurisdiction: us
+- id: CMP-H15
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Articles 9(2) and 11(5)
+  obligation: Log emergency access to restricted data clearly and make it easily accessible to the patient, for at least three years. Applies from 26 March 2029.
+  how: Emergency access records kept and given to the patient's access report.
+  status: met
+  covered_by:
+  - BR-H36
+  - BR-H11
   jurisdiction: eu
 ---
 
