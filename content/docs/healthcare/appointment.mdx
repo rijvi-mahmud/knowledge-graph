@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.13.0
+version: 0.13.1
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -2132,6 +2132,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-171.206
   note: Information blocking exception for reproductive health care information.
 changelog:
+- version: 0.13.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - The Patients contract asks where to contact the patient for a purpose, so reminders honour opt-outs.
 - version: 0.13.0
   date: '2026-10-09'
   breaking: true
@@ -2296,7 +2301,7 @@ dependencies:
   contract:
   - 'Asks: does this patient exist and is the record in use? A merged record answers with the record that replaced it'
   - 'Asks: the patient''s identifiers to verify at check-in, such as name and date of birth'
-  - 'Asks: where to contact the patient, honouring confidential communications'
+  - 'Asks: where to contact the patient for this purpose, such as reminders, honouring confidential communications and opt-outs'
   - 'Asks: the patient''s preferred language and whether they need an interpreter'
   - 'Asks: may this person act for this patient on this appointment? (Covers minors, guardians, proxies and confidential care.)'
   - 'Receives: patient.merged, patient.unmerged, patient.deceased, patient.death_retracted and patient.entered_in_error'

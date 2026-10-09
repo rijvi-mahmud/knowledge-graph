@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.4.0
+version: 0.4.1
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -225,7 +225,7 @@ businessRules:
   rationale: HIPAA limits compound authorizations and prohibits conditioning, with these exceptions (45 CFR 164.508(b)(3) and (4)).
   jurisdiction: us
 - id: BR-H6
-  text: In the United States, a Part 2 consent is active only with the patient's name; who may disclose; a specific description of the information; the recipients, which for a single consent for all future treatment, payment and operations can be described generally, and which name an intermediary and its participants; each purpose; the right to revoke in writing; an expiration date or event (end of the treatment or none is enough for treatment, payment and operations); the signature, of the minor or of a person authorized for a patient lacking capacity or deceased; the date; for treatment, payment and operations, the statements on redisclosure and on the consequences of refusing; when a recipient is a covered entity or business associate, the statement that it may redisclose as HIPAA allows except in proceedings against the patient; and, if the program will fundraise with the records, the patient's right to opt out of fundraising.
+  text: In the United States, a Part 2 consent is active only with the patient's name; who may disclose; a specific description of the information; the recipients, which for a single consent for all future treatment, payment and operations can be described generally, and which name an intermediary with its participants by name, or by a general designation limited to those with a treating provider relationship with the patient; each purpose; the right to revoke in writing; an expiration date or event (end of the treatment or none is enough for treatment, payment and operations); the signature, of the minor or of a person authorized for a patient lacking capacity or deceased; the date; for treatment, payment and operations, the statements on redisclosure and on the consequences of refusing; when a recipient is a covered entity or business associate, the statement that it may redisclose as HIPAA allows except in proceedings against the patient; and, if the program will fundraise with the records, the patient's right to opt out of fundraising.
   rationale: These are the required elements of a Part 2 consent; electronic signatures are allowed where law doesn't forbid them, and the rules apply from 16 February 2026 (42 CFR 2.31(a); 89 FR 12472).
   jurisdiction: us
 - id: BR-H7
@@ -278,7 +278,7 @@ businessRules:
   rationale: The controller must be able to show consent was given, and it must be distinguishable, explicit for special categories and freely given (GDPR Articles 7(1), 7(2), 7(4) and 9(2)(a)).
   jurisdiction: eu
 - id: BR-H20
-  text: In the European Union, a patient can restrict health professionals' access to all or parts of their data. They are told first that this may affect their care, and ehds_restriction_rules applies the member state's rules and safeguards. Disclosure checks for health professionals then answer as if the restricted data weren't there, so the restriction itself is never visible to them, except access to protect the patient's vital interests, which is logged for the patient to see.
+  text: In the European Union, a patient can restrict health professionals' access to all or parts of their data. They are told first that this may affect their care, and ehds_restriction_rules applies the member state's rules and safeguards. Disclosure checks for health professionals then answer that the restricted data is to be left out silently, and modules show nothing in its place, so the restriction itself is never visible to them, except access to protect the patient's vital interests, which is logged for the patient to see.
   rationale: EHDS gives the right to restrict access, requires the patient to be told of its effect, keeps the fact of a restriction hidden from providers, and allows vital-interest access that is logged (EHDS Articles 8 and 11(5)); these apply from 26 March 2029 (Article 105).
   jurisdiction: eu
 - id: BR-H21
@@ -290,7 +290,7 @@ businessRules:
   rationale: EHDS gives this reversible right, limits its effect to later permits, and lets member states make such data available under strict conditions (EHDS Article 71(1), (3) and (4)); Chapter IV applies from 26 March 2029 (Article 105).
   jurisdiction: eu
 - id: BR-H23
-  text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure or a rule here names an override, such as emergency use. When a patient records a permit that conflicts with a deny they made themselves, they are asked whether to end the deny. A use the law allows without consent, such as treatment within the organization, is permitted with basis law, unless a narrower rule applies to that data. Every check and its answer is logged.
+  text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure or a rule here names an override, such as emergency use. When a patient records a permit that conflicts with a deny they made themselves, they are asked whether to end the deny. A use the law allows without consent, such as treatment within the organization, is permitted with basis law, unless a narrower rule applies to that data. One check can cover many records and answers for each. Every check and its answer is logged. A module may reuse an answer only until a consent event for that patient arrives.
   rationale: Modules need one consistent answer instead of reading forms; the log shows what each disclosure relied on, for audits and the accounting of disclosures.
 - id: BR-H24
   text: 'Restricted data can be used or disclosed in an emergency: under an agreed restriction for emergency treatment, with a request that the receiving provider not redisclose it; for Part 2 records to medical personnel in a bona fide emergency, documented at once with the personnel and their facility, who disclosed, when and the nature of the emergency; and in the EU to protect vital interests, logged for the patient. Each is recorded as an emergency use and reviewed by a privacy officer. While break-the-glass access that the Identity and access module reported is active for a patient, a disclosure check from that user with purpose ETREAT is answered permit for restricted data, and the emergency use is recorded automatically.'
@@ -302,7 +302,7 @@ businessRules:
   text: Whether an adult patient has executed an advance directive is recorded, with its kind and document, at the moment advance_directive_information_at sets for the organization, after giving written information on their rights. Care is never conditioned on whether they have one, and the orders a directive leads to are the Orders module's.
   rationale: Providers must document in a prominent part of the record whether the patient has an advance directive and must not condition care on it (42 CFR 489.102(a)(2) and (a)(3)); when depends on the kind of provider (489.102(b)).
 - id: BR-H27
-  text: A patient can opt out of a contact channel for a purpose, such as text reminders, by any reasonable means, including replying stop. The opt-out is honoured without delay and within contact_opt_out_deadline, and the Patients module is answered from it.
+  text: A patient can opt out of a contact channel for a purpose, such as text reminders, by any reasonable means, including replying stop. The opt-out is honoured without delay and within contact_opt_out_deadline, and the Patients module is answered from it for that channel and purpose only, so an opt-out of fundraising texts doesn't stop appointment reminders.
   rationale: In the United States, consent to calls and texts can be revoked by any reasonable means and must be honoured within ten business days (47 CFR 64.1200(a)(10)); a patient's choice of channel should be respected everywhere.
 - id: BR-H28
   text: When the Patients module merges two records, the consents of both move to the remaining record; where they conflict, the deny applies until a privacy officer reviews them. When it undoes a merge, consents recorded since are listed for review. When it records a death, consents stay in force until they end, and an estate representative can revoke them. When a representative's authority ends, consents they signed are listed for review and the patient is asked to confirm or revoke them. When it marks a record entered in error, its consents are listed for review.
@@ -994,6 +994,25 @@ acceptanceCriteria:
   verifies:
   - BR-H37
   jurisdiction: us
+- id: AC-H49
+  given: a chart view with 300 notes for one patient, two of them under a restriction
+  when: one check is made for all 300
+  then: each note gets its own answer, the two restricted ones deny or leave out silently, and the check is logged once with every answer
+  verifies:
+  - BR-H23
+- id: AC-H50
+  given: a module that reused a permit for a patient
+  when: consent.revoked arrives for that patient and the module needs the answer again
+  then: it asks again and gets the new answer
+  verifies:
+  - BR-H23
+  - DG-H4
+- id: AC-H51
+  given: a patient who opted out of fundraising texts
+  when: the Patients module asks about text messages for appointment reminders
+  then: the answer is no opt-out, and reminders continue
+  verifies:
+  - BR-H27
 operations:
 - name: Record a consent
   actor: Registrar
@@ -1177,8 +1196,8 @@ operations:
   method: POST
   path: /disclosure-checks
   success: 200
-  input: patient, data labels, categories or records, purpose, requester and recipient
-  output: permit or deny, basis, obligations and the check id
+  input: patient, the records or data labels and categories (one or many), purpose, requester and recipient
+  output: 'for each record: permit, deny, or leave out silently, with basis and obligations; and the check id'
   errors:
   - CONSENT_INVALID_PATIENT
   - CONSENT_INVALID_CODE
@@ -1238,7 +1257,7 @@ operations:
   method: GET
   path: /patients/{patient_id}/contact-opt-outs
   success: 200
-  input: patient
+  input: patient, and optionally a channel and purpose
   output: opt-outs with channel, purpose and when
   errors:
   - CONSENT_INVALID_PATIENT
@@ -1368,6 +1387,9 @@ deliveryGuarantees:
 - id: DG-H3
   text: Events carry ids, kinds and decisions, never the consent document, its provisions or the data it covers.
   rationale: A Part 2 consent shows that a patient is in SUD treatment; events fan out widely.
+- id: DG-H4
+  text: Every consent event names the patient, so a module that reuses disclosure answers drops those for that patient when one arrives.
+  rationale: A cached permit outliving a revocation would let a disclosure through (BR-H23).
 permissions:
 - name: consent.read
   description: Read a patient's consents and notices.
@@ -1532,7 +1554,7 @@ dependencies:
   - 'Asks: is this person involved in the patient''s care or payment, and has the patient objected to sharing with them?'
   - 'Asks: is this patient under legal hold?'
   - 'Receives: patient.registered (with informant), patient.merged, patient.unmerged, patient.deceased, patient.representative_changed and patient.entered_in_error'
-  - 'Answers: has the patient opted out of this contact channel?'
+  - 'Answers: has the patient opted out of this contact channel for this purpose?'
 - service: identity-service
   direction: upstream
   reason: authenticates callers
@@ -1705,6 +1727,14 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-164.514
   note: (f), fundraising communications and the opt-out.
 changelog:
+- version: 0.4.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H20: EU restrictions are answered as leave out silently, never as a visible deny.'
+  - 'BR-H23 and DG-H4: one check covers many records, and reused answers end when a consent event for the patient arrives.'
+  - 'BR-H27: contact opt-outs are answered per channel and purpose.'
+  - 'BR-H6: a general designation of intermediary participants is limited to those treating the patient (42 CFR 2.31(a)(4)(ii)(B)).'
 - version: 0.4.0
   date: '2026-10-10'
   breaking: false

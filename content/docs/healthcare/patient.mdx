@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.13.7
+version: 0.13.9
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -503,6 +503,9 @@ businessRules:
 - id: BR-H57
   text: An adult patient acting for themselves can authorise a proxy of their choice through the portal, setting the scope, period and, if they want, a purpose, and can withdraw it at any time; the proxy is recorded with kind proxy and patient.representative_changed is emitted. Parents, guardians and other legal representatives are still recorded by staff with evidence (BR-H14).
   rationale: Patients should be able to share access with a carer without visiting the organization, and take it back as easily. In the EU, access services must let people authorise people of their choice, for a limited or unlimited period and a specific purpose, and manage those authorisations (EHDS Article 4(2)(a)).
+- id: BR-H58
+  text: Contact details are given for a channel and a purpose, such as text messages for appointment reminders. A channel the patient opted out of for that purpose, as the Consent module answers, isn't returned, and the caller is told to use another channel or none.
+  rationale: A patient's opt-out must reach every module that contacts them; in the United States, consent to calls and texts must be honoured within ten business days of revocation (47 CFR 64.1200(a)(10)).
 validations:
 - field: names
   rule: at least one usual, official or temp name; a name may have only a given name or only a family name
@@ -1926,6 +1929,12 @@ acceptanceCriteria:
   verifies:
   - BR-H57
   - FR-H31
+- id: AC-H87
+  given: a patient who opted out of text messages for appointment reminders
+  when: contact details are asked for text messages for reminders, then for phone calls for reminders
+  then: the first answers that the patient opted out, and the second returns the phone number
+  verifies:
+  - BR-H58
 operations:
 - name: Search patients
   actor: Registrar
@@ -2203,8 +2212,8 @@ operations:
   method: GET
   path: /patients/{id}/contact-details
   success: 200
-  input: patient id, channel
-  output: the address or contact point to use, and the preferred language
+  input: patient id, channel and purpose
+  output: the address or contact point to use, and the preferred language, or that the patient opted out for that channel and purpose
   errors:
   - PATIENT_NOT_FOUND
   - PATIENT_DEPENDENCY_UNAVAILABLE
@@ -2933,7 +2942,7 @@ dependencies:
   - 'Gives: patient.registered with informant, so the privacy notice is given when the data came from someone else (GDPR Article 14)'
   - 'Gives: patient.registered, so the Notice of Privacy Practices acknowledgment can be sought at first service (45 CFR 164.520(c)(2)(ii))'
   - 'Gives: patient.merged, patient.unmerged, patient.deceased and patient.representative_changed'
-  - 'Asks: has the patient opted out of a contact channel? (used when answering where to contact them)'
+  - 'Asks: has the patient opted out of this contact channel for this purpose? (used when answering where to contact them)'
   - Restriction requests and EU opt-outs are Consent's concern
   - 'Answers: is this person involved in the patient''s care or payment, and has the patient objected to sharing with them?'
 - service: coverage-service
@@ -3250,6 +3259,16 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
 changelog:
+- version: 0.13.9
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H58: contact details are given per channel and purpose, honouring the Consent module''s opt-outs.'
+- version: 0.13.8
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - The Consent contract asks about contact opt-outs per channel and purpose.
 - version: 0.13.7
   date: '2026-10-10'
   breaking: false
