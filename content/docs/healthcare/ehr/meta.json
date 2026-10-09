@@ -8,6 +8,7 @@
     "encounter",
     "adt",
     "clinical-documentation",
-    "terminology"
+    "terminology",
+    "practitioner"
   ]
 }

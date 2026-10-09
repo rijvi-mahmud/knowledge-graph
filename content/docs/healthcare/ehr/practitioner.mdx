@@ -1,0 +1,427 @@
+---
+title: Medical staff and privileges
+description: 'Hospital practitioners: medical staff appointment, clinical privileges, National Practitioner Data Bank queries and reappointment, built on the practitioner rules.'
+module: practitioner
+version: 0.1.0
+status: draft
+industry: healthcare
+domain: ehr
+extends: healthcare/practitioner
+purpose: 'Add what a hospital needs to the practitioner rules: appointment to the medical staff, clinical privileges for each procedure or service, NPDB queries, periodic appraisal and reappointment, and privileges for telemedicine practitioners granted by relying on a distant site.'
+scope:
+- Medical staff appointment and categories
+- Clinical privileges, granted, checked, suspended and revoked
+- NPDB queries at appointment and every 2 years (United States)
+- Periodic appraisal and reappointment
+- Telemedicine privileges by proxy
+nonGoals:
+- Which procedures exist. Orders and Theatre own their catalogues; the privilege catalogue names them.
+- Peer review case files. The medical staff's quality process owns them.
+dataModel:
+- name: medical_staff
+  type: membership
+  required: false
+  description: 'Membership of the medical staff: category, such as active or courtesy, appointed_at and reappoint_by.'
+  constraints: set through appointment and reappointment
+  jurisdiction: us
+- name: privileges
+  type: privilege[]
+  required: false
+  description: 'Clinical privileges: the procedure or service, department, period, status and whether granted by proxy.'
+  constraints: each from privilege_catalogue; within the practitioner's licence (BR-E2)
+- name: npdb_queries
+  type: query[]
+  required: false
+  description: 'NPDB queries: date, purpose and the report reference.'
+  constraints: append-only
+  jurisdiction: us
+businessRules:
+- id: BR-E1
+  text: In the United States, a practitioner joins the medical staff only when the governing body appoints them on the medical staff's recommendation, after the medical staff has examined their credentials, and is then bound by the bylaws.
+  rationale: The medical staff must examine the credentials of all eligible candidates and recommend appointment to the governing body (42 CFR 482.22(a)(2)).
+  jurisdiction: us
+- id: BR-E2
+  text: Clinical privileges are granted one procedure or service at a time from privilege_catalogue, by the criteria the bylaws set, and never beyond what the practitioner's licence allows. A practitioner may perform or order only what they are privileged for; Theatre, Orders and Clinical documentation ask before allowing it.
+  rationale: Hospital bylaws must include criteria for determining the privileges granted to individual practitioners (42 CFR 482.22(c)(6)); privileges are how a hospital limits each practitioner to what they have shown they can do.
+- id: BR-E3
+  text: In the United States, the NPDB is queried when a practitioner applies for appointment or privileges and every 2 years after; privileges are not granted without a current query, and a query falls due 2 years after the last.
+  rationale: Hospitals must request information from the NPDB at application and every 2 years, and are presumed to know what it holds if they don't (45 CFR 60.17).
+  jurisdiction: us
+- id: BR-E4
+  text: In the United States, each member of the medical staff is appraised and reappointed every reappointment_interval; practitioner.reappointment_due is emitted ahead, and a member not reappointed by reappoint_by loses their privileges.
+  rationale: The medical staff must periodically conduct appraisals of its members (42 CFR 482.22(a)(1)); bylaws set the interval.
+  jurisdiction: us
+- id: BR-E5
+  text: In the United States, a telemedicine practitioner can be granted privileges by relying on the credentialing and privileging decisions of a distant-site hospital or telemedicine entity, only when a written agreement records the conditions the regulation sets, including that the practitioner is privileged at the distant site and licensed in the state where the patient's hospital is.
+  rationale: The governing body may rely on the distant site's decisions if its written agreement ensures the conditions in 42 CFR 482.22(a)(3) and (4) are met.
+  jurisdiction: us
+- id: BR-E6
+  text: When a practitioner is suspended, made inactive, or loses a licence a privilege depends on, the affected privileges are suspended at once and practitioner.privileges_changed is emitted; reinstatement restores them only when they are still current.
+  rationale: A privilege can't outlive the licence or standing it rests on; consumers need to stop booking and ordering at once.
+edgeCases:
+- id: EC-E1
+  situation: A surgeon is booked for a procedure they hold no privilege for.
+  behaviour: Theatre asks and is told no; the booking is refused there.
+  covers:
+  - BR-E2
+  - AC-E2
+- id: EC-E2
+  situation: An NPDB query falls due while the practitioner is on leave.
+  behaviour: It is listed when due; privileges lapse only at reappointment if nothing has been queried.
+  covers:
+  - BR-E3
+  - BR-E4
+  - AC-E3
+  jurisdiction: us
+- id: EC-E3
+  situation: A night-time teleradiology group reads scans from another country.
+  behaviour: Privileges by proxy need the written agreement and a licence in the state where the patient's hospital is; without either they aren't granted.
+  covers:
+  - BR-E5
+  - AC-E5
+  jurisdiction: us
+settings:
+- name: privilege_catalogue
+  type: list
+  description: The procedures and services privileges are granted for, by department, with the qualifications each needs.
+- name: reappointment_interval
+  type: duration
+  description: How often medical staff members are appraised and reappointed. Set by the medical staff bylaws.
+  jurisdiction: us
+acceptanceCriteria:
+- id: AC-E1
+  given: a credentialed practitioner the medical staff hasn't recommended
+  when: privileges are granted, then the governing body appoints them on recommendation and privileges are granted
+  then: the first fails with PRACTITIONER_NOT_ON_MEDICAL_STAFF and HTTP 409; then medical_staff is set and the privilege granted, emitting practitioner.privileges_changed
+  verifies:
+  - BR-E1
+  - BR-E2
+  jurisdiction: us
+- id: AC-E2
+  given: a nurse practitioner whose licence doesn't allow a surgical procedure, and an unknown privilege id
+  when: the procedure is granted as a privilege, a privilege is checked, and the unknown privilege is revoked
+  then: the grant fails with PRACTITIONER_OUTSIDE_LICENCE and HTTP 422; the check answers from the privileges held; the revoke fails with PRACTITIONER_PRIVILEGE_NOT_FOUND and HTTP 404
+  verifies:
+  - BR-E2
+- id: AC-E3
+  given: an applicant with no NPDB query, and a member whose last query was 23 months ago
+  when: privileges are granted to the applicant, then a query is recorded and they are granted; and the daily check runs
+  then: the first fails with PRACTITIONER_NPDB_QUERY_REQUIRED and HTTP 409, then succeeds; practitioner.npdb_query_due is emitted for the member
+  verifies:
+  - BR-E3
+  jurisdiction: us
+- id: AC-E4
+  given: a member whose reappoint_by is in 60 days, and one past it
+  when: the daily check runs
+  then: practitioner.reappointment_due is emitted for the first; the second loses their privileges and practitioner.privileges_changed is emitted
+  verifies:
+  - BR-E4
+  jurisdiction: us
+- id: AC-E5
+  given: a telemedicine radiologist privileged at a distant-site hospital
+  when: privileges by proxy are granted without an agreement, then with one
+  then: the first fails with PRACTITIONER_AGREEMENT_REQUIRED and HTTP 422; the second grants them, recording the agreement and the distant site's decision
+  verifies:
+  - BR-E5
+  jurisdiction: us
+- id: AC-E6
+  given: a surgeon with privileges
+  when: they are suspended for an expired licence, then reinstated after renewal
+  then: their privileges are suspended at once with practitioner.privileges_changed, then restored
+  verifies:
+  - BR-E6
+operations:
+- name: Appoint to the medical staff
+  actor: Credentials committee
+  description: Record the governing body's appointment on the medical staff's recommendation.
+  method: POST
+  path: /practitioners/{id}/medical-staff
+  success: 201
+  input: category, recommendation and appointment dates
+  output: the membership
+  errors:
+  - PRACTITIONER_NOT_FOUND
+  - PRACTITIONER_INVALID_STATUS
+  - PRACTITIONER_FORBIDDEN
+  jurisdiction: us
+- name: Reappoint
+  actor: Credentials committee
+  description: Record a reappointment after appraisal.
+  method: POST
+  path: /practitioners/{id}/medical-staff/reappointment
+  success: 200
+  input: appraisal outcome and new reappoint_by
+  output: the membership
+  errors:
+  - PRACTITIONER_NOT_FOUND
+  - PRACTITIONER_NOT_ON_MEDICAL_STAFF
+  - PRACTITIONER_NPDB_QUERY_REQUIRED
+  - PRACTITIONER_FORBIDDEN
+  jurisdiction: us
+- name: Grant a privilege
+  actor: Credentials committee
+  description: Grant a privilege from privilege_catalogue.
+  method: POST
+  path: /practitioners/{id}/privileges
+  success: 201
+  input: catalogue code, department and period
+  output: the privilege
+  errors:
+  - PRACTITIONER_NOT_FOUND
+  - PRACTITIONER_NOT_ON_MEDICAL_STAFF
+  - PRACTITIONER_NPDB_QUERY_REQUIRED
+  - PRACTITIONER_OUTSIDE_LICENCE
+  - PRACTITIONER_NOT_VERIFIED
+  - PRACTITIONER_FORBIDDEN
+- name: Grant privileges by proxy
+  actor: Credentials committee
+  description: Grant telemedicine privileges relying on a distant site's decisions.
+  method: POST
+  path: /practitioners/{id}/privileges/by-proxy
+  success: 201
+  input: catalogue codes, distant site, agreement reference and its decisions
+  output: the privileges
+  errors:
+  - PRACTITIONER_NOT_FOUND
+  - PRACTITIONER_AGREEMENT_REQUIRED
+  - PRACTITIONER_OUTSIDE_LICENCE
+  - PRACTITIONER_FORBIDDEN
+  jurisdiction: us
+- name: Revoke a privilege
+  actor: Credentials committee
+  description: Revoke or restrict a privilege, with a reason.
+  method: POST
+  path: /privileges/{id}/revoke
+  success: 200
+  input: reason
+  output: the privilege
+  errors:
+  - PRACTITIONER_PRIVILEGE_NOT_FOUND
+  - PRACTITIONER_REASON_REQUIRED
+  - PRACTITIONER_FORBIDDEN
+- name: Check a privilege
+  actor: System
+  description: Whether a practitioner may perform a procedure or service on a date.
+  method: GET
+  path: /practitioners/{id}/privileges/check
+  success: 200
+  input: catalogue code, department and date
+  output: privileged or not, and the privilege
+  errors:
+  - PRACTITIONER_NOT_FOUND
+- name: Record an NPDB query
+  actor: Credentialing specialist
+  description: Record an NPDB query and its report reference.
+  method: POST
+  path: /practitioners/{id}/npdb-queries
+  success: 201
+  input: date, purpose and report reference
+  output: the query
+  errors:
+  - PRACTITIONER_NOT_FOUND
+  - PRACTITIONER_FORBIDDEN
+  jurisdiction: us
+events:
+- name: practitioner.privileges_changed
+  description: Privileges were granted, suspended, restored or revoked.
+  payload:
+  - practitioner_id
+  - revision
+  - privilege_codes
+- name: practitioner.npdb_query_due
+  description: An NPDB query is due.
+  payload:
+  - practitioner_id
+  - revision
+  - due_on
+- name: practitioner.reappointment_due
+  description: Reappointment is due.
+  payload:
+  - practitioner_id
+  - revision
+  - reappoint_by
+permissions:
+- name: practitioner.privileges
+  description: Grant, revoke and check privileges.
+accessMatrix:
+- action: Appoint, reappoint, grant and revoke privileges
+  roles:
+    Credentialing specialist: none
+    Credentials committee: any
+    Practitioner: none
+    Privacy officer: none
+    System: none
+  permission: practitioner.decide
+- action: Check a privilege
+  roles:
+    Credentialing specialist: any
+    Credentials committee: any
+    Practitioner: own
+    Privacy officer: none
+    System: any
+  permission: practitioner.privileges
+- action: Record an NPDB query
+  roles:
+    Credentialing specialist: any
+    Credentials committee: none
+    Practitioner: none
+    Privacy officer: none
+    System: none
+  permission: practitioner.manage
+personalData:
+- field: medical_staff, privileges
+  category: personal data of staff
+  purpose: Showing what a practitioner may do in the hospital
+  retention: credential_retention
+- field: npdb_queries
+  category: personal data of staff; NPDB reports are confidential
+  purpose: Showing the queries the law requires were made
+  retention: credential_retention
+  jurisdiction: us
+errors:
+- code: PRACTITIONER_PRIVILEGE_NOT_FOUND
+  http: 404
+  message: No privilege exists with that id.
+- code: PRACTITIONER_NOT_ON_MEDICAL_STAFF
+  http: 409
+  message: The practitioner isn't appointed to the medical staff.
+- code: PRACTITIONER_NPDB_QUERY_REQUIRED
+  http: 409
+  message: An NPDB query from the last 2 years is needed first.
+- code: PRACTITIONER_OUTSIDE_LICENCE
+  http: 422
+  message: The privilege goes beyond what the practitioner's licence allows.
+- code: PRACTITIONER_AGREEMENT_REQUIRED
+  http: 422
+  message: Privileges by proxy need a written agreement with the distant site.
+dependencies:
+- service: npdb
+  direction: upstream
+  reason: the National Practitioner Data Bank
+  criticality: soft
+  contract:
+  - 'Asks: what does the NPDB hold on this practitioner? (United States)'
+- service: theatre-service
+  direction: downstream
+  reason: surgery scheduling
+  criticality: soft
+  contract:
+  - 'Gives: whether a practitioner is privileged for a procedure on a date'
+  - 'Gives: practitioner.privileges_changed'
+- service: orders-service
+  direction: downstream
+  reason: orders
+  criticality: soft
+  contract:
+  - 'Gives: whether a practitioner is privileged to order a service'
+  - 'Gives: practitioner.privileges_changed'
+- service: notification-service
+  direction: downstream
+  reason: tells people about work waiting for them
+  criticality: soft
+  contract:
+  - 'Gives: practitioner.credential_expiring and practitioner.credential_expired, for the practitioner and credentialing staff'
+  - 'Gives: practitioner.npdb_query_due and practitioner.reappointment_due'
+decisions:
+- id: ADR-E1
+  decision: Privileges are granted per procedure or service from a catalogue.
+  rationale: Bylaws must set criteria for each privilege; a catalogue lets Theatre and Orders ask a precise question.
+  date: '2026-10-09'
+references:
+- id: REF-E1
+  title: '42 CFR 482.22, Condition of participation: Medical staff'
+  url: https://www.ecfr.gov/current/title-42/section-482.22
+  note: Appointment, appraisals, criteria for privileges, and telemedicine by proxy.
+- id: REF-E2
+  title: 45 CFR 60.17, Information which hospitals must request from the NPDB
+  url: https://www.ecfr.gov/current/title-45/section-60.17
+  note: At application and every 2 years.
+changelog:
+- version: 0.1.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'First draft: medical staff appointment, privileges, NPDB queries, reappointment and telemedicine privileges by proxy.'
+tables:
+- name: privileges
+  description: 'privileges: one row per granted privilege.'
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: practitioner_id
+    type: uuid
+  - name: code
+    type: text
+  - name: department_id
+    type: uuid
+  - name: period
+    type: daterange
+  - name: status
+    type: text
+  - name: by_proxy
+    type: jsonb
+    nullable: true
+  indexes:
+  - name: privileges_check
+    definition: CREATE INDEX ON privileges (practitioner_id, code) WHERE status = 'granted'
+  constraints:
+  - name: privileges_pkey
+    definition: PRIMARY KEY (id)
+- name: medical_staff
+  description: 'medical_staff and npdb_queries: membership and NPDB queries.'
+  columns:
+  - name: practitioner_id
+    type: uuid
+  - name: category
+    type: text
+  - name: appointed_at
+    type: date
+  - name: reappoint_by
+    type: date
+  - name: npdb_queries
+    type: jsonb
+    default: '''[]'''
+  indexes: []
+  constraints:
+  - name: medical_staff_pkey
+    definition: PRIMARY KEY (practitioner_id)
+compliance:
+- id: CMP-E1
+  regulation: Medicare Conditions of Participation
+  provision: 42 CFR 482.22(a) and (c)(6)
+  obligation: Medical staff examine credentials and recommend appointment, appraise members periodically, and grant privileges by set criteria; telemedicine by proxy under a written agreement.
+  how: Appointment, reappointment, privileges and by-proxy grants.
+  status: met
+  covered_by:
+  - BR-E1
+  - BR-E2
+  - BR-E4
+  - BR-E5
+  jurisdiction: us
+- id: CMP-E2
+  regulation: Health Care Quality Improvement Act regulations
+  provision: 45 CFR 60.17
+  obligation: Query the NPDB at application and every 2 years.
+  how: Queries tracked; privileges need a current query.
+  status: met
+  covered_by:
+  - BR-E3
+  jurisdiction: us
+---
+
+Hospital practitioners build on the [practitioner rules](/docs/healthcare/practitioner)
+every health application shares. This layer adds what a hospital's medical
+staff decides: who joins it, and exactly what each member may do.
+
+## Credentialed isn't the same as privileged
+
+A credentialed surgeon may still not be allowed to do every operation. Each
+procedure is a privilege, granted by the criteria the bylaws set, and Theatre
+and Orders ask before booking or ordering it (BR-E2).
+
+## In the United States, the Data Bank is asked every two years
+
+Hospitals must query the National Practitioner Data Bank when a practitioner
+applies and every 2 years after, and are presumed to know what it holds if
+they don't (BR-E3).

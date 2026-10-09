@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.11.4
+version: 0.11.5
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -2119,6 +2119,11 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-92.201
   note: Language assistance services.
 changelog:
+- version: 0.11.5
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Asks the Practitioners module, not Identity, whether a practitioner is active and licensed where the patient is.
 - version: 0.11.4
   date: '2026-10-09'
   breaking: false
@@ -2245,8 +2250,6 @@ dependencies:
   - 'Asks: does this identity exist, and is it active?'
   - 'Asks: the person''s preferred time zone and locale, if they have one'
   - 'Asks: does the caller hold this permission?'
-  - 'Asks: whether a person is a practitioner'
-  - 'Asks: is this practitioner licensed or permitted to practise in this US state?'
 - service: patient-service
   direction: upstream
   reason: owns patient records
@@ -2360,6 +2363,15 @@ dependencies:
   - 'Gives: appointment.booked and appointment.rescheduled, so coverage can be verified before the day'
   - 'Receives: the financial clearance status for the appointment'
   - Eligibility checks, estimates and financial counselling are Coverage's concern
+- service: practitioner-service
+  direction: upstream
+  reason: knows who may practise where
+  criticality: hard
+  contract:
+  - 'Asks: is this identity a practitioner, and are they active?'
+  - 'Asks: is this practitioner licensed or permitted to practise in this US state on this date?'
+  - 'Receives: practitioner.suspended and practitioner.reinstated, so future appointments with a suspended practitioner are flagged for review'
+  - Credentialing is the Practitioners module's concern
 compliance:
 - id: CMP-H1
   regulation: HIPAA Privacy Rule

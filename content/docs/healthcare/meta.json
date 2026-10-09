@@ -7,6 +7,7 @@
     "appointment",
     "encounter",
     "clinical-documentation",
+    "practitioner",
     "terminology",
     "ehr"
   ]
