@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.6.0
+version: 0.6.1
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -55,6 +55,16 @@ glossary:
   definition: Emergency access to information a user wouldn't normally see, recorded and reviewed afterwards.
 - term: Scope
   definition: What an app may do, in SMART App Launch syntax, such as patient/Observation.rs to read and search a patient's observations.
+- term: Paused session
+  definition: A session past its inactivity timeout but not its maximum duration, which the user resumes by authenticating again (BR-H8).
+- term: Dormant account
+  definition: A staff or system account with no sign-in or token request for dormant_account_period (BR-H23).
+- term: Trusted referee
+  definition: A trained person who helps proof someone who can't meet the usual evidence requirements (NIST SP 800-63A-4).
+- term: Applicant reference
+  definition: A person who vouches for an applicant's identity or circumstances, such as a parent for a minor, without acting for them (NIST SP 800-63A-4).
+- term: Refresh token rotation
+  definition: Issuing a new refresh token at every use and invalidating the old one, so a stolen one is detected (RFC 9700).
 concepts:
 - name: One person, one account
   description: Shared accounts make it impossible to tell who did what. Every person and every system has its own account, and representatives never use the patient's.
@@ -75,7 +85,7 @@ dataModel:
   type: reference
   required: true
   description: 'The person or system it belongs to: a practitioner or staff record, a patient, a representative relationship from the Patients module, or a system.'
-  constraints: one active account per subject and kind
+  constraints: 'one active account per subject and kind; codes: in the United States, the SMART fhirUser claim names it as a FHIR Practitioner, Patient, RelatedPerson or Person resource'
 - name: account.username
   type: string
   required: true
@@ -157,8 +167,8 @@ dataModel:
 - name: app.kind
   type: enum
   required: true
-  description: How the app authenticates.
-  constraints: 'confidential | public | backend; codes: SMART App Launch client types'
+  description: How the app authenticates, and whether it acts for a person or as a backend system.
+  constraints: 'public | confidential-symmetric | confidential-asymmetric, for apps acting for a person; backend, for SMART Backend Services, which authenticates with asymmetric keys; codes: SMART App Launch 2.0.0 client capabilities client-public, client-confidential-symmetric and client-confidential-asymmetric'
 - name: app.status
   type: enum
   required: true
@@ -179,12 +189,27 @@ dataModel:
   description: Whether the practitioner may sign controlled substance prescriptions, with the two approvers, when, and any revocation and its reason.
   jurisdiction: us
 relationships:
+- type: belongs_to
+  target: practitioner, staff record, patient, representative relationship or system
+  note: account.subject; one active account per subject and kind (BR-H1)
+- type: has_many
+  target: authenticator
+  note: authenticators of an account
+- type: has_many
+  target: role assignment
+  note: roles an account holds, each for a department or organization and a period
 - type: has_many
   target: session
   note: sessions of an account
 - type: has_many
   target: grant
   note: apps an account has authorized
+- type: has_many
+  target: grant
+  note: an app's grants from many accounts
+- type: has_many
+  target: break glass
+  note: emergency accesses an account used, each for one patient
 - type: can_trigger
   target: event:identity.break_glass_used
 businessRules:
@@ -355,13 +380,13 @@ stateMachine:
     trigger: reinstated (BR-H24)
   - from: active
     to: disabled
-    trigger: person left, dormant, patient died or record entered in error (BR-H4, BR-H18, BR-H23)
+    trigger: person left, dormant, patient died, record entered in error, or account closed or erased (BR-H4, BR-H18, BR-H23, BR-H28)
   - from: suspended
     to: disabled
-    trigger: person left
+    trigger: person left, patient died, record entered in error, or account closed or erased (BR-H4, BR-H18, BR-H28)
   - from: locked
     to: disabled
-    trigger: person left
+    trigger: person left, patient died, record entered in error, or account closed or erased (BR-H4, BR-H18, BR-H28)
   - from: pending
     to: disabled
     trigger: enrolment abandoned
@@ -409,6 +434,14 @@ workflows:
   - End its sessions and revoke its tokens
   - Emit identity.account_disabled
   outcome: Nobody keeps access after leaving.
+- name: Approve a backend app
+  trigger: A vendor registers a backend app with system scopes
+  actor: Account administrator
+  steps:
+  - The app registers with its public keys and requested system scopes, and stays pending
+  - The administrator checks the agreement and the security review, then approves the scopes it needs
+  - The app requests 5 minute tokens with signed assertions
+  outcome: Only approved systems reach many patients' data at once, each with its own keys.
 edgeCases:
 - id: EC-H1
   situation: Two nurses share one login on a busy ward.
@@ -1459,6 +1492,7 @@ events:
   payload:
   - account_id
   - revision
+  - reason
 - name: identity.role_changed
   description: A role was assigned or removed.
   payload:
@@ -1488,6 +1522,7 @@ events:
   payload:
   - client_id
   - kind
+  - status
 - name: identity.grant_revoked
   description: A patient or user revoked an app's access.
   payload:
@@ -1904,6 +1939,13 @@ references:
   url: https://eur-lex.europa.eu/eli/dir/2016/2102/oj/eng
   note: Articles 1, 4 and 6.
 changelog:
+- version: 0.6.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - app.kind uses the SMART App Launch 2.0.0 client capabilities (public, confidential-symmetric, confidential-asymmetric) plus backend; account.subject names the SMART fhirUser resource types.
+  - Suspended and locked accounts also follow a death, an entered-in-error record and a closed or erased account.
+  - identity.account_locked carries a reason and identity.app_registered a status; relationships, glossary, a backend app approval workflow and storage columns for throttling and token rotation.
 - version: 0.6.0
   date: '2026-10-09'
   breaking: true
@@ -2001,6 +2043,9 @@ tables:
     type: jsonb
     nullable: true
     note: United States only
+  - name: locked_reason
+    type: text
+    nullable: true
   indexes: []
   constraints:
   - name: accounts_pkey
@@ -2025,6 +2070,12 @@ tables:
   - name: registered_at
     type: timestamptz
   - name: last_used_at
+    type: timestamptz
+    nullable: true
+  - name: failed_count
+    type: integer
+    default: '0'
+  - name: disabled_at
     type: timestamptz
     nullable: true
   indexes: []
@@ -2135,6 +2186,13 @@ tables:
   - name: revoked_at
     type: timestamptz
     nullable: true
+  - name: refresh_token_hash
+    type: bytea
+    nullable: true
+  - name: refresh_family
+    type: uuid
+    nullable: true
+    note: links rotated refresh tokens so a reuse revokes the family
   indexes: []
   constraints:
   - name: grants_pkey
