@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Hospital sign-in: shared clinical workstations with badge tap, and read-only access during downtime, built on the healthcare identity rules.'
 module: identity
-version: 0.1.0
+version: 0.2.0
 status: draft
 industry: healthcare
 domain: ehr
@@ -16,14 +16,14 @@ nonGoals:
 - Badge hardware and printing. Facilities and security own them.
 businessRules:
 - id: BR-E1
-  text: On a shared clinical workstation, a staff member signs in by tapping their badge and entering a PIN, which together are two factors, and the next user's tap ends the previous user's session on that workstation; one user's session never carries over to another.
-  rationale: Clinicians sign in many times an hour on shared workstations; fast switching keeps each action attributed to the right person (45 CFR 164.312(a)(2)(i)).
+  text: On a shared clinical workstation, a staff member's first sign-in of a session is at their role's required_aal. Within session_max_duration, a badge tap with their PIN resumes their own session on any shared workstation; the badge only identifies them and counts as a factor only if it is a cryptographic smart card. The next user's tap hides the previous user's work on that workstation, and one user's screen never carries over to another.
+  rationale: Clinicians sign in many times an hour on shared workstations. NIST SP 800-63B-4 lets an AAL2 session resume with a password and the session secret after inactivity, so a tap and PIN are fast without lowering assurance, and every action stays attributed to the right person (45 CFR 164.312(a)(2)(i)).
 - id: BR-E2
-  text: Shared clinical workstations lock after shared_workstation_timeout of inactivity, hiding patient data, and end the session after session_inactivity_timeout.
-  rationale: Screens in clinical areas are seen by passers-by; HIPAA expects sessions to end after inactivity (45 CFR 164.312(a)(2)(iii)).
+  text: Shared clinical workstations lock after shared_workstation_timeout of inactivity, hiding patient data; the user's session pauses after session_inactivity_timeout as on any device.
+  rationale: Screens in clinical areas are seen by passers-by, so they lock sooner than a session pauses; HIPAA expects sessions to end after inactivity (45 CFR 164.312(a)(2)(iii)).
 - id: BR-E3
-  text: During an EHR downtime, staff reach the read-only backup with their own accounts, and every access is logged; the backup never accepts changes.
-  rationale: The SAFER Contingency Planning guide expects a read-only backup during downtime; access must still be attributable to a person.
+  text: During an EHR downtime, staff reach the read-only backup with their own accounts, verified without the EHR, such as against the organization's directory, and every access is logged; the backup never accepts changes.
+  rationale: The SAFER Contingency Planning guide expects a read-only backup during downtime; if sign-in needed the EHR that is down, nobody could reach it, and access must still be attributable to a person.
 edgeCases:
 - id: EC-E1
   situation: A nurse walks away from a workstation in a corridor during a code.
@@ -32,15 +32,20 @@ edgeCases:
   - BR-E1
   - BR-E2
   - AC-E2
+- id: EC-E2
+  situation: A doctor loses their badge in the canteen.
+  behaviour: The badge alone opens nothing without the PIN and an existing session; the doctor reports it and it is removed (BR-H19 tells them of the change).
+  covers:
+  - BR-E1
 settings:
 - name: shared_workstation_timeout
   type: duration
   description: Inactivity before a shared clinical workstation locks. Set by the organization; short, such as a few minutes.
 acceptanceCriteria:
 - id: AC-E1
-  given: a nurse signed in on a shared workstation
-  when: a doctor taps their badge and enters their PIN on the same workstation
-  then: the nurse's session ends and the doctor's starts at AAL2; nothing the nurse had open is shown
+  given: a nurse who signed in at the start of the shift with a password and a security key, and a doctor who hasn't signed in this shift
+  when: the nurse taps their badge and enters their PIN on a shared workstation, then the doctor taps theirs on the same workstation
+  then: the nurse's session resumes at AAL2; the doctor is asked for a full sign-in, and nothing the nurse had open is shown
   verifies:
   - BR-E1
 - id: AC-E2
@@ -50,15 +55,15 @@ acceptanceCriteria:
   verifies:
   - BR-E2
 - id: AC-E3
-  given: an EHR downtime
+  given: an EHR downtime, with the EHR's sign-in unavailable
   when: a nurse opens the read-only backup and tries to save a change
-  then: the access is logged under the nurse's account and the change is refused
+  then: the nurse signs in to the backup with their own account, the access is logged under it, and the change is refused
   verifies:
   - BR-E3
 decisions:
 - id: ADR-E1
-  decision: Badge tap with a PIN is the sign-in on shared clinical workstations.
-  rationale: It gives two factors with a few seconds' effort, which clinicians signing in dozens of times a shift will actually use.
+  decision: A badge tap with a PIN resumes a session on shared clinical workstations; the first sign-in of a session is a full one.
+  rationale: It takes a few seconds, which clinicians signing in dozens of times a shift will actually use, and NIST allows it as an AAL2 reauthentication.
   date: '2026-10-09'
 references:
 - id: REF-E1
@@ -66,6 +71,13 @@ references:
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: 'Contingency Planning: read-only backup during downtime.'
 changelog:
+- version: 0.2.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - 'Breaking: a badge tap with a PIN resumes a session after a full first sign-in, instead of counting as two factors; the badge isn''t a factor unless it is a cryptographic smart card (BR-E1, NIST SP 800-63B-4).'
+  - Shared workstations lock sooner than a session pauses (BR-E2).
+  - The downtime backup verifies staff without the EHR (BR-E3).
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false
@@ -79,6 +91,7 @@ may sign in to the same screen minutes apart.
 
 ## Switching users takes seconds, never a shared login
 
-A badge tap and a PIN sign the next person in and end the last person's
-session, so nobody is tempted to keep working under someone else's name
-(BR-E1).
+Each person signs in fully once per session. After that, a badge tap and a PIN
+bring their session back on any shared workstation and hide the last
+person's work, so nobody is tempted to keep working under someone else's
+name (BR-E1).

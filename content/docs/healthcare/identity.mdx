@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.2.0
+version: 0.3.0
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -147,8 +147,8 @@ dataModel:
 - name: session.ended_reason
   type: code
   required: false
-  description: Why it ended, such as signed out, inactive, expired or account disabled.
-  constraints: 'codes: local list'
+  description: Why it ended, such as signed out, expired or account disabled. A paused session hasn't ended.
+  constraints: 'signed_out | expired | account_disabled | account_suspended | revoked; codes: none standard, local to this specification'
 - name: app.client_id
   type: string
   required: true
@@ -201,8 +201,8 @@ businessRules:
   text: An account is disabled within deprovision_deadline of its person leaving, or the Practitioners module reporting them inactive. When it reports a practitioner suspended, roles that need an active practitioner are suspended until reinstatement.
   rationale: Access must end when employment ends (45 CFR 164.308(a)(3)(ii)(C)); a departed or suspended clinician must not keep reaching patient data.
 - id: BR-H5
-  text: 'Each role and account kind needs an authentication assurance level, set in required_aal: at least AAL2, multi-factor, for any access to patient data, with at least one phishing-resistant authenticator offered. A sign-in below the level a request needs is refused until the user steps up.'
-  rationale: NIST SP 800-63B-4 requires two factors at AAL2 and that verifiers offer a phishing-resistant option; NIS2 expects multi-factor authentication where appropriate (Directive (EU) 2022/2555, Article 21(2)(j)).
+  text: 'Each role and account kind needs an authentication assurance level, set in required_aal: at least AAL2, multi-factor, for any access to patient data, and AAL3, which needs a phishing-resistant authenticator, for account administrators. At least one phishing-resistant authenticator is always offered. A sign-in below the level a request needs is refused until the user steps up.'
+  rationale: NIST SP 800-63B-4 requires two factors at AAL2, a phishing-resistant option offered at AAL2, and a phishing-resistant authenticator at AAL3; an administrator account can open every other account. NIS2 expects multi-factor authentication where appropriate (Directive (EU) 2022/2555, Article 21(2)(j)).
 - id: BR-H6
   text: Passwords are at least 15 characters when used alone, or 8 when used with another factor, are checked against a list of common and compromised passwords, and have no composition rules and no forced periodic change; a password is changed when there is evidence it is compromised.
   rationale: NIST SP 800-63B-4 sets these lengths, requires the blocklist check, and forbids composition rules and periodic changes, which push people to weaker, predictable passwords.
@@ -210,17 +210,17 @@ businessRules:
   text: Failed sign-ins are throttled and recorded. Unusual patterns, such as many failures or sign-ins from a new country, are reported to the privacy officer, and an account under attack is locked until verified.
   rationale: HIPAA expects procedures for monitoring log-in attempts and reporting discrepancies (45 CFR 164.308(a)(5)(ii)(C)), and NIST SP 800-63B requires limiting failed attempts.
 - id: BR-H8
-  text: A session ends after session_inactivity_timeout without activity, and needs a fresh authentication after session_max_duration; ending it clears patient data from the screen.
-  rationale: HIPAA expects electronic sessions to end after a set time of inactivity (45 CFR 164.312(a)(2)(iii)); NIST SP 800-63B-4 recommends at most 1 hour of inactivity and 24 hours overall at AAL2.
+  text: A session pauses after session_inactivity_timeout without activity and ends after session_max_duration, both set for the session's AAL; pausing or ending it clears patient data from the screen. At AAL2, a paused session may be resumed with the user's password or PIN alone, together with the session they still hold. At AAL3, and after session_max_duration, the user authenticates in full.
+  rationale: HIPAA expects sessions to end after inactivity (45 CFR 164.312(a)(2)(iii)). NIST SP 800-63B-4 sets at most 1 hour of inactivity and 24 hours overall at AAL2, allows reauthentication with a password and the session secret after an inactivity timeout, and sets 15 minutes and 12 hours at AAL3 with full reauthentication.
 - id: BR-H9
-  text: A module can ask for a fresh authentication before a sensitive action, such as signing a note or a prescription; the answer says whether the user authenticated at the required level within the freshness it asked for.
-  rationale: A signature or prescription must be made by the person themselves at that moment, not by whoever finds an open session.
+  text: A module can ask for a fresh authentication before a sensitive action, such as signing a note or a prescription, and say whether every factor of the required level must be presented at that moment. The answer says whether the user authenticated at that level within the freshness asked for; a resumption with a password or PIN alone never counts as presenting every factor.
+  rationale: A signature or prescription must be made by the person themselves at that moment, not by whoever finds an open session; some signatures, such as controlled substance prescriptions in the United States, legally need the full two-factor protocol at signing (21 CFR 1311.140).
 - id: BR-H10
-  text: In the United States, a practitioner can sign controlled substance prescriptions only with a two-factor credential issued after identity proofing by an approved credential service provider, after one designated person confirms with the Practitioners module that their DEA registration and state authorization are current, and after two designated people, one a registrant using their own two-factor credential, have granted that access.
-  rationale: DEA requires identity-proofed two-factor credentials, a check that registration and state authorization are current, and logical access set by two designated individuals (21 CFR 1311.105, 1311.125(a) to (c)).
+  text: In the United States, a practitioner can sign controlled substance prescriptions only with a two-factor credential issued after identity proofing by an approved credential service provider, after one designated person confirms with the Practitioners module that their DEA registration and state authorization are current, and after two designated people, one a registrant using their own two-factor credential, have granted that access. Each signing completes the two-factor protocol at that moment, as the prescribing module asks (BR-H9).
+  rationale: DEA requires identity-proofed two-factor credentials, a check that registration and state authorization are current, logical access set by two designated individuals, and the two-factor protocol at each signing (21 CFR 1311.105, 1311.125(a) to (c), 1311.140).
   jurisdiction: us
 - id: BR-H11
-  text: In an emergency, a user with a clinical role can break the glass to reach a patient's information they wouldn't otherwise see, giving a reason. The access lasts break_glass_duration, is logged, emits identity.break_glass_used, and is reviewed by the privacy officer within break_glass_review_deadline.
+  text: In an emergency, a user with a clinical role can break the glass to reach a patient's information they wouldn't otherwise see, giving a reason. The access lasts break_glass_duration, is logged, emits identity.break_glass_used, and is reviewed by the privacy officer within break_glass_review_deadline. Breaking the glass gives a permission the user lacks; a module's own checks, such as the reason the Patients module asks for before opening a restricted record, still apply.
   rationale: HIPAA requires a procedure for obtaining necessary information in an emergency (45 CFR 164.312(a)(2)(ii)); review afterwards stops it becoming a back door.
 - id: BR-H12
   text: A patient or representative account is issued only after identity proofing at patient_identity_assurance and a match to the patient record the Patients module confirms. A representative gets their own account with the scope the Patients module records, which follows changes such as a minor reaching the age of majority.
@@ -256,18 +256,27 @@ businessRules:
   rationale: SMART App Launch 2.0.0 requires discovery, and certified health IT must receive and validate tokens it issued (45 CFR 170.315(g)(10)(vii), 170.215(c)).
   jurisdiction: us
 - id: BR-H22
-  text: 'In the United States, a practitioner''s controlled substance prescribing access is revoked on the date any of these is discovered: an authenticator in their two-factor credential is lost, stolen or compromised (immediately on their report); their DEA registration expires unrenewed, or is terminated, revoked or suspended; or they may no longer use the application, such as on leaving. A revocation an administrator enters is confirmed by a second designated registrant with their two-factor credential.'
+  text: 'In the United States, a practitioner''s controlled substance prescribing access is revoked on the date any of these is discovered: an authenticator in their two-factor credential is lost, stolen or compromised (immediately when they report it, such as by removing it); their DEA registration expires unrenewed, or is terminated, revoked or suspended; or they may no longer use the application, such as on leaving. A revocation an administrator enters is confirmed by a second designated registrant with their two-factor credential.'
   rationale: DEA lists these revocation triggers and requires the second designated individual for revocations as for grants (21 CFR 1311.125(c) and (d)).
   jurisdiction: us
 - id: BR-H23
-  text: Staff and system accounts with no sign-in for dormant_account_period are disabled. Patient and representative accounts aren't, because patients sign in rarely.
+  text: Active staff and system accounts with no sign-in or token request for dormant_account_period are disabled. Suspended accounts, such as during planned leave, aren't, and neither are patient and representative accounts, because patients sign in rarely.
   rationale: Unused accounts are a common way in for attackers and nobody notices their misuse; NIST SP 800-53 Rev. 5 (account management, control enhancement 3) disables accounts inactive for a set period, and HIPAA requires access management (45 CFR 164.308(a)(4)).
 - id: BR-H24
   text: An administrator can suspend and reinstate an account, giving a reason. A disabled staff account is re-enabled, not recreated, when its person returns, and comes back with no roles, so every role is authorized again (BR-H2, BR-H3).
   rationale: Re-enabling keeps one account per person and their history in one place (BR-H1), while clearing roles stops a returning worker getting their old access by default.
+- id: BR-H25
+  text: An administrator can change an account's username, or relink a patient or representative account to another patient record, only after the Patients module confirms the person matches that record, giving a reason. It is how accounts listed for review after an unmerge or an entered-in-error record are put right.
+  rationale: An account pointing at the wrong record shows someone else's data, so a relink needs the same match as enrolment (BR-H12); the reason keeps the change accountable.
+- id: BR-H26
+  text: A person can enrol in the portal, and recover an account, without signing in. Neither response says whether a matching record or account exists, and both are throttled.
+  rationale: Saying "no such patient" or "no such account" lets anyone test who is a patient here, which itself discloses health information; throttling stops guessing at scale (NIST SP 800-63B-4 rate limiting).
 validations:
 - field: account.subject
-  rule: An existing practitioner, staff record, patient or representative relationship, or a registered system, with no other active account of the same kind
+  rule: An existing practitioner, staff record, patient, representative relationship or registered system
+  error: IDENTITY_INVALID_SUBJECT
+- field: account.subject
+  rule: No other active account of the same kind for that subject
   error: IDENTITY_DUPLICATE
 - field: account.username
   rule: Unique, never used before
@@ -307,7 +316,7 @@ stateMachine:
     trigger: unlocked after verification
   - from: active
     to: suspended
-    trigger: practitioner suspended or an administrator suspends it (BR-H4, BR-H24)
+    trigger: an administrator suspends it (BR-H24)
   - from: suspended
     to: active
     trigger: reinstated (BR-H24)
@@ -339,8 +348,8 @@ workflows:
   trigger: A patient asks for portal access
   actor: Patient
   steps:
-  - Prove identity remotely or in person at patient_identity_assurance
-  - The Patients module confirms the matching record
+  - Start enrolment, proving identity remotely or in person at patient_identity_assurance
+  - The Patients module confirms the matching record; otherwise the person is told to contact the organization, without saying why
   - Register authenticators
   outcome: The patient reaches their own record, and only theirs.
 - name: Break the glass
@@ -442,6 +451,18 @@ edgeCases:
   covers:
   - BR-H23
   - AC-H28
+- id: EC-H13
+  situation: A nurse goes on six months of parental leave.
+  behaviour: An administrator suspends the account, so it isn't disabled as dormant, and reinstates it when they return with their roles intact.
+  covers:
+  - BR-H23
+  - BR-H24
+- id: EC-H14
+  situation: Someone enters a neighbour's details on the enrolment page to find out if they are a patient.
+  behaviour: The answer is the same either way, and repeated tries are throttled.
+  covers:
+  - BR-H26
+  - AC-H32
 functionalRequirements:
 - id: FR-H1
   text: The service must create, disable and lock accounts, one per person or system.
@@ -485,6 +506,14 @@ functionalRequirements:
   priority: must
   verification: test
   jurisdiction: us
+- id: FR-H11
+  text: The service must let people enrol and recover accounts without signing in, without revealing whether a record or account exists.
+  priority: must
+  verification: test
+- id: FR-H12
+  text: The service must let administrators change usernames and relink patient accounts after a confirmed match.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Authenticators are verified with phishing-resistant protocols where the authenticator supports them, and secrets never leave the service.
@@ -508,10 +537,10 @@ settings:
   description: The authentication assurance each role and account kind needs. Default AAL2 for every account that reaches patient data, and AAL3 for administrators.
 - name: session_inactivity_timeout
   type: duration
-  description: Inactivity before a session ends. Default 30 minutes; NIST SP 800-63B-4 recommends no more than 1 hour at AAL2.
+  description: 'Inactivity before a session pauses, per AAL. Default 30 minutes at AAL2 (NIST SP 800-63B-4: no more than 1 hour) and 15 minutes at AAL3 (no more than 15 minutes).'
 - name: session_max_duration
   type: duration
-  description: How long before a fresh authentication is needed. Default 12 hours; NIST recommends no more than 24 hours at AAL2.
+  description: 'How long before a full authentication is needed, per AAL. Default 12 hours at AAL2 (NIST: no more than 24 hours) and 12 hours at AAL3 (no more than 12 hours).'
 - name: patient_identity_assurance
   type: code
   description: How strongly patients and representatives are proven before getting an account. Default IAL2 in the United States; in the EU, the eIDAS level the member state requires.
@@ -564,7 +593,7 @@ acceptanceCriteria:
 - id: AC-H2
   given: a person with no practitioner or staff record
   when: a staff account is created for them, then for a credentialed practitioner with the role nurse
-  then: the first fails with IDENTITY_DUPLICATE and HTTP 409 because the subject isn't valid; the second is created and identity.account_created is emitted
+  then: the first fails with IDENTITY_INVALID_SUBJECT and HTTP 422; the second is created and identity.account_created is emitted
   verifies:
   - BR-H2
 - id: AC-H3
@@ -601,23 +630,23 @@ acceptanceCriteria:
   verifies:
   - BR-H7
 - id: AC-H8
-  given: session_inactivity_timeout of 30 minutes
-  when: a session is idle for 31 minutes
-  then: it ends with reason inactive and the next request fails with IDENTITY_INVALID_CREDENTIAL and HTTP 401
+  given: session_inactivity_timeout of 30 minutes and session_max_duration of 12 hours at AAL2
+  when: a session is idle for 31 minutes, and another reaches 12 hours
+  then: the first pauses and its next request fails with IDENTITY_AAL_TOO_LOW and HTTP 401 until it is resumed; the second ends with reason expired and its next request fails with IDENTITY_INVALID_CREDENTIAL and HTTP 401
   verifies:
   - BR-H8
   - FR-H2
 - id: AC-H9
   given: a clinician who authenticated 2 hours ago
-  when: Clinical documentation checks the permission note.write with a freshness of 5 minutes
-  then: the answer says the authentication isn't fresh enough; after a step-up it is allowed
+  when: Clinical documentation checks the permission note.write with a freshness of 5 minutes, and a prescribing module asks for every factor at that moment from a user who just resumed with a PIN
+  then: the first answer says the authentication isn't fresh enough, and after a step-up it is allowed; the second says every factor is needed, and is allowed only after the user presents both
   verifies:
   - BR-H9
   - FR-H3
 - id: AC-H10
   given: a practitioner with a proofed two-factor credential and one designated approver
-  when: controlled substance prescribing is granted, then with a second approver who is a registrant
-  then: the first fails with IDENTITY_EPCS_REQUIREMENTS_UNMET and HTTP 409; the second succeeds
+  when: controlled substance prescribing is granted, then with a second approver who is a registrant, and for another practitioner whose DEA registration the Practitioners module reports expired
+  then: the first fails with IDENTITY_EPCS_REQUIREMENTS_UNMET and HTTP 409; the second succeeds; the third fails with IDENTITY_EPCS_REQUIREMENTS_UNMET and HTTP 409
   verifies:
   - BR-H10
   jurisdiction: us
@@ -760,6 +789,36 @@ acceptanceCriteria:
   then: both are refused at once, and in any case within 1 hour
   verifies:
   - BR-H15
+- id: AC-H32
+  given: a person whose details match a patient record, and one whose details match none
+  when: each enrols with an IAL2 proofing result, and a third enrols with an IAL1 result
+  then: the first gets a pending account; the second fails with IDENTITY_NOT_MATCHED and HTTP 422 in a message that doesn't say whether a record exists; the third fails with IDENTITY_AAL_TOO_LOW and HTTP 401
+  verifies:
+  - BR-H26
+  - BR-H12
+  - FR-H11
+- id: AC-H33
+  given: a portal account listed for review after an unmerge
+  when: an administrator relinks it to a record the Patients module confirms, then tries another record it doesn't confirm, then changes a username to one used before
+  then: the first succeeds with the reason recorded; the second fails with IDENTITY_NOT_MATCHED and HTTP 422; the third with IDENTITY_DUPLICATE and HTTP 409
+  verifies:
+  - BR-H25
+  - FR-H12
+- id: AC-H34
+  given: a username that exists and one that doesn't
+  when: recovery is started for each
+  then: both get the same 202 answer; only the real holder is contacted, through a channel on file
+  verifies:
+  - BR-H26
+  - BR-H19
+  - FR-H11
+- id: AC-H35
+  given: an AAL2 session idle past session_inactivity_timeout but within session_max_duration, and an AAL3 administrator session idle for 16 minutes
+  when: the first user enters their PIN, and the administrator enters a password
+  then: the first session resumes at AAL2; the administrator must authenticate in full with their phishing-resistant authenticator
+  verifies:
+  - BR-H8
+  - BR-H5
 operations:
 - name: Create an account
   actor: Account administrator
@@ -771,9 +830,28 @@ operations:
   output: the account, pending
   errors:
   - IDENTITY_DUPLICATE
+  - IDENTITY_INVALID_SUBJECT
   - IDENTITY_INVALID_ROLE
   - IDENTITY_READ_ONLY_FIELD
   - IDENTITY_IDEMPOTENCY_KEY_REUSED
+  - IDENTITY_FORBIDDEN
+  - IDENTITY_DEPENDENCY_UNAVAILABLE
+- name: Change an account
+  actor: Account administrator
+  description: Change the username, or relink a patient or representative account to the record the Patients module confirms.
+  method: PATCH
+  path: /accounts/{id}
+  success: 200
+  input: username or the patient record, reason and revision
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_DUPLICATE
+  - IDENTITY_INVALID_SUBJECT
+  - IDENTITY_NOT_MATCHED
+  - IDENTITY_READ_ONLY_FIELD
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_REVISION_CONFLICT
   - IDENTITY_FORBIDDEN
   - IDENTITY_DEPENDENCY_UNAVAILABLE
 - name: Get an account
@@ -808,6 +886,30 @@ operations:
   errors:
   - IDENTITY_NOT_FOUND
   - IDENTITY_FORBIDDEN
+- name: Enrol in the portal
+  actor: Patient
+  description: 'Start a patient or representative account: prove identity at patient_identity_assurance and ask the Patients module to confirm the record. Needs no sign-in, and accepts a retry key.'
+  method: POST
+  path: /enrolments
+  success: 201
+  input: name, date of birth, contact details, identity proofing result, and for a representative the patient they act for
+  output: a pending account, or the same neutral answer whether or not a record matched
+  errors:
+  - IDENTITY_NOT_MATCHED
+  - IDENTITY_AAL_TOO_LOW
+  - IDENTITY_IDEMPOTENCY_KEY_REUSED
+  - IDENTITY_DEPENDENCY_UNAVAILABLE
+- name: Recover an account
+  actor: Staff member
+  description: Start recovering an account whose authenticators are lost, with identity proven at the level the account was created with. Needs no sign-in.
+  method: POST
+  path: /recoveries
+  success: 202
+  input: username or contact details, and the identity proofing result
+  output: the same answer whether or not the account exists; the holder is told through a channel on file
+  errors:
+  - IDENTITY_AAL_TOO_LOW
+  - IDENTITY_DEPENDENCY_UNAVAILABLE
 - name: Register an authenticator
   actor: Staff member
   description: Add a password, one-time-password app, security key, passkey or smart card.
@@ -1235,7 +1337,7 @@ permissions:
 - name: identity.check
   description: Ask whether a caller holds a permission.
 accessMatrix:
-- action: Create, search, suspend, reinstate, re-enable, disable and unlock accounts, assign and define roles, run access reviews, grant and revoke controlled substance prescribing
+- action: Create, change, search, suspend, reinstate, re-enable, disable and unlock accounts, assign and define roles, run access reviews, grant and revoke controlled substance prescribing
   roles:
     Account administrator: any
     Staff member: none
@@ -1253,6 +1355,16 @@ accessMatrix:
     App: none
     System: none
   permission: identity.self
+- action: Enrol in the portal, recover an account
+  roles:
+    Account administrator: own
+    Staff member: own
+    Patient: own
+    Privacy officer: own
+    App: none
+    System: none
+  permission: none
+  note: Needs no sign-in; "own" means the person enrolling or recovering.
 - action: Break the glass
   roles:
     Account administrator: none
@@ -1355,6 +1467,9 @@ errors:
 - code: IDENTITY_DUPLICATE
   http: 409
   message: That person or system already has an active account of this kind, or the username was used before.
+- code: IDENTITY_INVALID_SUBJECT
+  http: 422
+  message: The account's subject isn't a practitioner, staff record, patient, representative relationship or registered system this organization holds.
 - code: IDENTITY_INVALID_CREDENTIAL
   http: 401
   message: The sign-in or token couldn't be verified.
@@ -1363,7 +1478,7 @@ errors:
   message: The account is locked; an administrator must verify you to unlock it.
 - code: IDENTITY_AAL_TOO_LOW
   http: 401
-  message: This needs a stronger or fresher authentication; step up and try again.
+  message: This needs a stronger or fresher authentication, or stronger identity proofing; step up and try again.
 - code: IDENTITY_WEAK_PASSWORD
   http: 422
   message: The password is too short or on the list of common and compromised passwords.
@@ -1381,7 +1496,7 @@ errors:
   message: No grant exists with that id.
 - code: IDENTITY_EPCS_REQUIREMENTS_UNMET
   http: 409
-  message: Controlled substance prescribing needs a proofed two-factor credential and two designated approvers.
+  message: Controlled substance prescribing needs a proofed two-factor credential, a current DEA registration and state authorization, and two designated people, one a registrant.
 - code: IDENTITY_INVALID_STATUS
   http: 409
   message: The account isn't in a status that allows this.
@@ -1400,6 +1515,9 @@ errors:
 - code: IDENTITY_DEPENDENCY_UNAVAILABLE
   http: 503
   message: Practitioners, Patients or an identity provider can't be reached. Try again.
+- code: IDENTITY_NOT_MATCHED
+  http: 422
+  message: We couldn't confirm your record. Contact the organization to finish enrolment.
 dependencies:
 - service: practitioner-service
   direction: upstream
@@ -1416,7 +1534,7 @@ dependencies:
   reason: owns patients and their representatives
   criticality: hard
   contract:
-  - 'Asks: does this enrolment match a patient record in use?'
+  - 'Asks: does this enrolment or relink match a patient record in use?'
   - 'Asks: who represents this patient, with what scope?'
   - 'Receives: patient.merged, patient.unmerged, patient.deceased and patient.representative_changed'
   - 'Receives: patient.death_retracted and patient.entered_in_error'
@@ -1533,6 +1651,18 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-164.502
   note: (g)(4), executors of a deceased individual as personal representatives.
 changelog:
+- version: 0.3.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - 'Breaking: an invalid subject fails with the new IDENTITY_INVALID_SUBJECT (422), not IDENTITY_DUPLICATE.'
+  - Account administrators need AAL3 (BR-H5); session limits are set per AAL, and an AAL2 session can be resumed with a password or PIN after inactivity (BR-H8, NIST SP 800-63B-4).
+  - A module can require every factor at the moment of signing; US controlled substance signing does (BR-H9, BR-H10, 21 CFR 1311.140).
+  - A practitioner's suspension suspends roles, not the account; the state machine said otherwise.
+  - Dormancy skips suspended accounts (BR-H23).
+  - 'New operations: enrol in the portal, recover an account, and change an account, with BR-H25, BR-H26 and IDENTITY_NOT_MATCHED.'
+  - A session pauses after inactivity and ends after session_max_duration; a paused session fails with IDENTITY_AAL_TOO_LOW until resumed (BR-H8).
+  - 'BR-H11: breaking the glass adds a permission; other modules'' reason prompts still apply.'
 - version: 0.2.0
   date: '2026-10-09'
   breaking: false
