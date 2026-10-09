@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.2.2
+version: 0.3.0
 status: draft
 industry: healthcare
 variants:
@@ -24,7 +24,7 @@ scope:
 - A department's and a practitioner's open and incomplete encounters
 - Links to episodes of care
 - Patients' own access to their encounters, and their correction requests
-- Restricting disclosure to a health plan for care paid in full
+- Marking encounters covered by a self-pay restriction the Consent module agreed
 - Moving an encounter recorded on the wrong patient, and merging duplicates
 nonGoals:
 - Booking. The Appointments module schedules visits; an encounter records what actually happened.
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.3.0
+  date: '2026-10-10'
+  breaking: true
+  changes:
+  - 'Breaking: the self-pay health plan restriction is owned by the Consent module; POST /encounters/{id}/health-plan-restriction is removed, and health_plan_restriction is set only from consent.restriction_decided (BR-H41).'
 - version: 0.2.2
   date: '2026-10-09'
   breaking: false
@@ -355,8 +360,8 @@ dataModel:
 - name: health_plan_restriction
   type: boolean
   required: false
-  description: Set when the patient paid in full for this encounter's services and asked that it not be disclosed to their health plan.
-  constraints: set by the service through its operation
+  description: Set while a self-pay restriction the Consent module agreed covers this encounter's services (BR-H41).
+  constraints: set by the service from consent.restriction_decided only
 - name: access_denial
   type: access denial
   required: false
@@ -504,8 +509,8 @@ businessRules:
   text: A patient, or their representative, can ask for an encounter to be corrected. An HIM specialist decides within the Patients module's correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made as an amendment linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which goes with later disclosures.
   rationale: HIPAA requires a decision within 60 days, with one 30-day extension, a written denial and a right to disagree (45 CFR 164.526). GDPR gives rights to rectification and to restriction while accuracy is checked (Articles 16 and 18).
 - id: BR-H41
-  text: When the patient, or someone other than the health plan, has paid in full for the encounter's services and asks that they not be disclosed to the health plan, health_plan_restriction is set. Billing must not disclose the encounter to that plan for payment or operations unless the law requires it. The restriction is never refused.
-  rationale: HIPAA requires a covered entity to agree to this restriction when the care was paid in full out of pocket and the disclosure is for payment or operations and not otherwise required by law (45 CFR 164.522(a)(1)(vi)).
+  text: When the Consent module reports a self-pay restriction it agreed that covers an encounter's services (consent.restriction_decided), health_plan_restriction is set on that encounter, and it is cleared only when the Consent module reports the restriction ended. It is never set here directly. Billing must not disclose a restricted encounter to that health plan for payment or operations unless the law requires it.
+  rationale: HIPAA requires a covered entity to agree to this restriction when the care was paid in full and the disclosure is for payment or operations and not otherwise required by law (45 CFR 164.522(a)(1)(vi)); the Consent module owns the restriction, so the encounter only reflects it and the two can't disagree.
 - id: BR-H42
   text: When a patient who requests a correction asks for the data to be restricted meanwhile, accuracy_contested is set. Everyone reading the encounter sees the contested part marked, and it is cleared when the request is decided.
   rationale: GDPR gives a right to restriction while the accuracy of personal data is checked (Article 18(1)(a)). Marking it, rather than hiding it, keeps the data available for care while warning everyone it is disputed.
@@ -1195,8 +1200,8 @@ acceptanceCriteria:
   verifies:
   - BR-H40
 - id: AC-H55
-  given: a patient who paid in full for a visit
-  when: they ask that it not go to their health plan
+  given: a patient who paid in full for a visit, and the Consent module agreeing their self-pay restriction for it
+  when: consent.restriction_decided arrives naming the encounter
   then: health_plan_restriction is set, encounter.restriction_changed is emitted, and Billing does not send the encounter to that plan
   verifies:
   - BR-H41
@@ -1634,18 +1639,6 @@ operations:
   - ENCOUNTER_CORRECTION_CLOSED
   - ENCOUNTER_EXTENSION_USED
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
-- name: Restrict disclosure to the health plan
-  actor: Registrar
-  description: Record that care was paid in full and the patient asked that it not be disclosed to their health plan.
-  method: POST
-  path: /encounters/{id}/health-plan-restriction
-  success: 200
-  input: encounter id, revision, who paid, confirmation of payment in full
-  output: the encounter
-  errors:
-  - ENCOUNTER_NOT_FOUND
-  - ENCOUNTER_REVISION_CONFLICT
-  - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Withhold part of an encounter
   actor: Clinician
   description: Record a licensed professional's decision that access to part of the encounter is reasonably likely to endanger life or physical safety.
@@ -1937,16 +1930,6 @@ accessMatrix:
     System: none
     Patient: none
   permission: encounter.complete
-- action: Restrict disclosure to the health plan
-  roles:
-    Clinician: none
-    Registrar: any
-    Health information management (HIM) specialist: any
-    Privacy officer: none
-    System: none
-    Patient: none
-  permission: encounter.write
-  note: Recorded at the patient's request.
 - action: Withhold part of an encounter
   roles:
     Clinician: own
@@ -2177,7 +2160,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: the sensitivity codes of each encounter'
-  - 'Gives: encounter.restriction_changed, so other disclosures honour it'
+  - 'Receives: consent.restriction_decided, for self-pay restrictions covering an encounter''s services'
   - Disclosure decisions, including under 42 CFR Part 2, are Consent's concern
 - service: identity-service
   direction: upstream

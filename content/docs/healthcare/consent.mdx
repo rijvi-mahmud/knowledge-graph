@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.2.0
+version: 0.2.2
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -250,7 +250,7 @@ businessRules:
   text: A consent with an expiration date becomes inactive at the end of that date where the patient was, and consent.expired is emitted; one ending on an event becomes inactive when staff record the event.
   rationale: An expired authorization is invalid (45 CFR 164.508(b)(2)(i); 42 CFR 2.31(c)(1)); end dates are inclusive, as FHIR periods are.
 - id: BR-H13
-  text: In the United States, a patient can ask to restrict uses or disclosures for treatment, payment or operations, or disclosures to family and friends. A privacy officer agrees or declines, except that a request not to tell a health plan about a service the patient paid for in full, for payment or operations and where no law requires it, must be agreed. An agreed restriction binds every disclosure check, except emergency treatment and disclosures the law requires or permits without the patient's agreement.
+  text: In the United States, a patient can ask to restrict uses or disclosures for treatment, payment or operations, or disclosures to family and friends. The request names the services or encounters it covers. A privacy officer agrees or declines, except that a request not to tell a health plan about a service the patient paid for in full, for payment or operations and where no law requires it, must be agreed. An agreed restriction binds every disclosure check, except emergency treatment and disclosures the law requires or permits without the patient's agreement.
   rationale: Patients may request restrictions, the self-pay restriction must be agreed, and restrictions don't block required or public-interest disclosures (45 CFR 164.522(a)(1)).
   jurisdiction: us
 - id: BR-H14
@@ -293,10 +293,10 @@ businessRules:
   text: A disclosure check names the patient, the data (its sensitivity codes, categories or records), the purpose, the requester and the recipient, and gets permit or deny with its basis (the consents or the law relied on) and obligations, such as a notice to attach or a limit on redisclosure. A deny that applies wins over a permit, except where law requires the disclosure. A use the law allows without consent, such as treatment within the organization, is permitted with basis law, unless a narrower rule applies to that data. Every check and its answer is logged.
   rationale: Modules need one consistent answer instead of reading forms; the log shows what each disclosure relied on, for audits and the accounting of disclosures.
 - id: BR-H24
-  text: 'Restricted data can be used or disclosed in an emergency: under an agreed restriction for emergency treatment, with a request that the receiving provider not redisclose it; for Part 2 records to medical personnel in a bona fide emergency, documented at once with the personnel and their facility, who disclosed, when and the nature of the emergency; and in the EU to protect vital interests, logged for the patient. Each is recorded as an emergency use and reviewed by a privacy officer.'
+  text: 'Restricted data can be used or disclosed in an emergency: under an agreed restriction for emergency treatment, with a request that the receiving provider not redisclose it; for Part 2 records to medical personnel in a bona fide emergency, documented at once with the personnel and their facility, who disclosed, when and the nature of the emergency; and in the EU to protect vital interests, logged for the patient. Each is recorded as an emergency use and reviewed by a privacy officer. While break-the-glass access that the Identity and access module reported is active for a patient, a disclosure check from that user with purpose ETREAT is answered permit for restricted data, and the emergency use is recorded automatically.'
   rationale: HIPAA, Part 2 and the EHDS each allow emergency use under these conditions (45 CFR 164.522(a)(1)(iii) and (iv); 42 CFR 2.51; EHDS Article 11(5)).
 - id: BR-H25
-  text: Informed consent to a treatment or procedure records the procedure, the practitioner who obtained it, that risks, benefits and alternatives were discussed in a language the patient understands, and the signature where consent_required_procedures requires one. The patient can withdraw it until the procedure starts. In an emergency without consent, the clinician records why.
+  text: Informed consent to a treatment or procedure records the procedure, the practitioner who obtained it, that risks, benefits and alternatives were discussed in a language the patient understands, and the signature where consent_required_procedures requires one. The patient can withdraw it until the procedure starts, or refuse it; a refusal is recorded with the risks of refusing that were explained, and consent.refused or consent.revoked tells the modules planning the procedure. In an emergency without consent, the clinician records why.
   rationale: Patients have the right to make informed decisions, including to refuse treatment (42 CFR 482.13(b)(2)); consent obtained in a language the patient doesn't understand isn't informed, and US providers must offer language assistance (45 CFR 92.201); which procedures need written consent is set by law and by the organization.
 - id: BR-H26
   text: Whether an adult patient has executed an advance directive is recorded, with its kind and document, at the moment advance_directive_information_at sets for the organization, after giving written information on their rights. Care is never conditioned on whether they have one, and the orders a directive leads to are the Orders module's.
@@ -909,6 +909,18 @@ acceptanceCriteria:
   - BR-H3
   - BR-H6
   jurisdiction: us
+- id: AC-H40
+  given: a nurse who broke the glass for an unconscious patient with an agreed restriction on their records
+  when: a check with purpose ETREAT is made while the access lasts, and another after it ends
+  then: the first is permit and an emergency use is recorded with consent.emergency_use_recorded; the second follows the restriction
+  verifies:
+  - BR-H24
+- id: AC-H41
+  given: a patient offered a blood transfusion
+  when: they refuse after the risks are explained
+  then: the consent is not-done with the risks recorded, and consent.refused is emitted
+  verifies:
+  - BR-H25
 operations:
 - name: Record a consent
   actor: Registrar
@@ -1202,6 +1214,7 @@ events:
   - consent_id
   - patient_id
   - decision
+  - encounter_ids
   - self_pay
   - revision
   jurisdiction: us
@@ -1410,7 +1423,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Asks: the sensitivity codes of an encounter'
-  - 'Receives: encounter.restriction_changed'
+  - 'Gives: consent.restriction_decided with the encounters a self-pay restriction covers, so Encounters marks them'
 - service: clinical-documentation-service
   direction: upstream
   reason: labels notes
@@ -1564,6 +1577,17 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-92.201
   note: Language assistance for informed consent.
 changelog:
+- version: 0.2.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H24: break-the-glass access reported by Identity permits emergency treatment checks and records the emergency use automatically.'
+  - 'BR-H25: informed refusal is recorded with the risks explained.'
+- version: 0.2.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - consent.restriction_decided names the encounters a restriction covers, and the Encounters module takes its health plan restriction from it, so the restriction has one owner (BR-H13).
 - version: 0.2.0
   date: '2026-10-10'
   breaking: false

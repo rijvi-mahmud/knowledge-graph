@@ -2,7 +2,7 @@
 title: Consent
 description: 'Hospital consent rules: informed consent in the chart before surgery, procedures the medical staff require written consent for, and advance directives at inpatient admission, built on the healthcare consent rules.'
 module: consent
-version: 0.1.0
+version: 0.1.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -71,6 +71,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Answers: is a properly executed informed consent for this operation, on this patient, on file?'
+  - 'Gives: consent.revoked and consent.refused, so an operation whose consent was withdrawn or refused doesn''t start'
 decisions:
 - id: ADR-E1
   decision: The theatre asks whether consent is on file; this module doesn't schedule or stop operations.
@@ -86,6 +87,11 @@ references:
   url: https://www.ecfr.gov/current/title-42/section-482.24
   note: (c)(4)(v), properly executed informed consent forms.
 changelog:
+- version: 0.1.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - The theatre is told when a consent is revoked or refused.
 - version: 0.1.0
   date: '2026-10-10'
   breaking: false
