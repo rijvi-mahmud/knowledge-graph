@@ -152,9 +152,10 @@ Core
  └─ Appointment (complete, the reference example)
 Industries
  └─ Healthcare
-     ├─ industry base         rules every healthcare app shares (privacy of health data, ...)
+     ├─ industry base         rules every healthcare app shares (privacy of health data, ...),
+     │                        and shared modules: Patients, Appointments, Terminology
      └─ domains
-         └─ EHR               Patients · Appointments · Encounters · ADT · Clinical documentation
+         └─ EHR               Patients · Appointments · Encounters · ADT · Clinical documentation · Terminology
                               · Orders and results · Medications and allergies
 ```
 
@@ -177,8 +178,15 @@ Rules:
   transfer live only in their domain. Do not invent a fake core for them.
 - **A module can start at the industry level** when there is no neutral
   concept worth sharing yet. The user chose this for Patients
-  (`healthcare/patient`, no core page). Add a core page only when a second
-  industry needs the concept.
+  (`healthcare/patient`, no core page) and for Terminology
+  (`healthcare/terminology`, with an EHR page that adds nothing). Add a core
+  page only when a second industry needs the concept.
+- **Concepts every health application shares start at the healthcare level**,
+  even with one domain, so other health tech domains can reuse them. The user
+  asked for this on 2026-10-09: Terminology moved up, and Encounters and
+  Clinical documentation are to be split into a healthcare layer plus an EHR
+  layer holding the hospital-only rules (inpatient stays, US hospital
+  conditions of participation). ADT stays EHR-only. Ask before doing the split.
 - **Cap at three levels.** Needing a fourth usually means a concept deserves its
   own module.
 - **"Reviewed, nothing to add" gets a page.** Where a domain needs nothing extra
@@ -723,7 +731,7 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Clinical documentation (`healthcare/ehr/clinical-documentation` 0.3.1, EHR-only; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.0, EHR-only), Encounters (`healthcare/ehr/encounter` 0.12.0, EHR-only), Patients (`healthcare/patient` 0.11.0, which has no core page by the
+  drafts: Terminology (`healthcare/terminology` 0.1.0, healthcare level, and `healthcare/ehr/terminology` 0.1.0, nothing to add), Clinical documentation (`healthcare/ehr/clinical-documentation` 0.3.1, EHR-only; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.0, EHR-only), Encounters (`healthcare/ehr/encounter` 0.12.0, EHR-only), Patients (`healthcare/patient` 0.11.0, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.3.6) and Appointments
   (`healthcare/appointment` 0.10.2, `healthcare/ehr/appointment` 0.10.2; `core/appointment` 0.12.2). All
   support the US and EU through the `jurisdiction` setting. Next: Orders and results.

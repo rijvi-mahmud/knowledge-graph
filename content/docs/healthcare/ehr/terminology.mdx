@@ -1,0 +1,37 @@
+---
+title: Terminology
+description: 'Code systems in a hospital EHR: the healthcare terminology rules, reviewed with nothing to add.'
+module: terminology
+version: 0.1.0
+status: draft
+industry: healthcare
+domain: ehr
+extends: healthcare/terminology
+purpose: 'Use the healthcare terminology rules unchanged in the hospital EHR. Reviewed: a hospital needs no rule beyond them.'
+scope:
+- Everything in the healthcare terminology specification
+nonGoals:
+- Hospital-specific code choices, such as which value set each field uses. Those are settings of the modules that own the fields.
+decisions:
+- id: ADR-E1
+  decision: The EHR adds nothing to the healthcare terminology rules.
+  rationale: Inpatient procedure coding (ICD-10-PCS) and the discharge date for inpatient claims are already covered there, and nothing else about code systems differs in a hospital.
+  date: '2026-10-09'
+changelog:
+- version: 0.1.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Reviewed against the healthcare terminology rules; nothing to add.
+---
+
+Terminology in the EHR is the [healthcare terminology specification](/docs/healthcare/terminology)
+as it stands. This page records that it was reviewed for hospitals and needs
+nothing more.
+
+## A hospital needs nothing more
+
+The rules a hospital might seem to need, such as coding inpatient procedures
+with ICD-10-PCS in the United States or using the discharge date for
+inpatient claims, are already part of the healthcare rules, because any
+healthcare application that bills inpatient stays needs them.

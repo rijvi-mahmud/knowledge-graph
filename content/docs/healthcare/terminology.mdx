@@ -1,0 +1,1793 @@
+---
+title: Terminology
+description: 'The code systems the hospital uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
+module: terminology
+version: 0.1.0
+status: draft
+industry: healthcare
+purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
+scope:
+- A catalogue of the code systems in use, with their identifiers, publishers, licences and editions
+- Loading, checking, activating and withdrawing releases, with the dates each one is in effect
+- Checking a code on a date against the release in effect then, including whether it is valid for reporting
+- Looking up displays in each language, properties, parents and children
+- Inactive and replaced codes, with the replacements their publishers name
+- 'Value sets: the codes a field allows, versioned and bound to the module settings that use them'
+- Maps between code systems, including rule-based maps that need the patient's age or sex, and translation
+- ICD-11 postcoordination clusters
+- Local codes in the hospital's own code systems
+- Dual coding while moving from one classification to another, such as ICD-10 to ICD-11
+- 'Licences: loading and showing licensed content only where the hospital holds the licence'
+- Watching for releases that are due
+nonGoals:
+- 'The content of code systems. Their publishers own it: WHO, CDC and CMS, SNOMED International, Regenstrief, NLM, the AMA and national bodies.'
+- Choosing codes for a claim, payer code edits and grouping. Billing owns coding.
+- Recording diagnoses, results or medications. Each module records its own codes and asks this module whether they are valid.
+- Automatic coding from free text, including by AI.
+- Negotiating licences. The hospital holds them; this module records them.
+- Clinical decision rules built on codes. Clinical decision support owns them.
+actors:
+- name: Terminology manager
+  description: Loads and activates releases, and builds value sets, maps and local codes.
+- name: Clinician
+  description: Searches for codes when recording care, through other modules.
+- name: Coder
+  description: An HIM specialist who codes for reporting and claims, and uses maps and lookups.
+- name: System
+  description: Other modules that validate codes, expand value sets and translate codes.
+assumptions:
+- id: AS-H1
+  text: Publishers distribute releases as files the hospital can download, with dates of effect, and checksums or record counts to check them against.
+  rationale: CDC, CMS, NLM, SNOMED International, Regenstrief and WHO publish release files and notes with each release.
+- id: AS-H2
+  text: Callers send the date a code applies to, and the patient context a rule-based map needs.
+  rationale: Which release applies depends on the date of care, and map rules depend on the patient's age and sex. This module holds no patient data.
+- id: AS-H3
+  text: The hospital holds the licences for the code systems it uses, such as the AMA's for CPT.
+  rationale: Some code systems can't be used without a licence; others are free with attribution.
+glossary:
+- term: Code system
+  definition: A set of codes with meanings, such as ICD-10-CM or LOINC, identified by a URI (FHIR CodeSystem).
+- term: Release
+  definition: One version of a code system, in effect from one date to another.
+- term: Classification
+  definition: A code system that groups conditions into mutually exclusive categories for statistics and payment, such as ICD.
+- term: Value set
+  definition: The codes a field allows, defined by rules over one or more code systems (FHIR ValueSet).
+- term: Map
+  definition: Links from codes in one code system to codes in another, with how closely each matches (FHIR ConceptMap).
+- term: Stem code
+  definition: An ICD-11 code that can be used alone.
+- term: Extension code
+  definition: An ICD-11 code that adds detail, such as laterality or severity, to a stem code and is never used alone.
+- term: Cluster
+  definition: 'ICD-11 codes joined into one: stem codes with a slash (/), extension codes with an ampersand (&).'
+- term: Dual coding
+  definition: Coding the same thing in two classifications or versions, for example during a transition (WHO).
+- term: Header code
+  definition: An ICD-10-CM or ICD-10-PCS code that heads a group and isn't valid for reporting.
+concepts:
+- name: A code means what its release says
+  description: A code is checked against the release in effect on the date it applies to. A record keeps the system, code and release, so it reads the same years later even after the code is inactivated.
+- name: Translation suggests, never replaces
+  description: A map returns candidate codes and how closely they match. The original code always stays in the record.
+dataModel:
+- name: code_system.uri
+  type: uri
+  required: true
+  description: The code system's canonical identifier, such as http://snomed.info/sct or http://hl7.org/fhir/sid/icd-10-cm.
+  constraints: the publisher's or HL7's registered URI; local systems use local_namespace
+- name: code_system.name
+  type: string
+  required: true
+  description: Its name, such as ICD-10-CM.
+- name: code_system.publisher
+  type: string
+  required: true
+  description: Who maintains it, such as CDC NCHS or SNOMED International.
+- name: code_system.kind
+  type: enum
+  required: true
+  description: What sort of code system it is.
+  constraints: 'classification | terminology | units | code_set | local; codes: none standard, local to this specification'
+- name: code_system.edition
+  type: string
+  required: false
+  description: The edition used, where a code system has several, such as SNOMED CT US Edition or a national edition, or ICD-10-GM.
+  constraints: one per code system in use
+- name: code_system.case_sensitive
+  type: boolean
+  required: true
+  description: Whether codes differ by case, as UCUM codes do.
+- name: code_system.check_digit
+  type: enum
+  required: true
+  description: The check digit scheme its codes use.
+  constraints: 'none | mod10 | verhoeff; codes: none standard; LOINC uses mod 10, SNOMED CT uses Verhoeff'
+- name: code_system.licence
+  type: licence
+  required: true
+  description: The licence its content needs, whether the hospital holds it, and the attribution it requires.
+  constraints: licence_held must be true before a release is activated, unless the licence is free
+- name: release.id
+  type: string
+  required: true
+  description: The release id.
+  constraints: set by the service
+- name: release.code_system
+  type: uri
+  required: true
+  description: The code system.
+- name: release.version
+  type: string
+  required: true
+  description: The publisher's version, such as FY2026 April for ICD-10-CM, 2.81 for LOINC, or a SNOMED CT edition date.
+  constraints: unique per code system
+- name: release.effective_from
+  type: date
+  required: true
+  description: The first date of care the release applies to, as the publisher states.
+- name: release.effective_to
+  type: date
+  required: false
+  description: The last date it applies to; set when a later release takes over.
+  constraints: set by the service
+- name: release.status
+  type: enum
+  required: true
+  description: Where the release is in its lifecycle.
+  constraints: 'staged | verified | active | retired | withdrawn; codes: none standard, local to this specification'
+- name: release.source
+  type: string
+  required: true
+  description: Where the files came from, and their checksum.
+- name: release.changes
+  type: change summary
+  required: false
+  description: 'What changed from the previous release: codes added, inactivated, and displays changed.'
+  constraints: set by the service when verified
+- name: release.loaded_by
+  type: string
+  required: true
+  description: The Terminology manager who loaded it, and who activated it.
+- name: concept.code
+  type: string
+  required: true
+  description: The code, exactly as the code system writes it.
+  constraints: unique in its code system; compared by case only where the code system is case-sensitive
+- name: concept.display
+  type: string
+  required: true
+  description: The publisher's display in the release.
+- name: concept.designations
+  type: designation[]
+  required: false
+  description: Other displays, by language and use, such as synonyms and translations.
+- name: concept.status
+  type: enum
+  required: true
+  description: Active or inactive in a release.
+  constraints: 'active | inactive; codes: FHIR concept-properties status'
+- name: concept.valid_for_reporting
+  type: boolean
+  required: false
+  description: Whether the code can be reported, rather than only heading a group.
+  constraints: from the release; for ICD-10-CM and ICD-10-PCS the order file's header flag
+- name: concept.parents
+  type: string[]
+  required: false
+  description: Codes directly above it, for subsumption.
+- name: concept.replaced_by
+  type: association[]
+  required: false
+  description: For an inactive code, the codes its publisher names instead and how they relate.
+  constraints: 'codes: SNOMED CT historical associations such as REPLACED BY, SAME AS, POSSIBLY EQUIVALENT TO, ALTERNATIVE; LOINC MAP_TO'
+- name: concept.releases
+  type: string[]
+  required: true
+  description: The releases the concept appears in, and whether it is active in each.
+  constraints: set by the service
+- name: value_set.url
+  type: uri
+  required: true
+  description: The value set's identifier.
+- name: value_set.version
+  type: string
+  required: true
+  description: Its version. A new version is made for every change.
+- name: value_set.name
+  type: string
+  required: true
+  description: A short name, such as encounter types.
+- name: value_set.used_by
+  type: string[]
+  required: false
+  description: The module settings bound to it, such as Encounters' encounter_type_codes.
+- name: value_set.rules
+  type: rule[]
+  required: true
+  description: 'Which codes it includes and excludes: whole code systems, codes under a parent, codes with a property, or listed codes.'
+  constraints: each names a code system and either a release or the release in effect
+- name: value_set.binding
+  type: enum
+  required: true
+  description: How strictly a field must use it.
+  constraints: 'required | extensible; codes: FHIR binding-strength required, extensible'
+- name: value_set.status
+  type: enum
+  required: true
+  description: Where it is in its lifecycle.
+  constraints: 'draft | active | retired; codes: FHIR publication-status draft, active, retired'
+- name: map.id
+  type: string
+  required: true
+  description: The map id.
+- name: map.source
+  type: string
+  required: true
+  description: The source code system and release.
+- name: map.target
+  type: string
+  required: true
+  description: The target code system and release.
+- name: map.kind
+  type: enum
+  required: true
+  description: How the map was made.
+  constraints: 'publisher | transition_table | local; codes: none standard, local to this specification'
+- name: map.entries
+  type: map entry[]
+  required: true
+  description: Each source code's targets, with relationship, and for rule-based maps the rule, group and priority.
+  constraints: 'codes: FHIR R5 ConceptMap relationship: equivalent, source-is-narrower-than-target, source-is-broader-than-target, related-to, not-related-to'
+- name: map.status
+  type: enum
+  required: true
+  description: Where it is in its lifecycle.
+  constraints: 'draft | active | retired; codes: FHIR publication-status'
+- name: dual_coding.pairs
+  type: pair[]
+  required: false
+  description: Classifications coded side by side during a transition, and the period.
+  constraints: from the dual_coding setting
+relationships:
+- type: has_many
+  target: release
+  note: a code system has many releases, at most one in effect on a date
+- type: has_many
+  target: concept
+  note: a release has many concepts
+- type: belongs_to
+  target: code_system
+  note: a value set rule and a map side each name a code system
+- type: can_trigger
+  target: event:terminology.release_activated
+businessRules:
+- id: BR-H1
+  text: A code is identified by its code system URI and code, never by its display. Every module records the system, the code and the release version it validated against. The code systems and editions in use are those in code_systems_in_use.
+  rationale: Displays change between releases and languages; the code doesn't. With the release recorded, a record reads the same years later.
+- id: BR-H2
+  text: A code is checked against the release of its code system in effect on the date the caller gives. At most one release of a code system and edition is in effect on any date.
+  rationale: HIPAA code sets are valid only within the dates their maintainers set (45 CFR 162.1011), and CDC states the range of dates of care each ICD-10-CM release applies to.
+- id: BR-H3
+  text: 'Callers choose the date by code_date_rule: by default the date of service. For ICD-10-CM and ICD-10-PCS on US inpatient claims, the discharge date.'
+  rationale: CDC states its releases by date of service, while CMS has institutional claims use the code set in effect on the discharge or through date (MLN Matters SE1408). The sources differ by use, so it is a setting.
+- id: BR-H4
+  text: 'A new release is staged, then verified: its checksum or record counts match what the publisher states, its files parse, and the changes from the previous release are listed. Only a verified release can be activated.'
+  rationale: A truncated or corrupt release would silently reject valid codes or accept invalid ones in every module at once.
+- id: BR-H5
+  text: A Terminology manager activates a verified release, which takes effect on its effective_from date and sets the previous release's effective_to to the day before. A release can be activated before its date, so it is ready in time. Activation is all or nothing.
+  rationale: ICD-10-CM releases are published ahead of 1 October and any 1 April update. Loading ahead means validation switches over on the right day without anyone working at midnight.
+- id: BR-H6
+  text: 'Releases are never deleted or changed once active. A release its publisher recalls is withdrawn: dates it covered fall back to the previous release, and codes recorded against it stay readable.'
+  rationale: Records coded against a release must stay readable for as long as they are kept.
+- id: BR-H7
+  text: When no release covers the date given, validation answers unknown rather than invalid, and names the dates the loaded releases cover.
+  rationale: A record from before the hospital loaded a code system isn't wrong; the caller decides whether to accept it.
+- id: BR-H8
+  text: An inactive code is never valid for new use on a date it is inactive, but stays readable with its last display. Validation returns the replacements its publisher names. Recorded codes are never rewritten automatically.
+  rationale: SNOMED CT links inactive concepts to active ones through historical associations, and LOINC names a replacement in MAP_TO. Which replacement is right depends on the record, so a person or the owning module decides.
+- id: BR-H9
+  text: 'Codes are matched exactly as the code system defines: by case only where it is case-sensitive, as UCUM is. Input is normalized only by a code system''s own documented rules.'
+  rationale: UCUM defines case-sensitive symbols, and mg and Mg are different. Guessing at normalization turns a typo into a different code.
+- id: BR-H10
+  text: A code that fails its code system's check digit (SNOMED CT Verhoeff, LOINC mod 10) and isn't in the release is reported as a likely typing error. Presence in the release decides validity.
+  rationale: SNOMED CT identifiers end in a Verhoeff check digit and LOINC codes in a mod 10 check digit; LOINC lists a few terms whose check digits are known to be wrong, so the digit alone mustn't reject a code.
+- id: BR-H11
+  text: Validation says separately whether a code exists, is active, and is valid for reporting. ICD-10-CM and ICD-10-PCS header codes exist but aren't valid for reporting.
+  rationale: The ICD-10-CM and ICD-10-PCS order files flag header codes as not valid for HIPAA-covered transactions. A diagnosis can be recorded clinically before it is coded fully for a claim.
+- id: BR-H12
+  text: An ICD-11 cluster is valid only when each part is valid in the release, stem codes are joined by a slash and extension codes by an ampersand, and no extension code is first or alone.
+  rationale: The ICD-11 reference guide defines clusters this way and says extension codes can never be used without a stem code or first in a cluster.
+- id: BR-H13
+  text: A module's coded setting, such as encounter_type_codes, is bound to a value set here. Each change makes a new version; an active version never changes.
+  rationale: Records validated against a value set must be explainable later. FHIR versions value sets for the same reason.
+- id: BR-H14
+  text: A value set is expanded on a date, using for each rule the release named or the release in effect on that date. With a required binding, codes outside it are refused; with an extensible one, a code outside it is allowed only when no code in it fits, with text.
+  rationale: FHIR defines required and extensible bindings this way. Expanding on the date keeps a value set over ICD-10-CM in step with each year's release.
+- id: BR-H15
+  text: Translating a code returns candidate targets with their relationship and never replaces the source code in any record.
+  rationale: Maps are rarely one to one. FHIR ConceptMap says how closely each target matches; the record keeps what the clinician chose.
+- id: BR-H16
+  text: A rule-based map, such as SNOMED CT to ICD-10-CM, evaluates its rules with the patient context the caller sends, such as age and sex. When the context is missing, every candidate is returned, flagged for a person to choose. The context is never stored.
+  rationale: NLM's SNOMED CT to ICD-10-CM map uses rules on age and sex; for example, sleep apnea maps to a newborn code or another depending on age. Keeping no context means this module holds no patient data.
+- id: BR-H17
+  text: Year-to-year ICD-10-CM changes are followed with the CDC conversion table. CMS GEMs, last updated for fiscal year 2018, are used only for ICD-9 history.
+  rationale: CDC publishes a conversion table with each ICD-10-CM release, and CMS stopped updating GEMs after fiscal year 2018.
+- id: BR-H18
+  text: ICD-10 to ICD-11 translation uses the transition tables WHO publishes with each ICD-11 version, and ICD-11 releases are loaded with their version identifiers.
+  rationale: WHO releases ICD-11 in versions with identifiers used when reporting, and provides transition tables with every version.
+- id: BR-H19
+  text: During a transition set in dual_coding, a field can hold a code from each classification in the pair, each validated against its own release.
+  rationale: WHO describes dual coding for transitions and comparison. Countries move from ICD-10 to ICD-11 at different times, and statistics need both during the change.
+- id: BR-H20
+  text: Local codes live only in local code systems under local_namespace, never added to a standard code system. A local code used in a field that is exchanged must map to a standard code, or it is flagged.
+  rationale: A local code under a standard URI would be read as a standard code by every receiver. SNOMED CT extensions need a namespace from SNOMED International.
+- id: BR-H21
+  text: A release can be activated only when its code system's licence is recorded as held or the content is free. Licensed content, such as CPT descriptions, is shown only to callers within the licence, and every display carries the attribution the licence requires.
+  rationale: The AMA requires a licence to use or display CPT content; SNOMED CT is free in member countries such as the United States under the affiliate licence; LOINC and ICD-11 are free with conditions, ICD-11 under CC BY-ND 3.0 IGO.
+- id: BR-H22
+  text: Displays are returned in the language asked for when the release has one, and otherwise in default_language, or the code system's preferred display, marked as a fallback.
+  rationale: National editions and translations carry their own displays; a patient or clinician must never see a blank where a code's meaning should be.
+- id: BR-H23
+  text: Search by text looks in displays and synonyms of a value set's expansion on a date, returns active codes only unless asked, and never returns content the caller's licence excludes.
+  rationale: Clinicians find codes by words. Returning inactive codes for new entries would bring retired codes back.
+- id: BR-H24
+  text: For each code system in release_watch, a release not loaded by its warning date is listed, and terminology.release_overdue is emitted.
+  rationale: ICD-10-CM changes every 1 October and sometimes 1 April, LOINC publishes in February and August, and SNOMED CT's International Edition and RxNorm publish monthly. A missed release means valid new codes are refused.
+- id: BR-H25
+  text: Activating, withdrawing or retiring a release, a value set or a map emits an event with the changes, so modules can re-check settings and open records that use them.
+  rationale: Modules cache code lists. Without an event they keep refusing new codes or accepting retired ones.
+- id: BR-H26
+  text: Every load, verification, activation, withdrawal and change to a value set, map or local code is logged with who, when and why.
+  rationale: Coding drives claims and statistics; an auditor must be able to see why a code was accepted on a date.
+- id: BR-H27
+  text: Every answer names the releases and value set versions it used.
+  rationale: A caller caching an answer, or explaining a decision later, needs to know which release it came from.
+- id: BR-H28
+  text: 'Requests are never refused for another module''s reasons: validation answers on the codes and dates given.'
+  rationale: Each module owns its own rules about which codes it accepts; this module only says what a code means and whether it is valid.
+- id: BR-H29
+  text: 'In the United States, the code sets for HIPAA transactions are loaded: ICD-10-CM for diagnoses, ICD-10-PCS for inpatient procedures, HCPCS and CPT for other services, CDT for dental services and NDC for retail pharmacy drugs. For certified health IT, SNOMED CT US Edition and LOINC are loaded at the versions ONC names.'
+  rationale: HIPAA names these code sets (45 CFR 162.1002), and ONC names vocabulary standards for certified health IT (45 CFR 170.207).
+  jurisdiction: us
+- id: BR-H30
+  text: In the European Union, value sets for fields exchanged in the European electronic health record exchange format use the coding systems its implementing acts name, as they are updated.
+  rationale: The EHDS exchange format includes coding systems and values, laid down and updated by implementing acts (Article 15).
+  jurisdiction: eu
+- id: BR-H31
+  text: Concurrent changes to a value set, map or local code send the revision they read; a stale revision fails.
+  rationale: Two Terminology managers editing one value set must not overwrite each other.
+- id: BR-H32
+  text: Validation, lookup and expansion keep working from the active releases when release sources or downloads are unreachable; only loading needs them.
+  rationale: Every module depends on validation. A publisher's site being down must never stop care being recorded.
+validations:
+- field: code_system.uri
+  rule: An absolute URI; local systems start with local_namespace; not already registered
+  error: TERMINOLOGY_INVALID_CODE_SYSTEM
+- field: code_system.licence
+  rule: Names the licence and whether it is held, or that the content is free
+  error: TERMINOLOGY_INVALID_CODE_SYSTEM
+- field: release.version
+  rule: Unique for its code system
+  error: TERMINOLOGY_RELEASE_EXISTS
+- field: release.effective_from
+  rule: A date; not inside an active release's period of the same edition unless that release is superseded by it
+  error: TERMINOLOGY_RELEASE_OVERLAP
+- field: release.source
+  rule: Files whose checksum or record counts match the publisher's, and that parse
+  error: TERMINOLOGY_RELEASE_VERIFICATION_FAILED
+- field: value_set.rules
+  rule: Each rule names a registered code system and a valid filter or listed codes present in the release it names
+  error: TERMINOLOGY_INVALID_VALUE_SET
+- field: map.entries
+  rule: Each source and target code exists in the releases the map names, and each relationship is a ConceptMap relationship code
+  error: TERMINOLOGY_INVALID_MAP
+- field: concept.code
+  rule: Added only to local code systems, unique in them
+  error: TERMINOLOGY_LOCAL_CODE_NOT_ALLOWED
+- field: release.status
+  rule: Fields the service sets, such as status, effective_to, changes and releases, can't be written by clients
+  error: TERMINOLOGY_READ_ONLY_FIELD
+stateMachine:
+  initial: staged
+  states:
+  - staged
+  - verified
+  - active
+  - retired
+  - withdrawn
+  transitions:
+  - from: staged
+    to: verified
+    trigger: verify (BR-H4)
+    guard: checksum or counts match and files parse
+  - from: staged
+    to: withdrawn
+    trigger: discard a staged release
+  - from: verified
+    to: active
+    trigger: activate (BR-H5)
+    guard: licence held or free (BR-H21)
+  - from: verified
+    to: withdrawn
+    trigger: discard a verified release
+  - from: active
+    to: retired
+    trigger: a later release takes over and its effective date passes
+  - from: active
+    to: withdrawn
+    trigger: the publisher recalls it (BR-H6)
+workflows:
+- name: Load a new release
+  trigger: A publisher releases a new version, or release_watch lists one as due
+  actor: Terminology manager
+  steps:
+  - Stage the release from the publisher's files
+  - 'Verify it: checksums or counts, parsing, and the list of changes'
+  - Review the changes, especially codes inactivated that value sets or settings use
+  - Activate it, effective on the publisher's date
+  - terminology.release_activated is emitted with the changes
+  outcome: Validation uses the new release from its effective date, and modules know what changed.
+- name: Validate a code
+  trigger: A module records a coded value
+  actor: System
+  steps:
+  - Send the system, code, date and optionally a value set
+  - The service finds the release in effect on the date, and the value set expansion
+  - It answers valid, invalid, inactive or unknown, with valid_for_reporting, the display and any replacements
+  outcome: The module accepts or refuses the code with a reason, and records the release used.
+- name: Change a value set
+  trigger: A module's setting needs other codes
+  actor: Terminology manager
+  steps:
+  - Create a new draft version with the changed rules
+  - Expand it on today's date and review it
+  - Activate it; terminology.value_set_activated is emitted
+  outcome: The setting uses the new version; records validated against the old one keep its version.
+- name: Move to ICD-11
+  trigger: A country adopts ICD-11 for a use
+  actor: Terminology manager
+  steps:
+  - Load the ICD-11 MMS release and WHO's transition tables
+  - Set dual_coding for the period
+  - Bind the value sets to ICD-11 from the adoption date
+  outcome: Both classifications are coded during the transition, and ICD-11 alone after it.
+edgeCases:
+- id: EC-H1
+  situation: A diagnosis dated 30 September is validated on 2 October, after the new ICD-10-CM release took effect on 1 October.
+  behaviour: It is checked against the release in effect on 30 September, the date given, not today's.
+  covers:
+  - BR-H2
+  - AC-H1
+- id: EC-H2
+  situation: An inpatient stay runs from 28 September to 3 October across an ICD-10-CM release change.
+  behaviour: For the claim, Billing validates with the discharge date, 3 October, under code_date_rule.
+  covers:
+  - BR-H3
+  - AC-H2
+- id: EC-H3
+  situation: The April ICD-10-CM update is activated in March.
+  behaviour: It takes effect on 1 April; the October release ends 31 March.
+  covers:
+  - BR-H5
+  - AC-H4
+- id: EC-H4
+  situation: A release download is cut off halfway.
+  behaviour: Verification fails on the counts and the release can't be activated.
+  covers:
+  - BR-H4
+  - AC-H3
+- id: EC-H5
+  situation: A publisher recalls a release after it took effect.
+  behaviour: It is withdrawn, its dates fall back to the previous release, and codes recorded with it still read.
+  covers:
+  - BR-H6
+  - AC-H5
+- id: EC-H6
+  situation: A record from 2009 is checked, before the hospital loaded any ICD-10-CM release.
+  behaviour: Validation answers unknown and names the dates covered.
+  covers:
+  - BR-H7
+  - AC-H6
+- id: EC-H7
+  situation: A SNOMED CT concept used in a value set is inactivated with a REPLACED BY association.
+  behaviour: The release's changes list the value set; validation of the old code for new dates returns inactive with the replacement; recorded codes stay as they are.
+  covers:
+  - BR-H8
+  - BR-H25
+  - AC-H7
+- id: EC-H8
+  situation: A unit is sent as MG instead of mg.
+  behaviour: It isn't matched, because UCUM is case-sensitive, and validation returns invalid.
+  covers:
+  - BR-H9
+  - AC-H8
+- id: EC-H9
+  situation: A SNOMED CT code is mistyped and fails its check digit.
+  behaviour: Validation returns invalid with a likely typing error.
+  covers:
+  - BR-H10
+  - AC-H8
+- id: EC-H10
+  situation: A coder picks E11, a header code, for a claim.
+  behaviour: Validation says it exists and is active but isn't valid for reporting.
+  covers:
+  - BR-H11
+  - AC-H9
+- id: EC-H11
+  situation: An ICD-11 cluster starts with an extension code.
+  behaviour: It is invalid.
+  covers:
+  - BR-H12
+  - AC-H10
+- id: EC-H12
+  situation: A sleep apnea concept is translated to ICD-10-CM without the patient's age.
+  behaviour: Both the newborn and the general code are returned, flagged for a coder to choose.
+  covers:
+  - BR-H16
+  - AC-H12
+- id: EC-H13
+  situation: A Terminology manager adds a hospital code to the LOINC code system.
+  behaviour: Refused; local codes go in a local code system.
+  covers:
+  - BR-H20
+  - AC-H14
+- id: EC-H14
+  situation: The CPT licence lapses.
+  behaviour: New CPT releases can't be activated and CPT descriptions are hidden from callers outside the licence.
+  covers:
+  - BR-H21
+  - AC-H15
+- id: EC-H15
+  situation: The ICD-10-CM release isn't loaded by 1 September.
+  behaviour: It is listed as overdue and terminology.release_overdue is emitted.
+  covers:
+  - BR-H24
+  - AC-H16
+- id: EC-H16
+  situation: The publisher's site is down when a release is due.
+  behaviour: Validation goes on with the active releases; loading waits.
+  covers:
+  - BR-H32
+  - AC-H17
+- id: EC-H17
+  situation: Two Terminology managers edit one draft value set.
+  behaviour: The second save fails with TERMINOLOGY_REVISION_CONFLICT.
+  covers:
+  - BR-H31
+  - AC-H18
+- id: EC-H18
+  situation: A country starts ICD-11 for mortality but keeps ICD-10 for payment.
+  behaviour: dual_coding holds both for the uses set; each code is validated against its own release.
+  covers:
+  - BR-H19
+  - AC-H11
+functionalRequirements:
+- id: FR-H1
+  text: The service must validate a code on a date against the release in effect, saying whether it exists, is active and is valid for reporting.
+  priority: must
+  verification: test
+- id: FR-H2
+  text: The service must stage, verify, activate and withdraw releases, keeping every release ever activated.
+  priority: must
+  verification: test
+- id: FR-H3
+  text: The service must return displays, properties, parents and replacements of a code on a date.
+  priority: must
+  verification: test
+- id: FR-H4
+  text: The service must version value sets and expand them on a date.
+  priority: must
+  verification: test
+- id: FR-H5
+  text: The service must translate codes with maps, evaluating map rules from the context given.
+  priority: must
+  verification: test
+- id: FR-H6
+  text: The service must validate ICD-11 clusters.
+  priority: should
+  verification: test
+- id: FR-H7
+  text: The service must hold local code systems apart from standard ones.
+  priority: must
+  verification: test
+- id: FR-H8
+  text: The service must refuse to activate unlicensed content and hide licensed content from callers outside the licence.
+  priority: must
+  verification: test
+- id: FR-H9
+  text: The service must serve the FHIR R5 terminology operations $validate-code, $lookup, $expand, $subsumes and $translate.
+  priority: must
+  verification: inspection
+- id: FR-H10
+  text: The service must list releases that are overdue against release_watch.
+  priority: should
+  verification: test
+- id: FR-H11
+  text: The service must log every change to releases, value sets, maps and local codes.
+  priority: must
+  verification: test
+nonFunctionalRequirements:
+- category: compatibility
+  text: Code systems, value sets and maps map onto FHIR R5 CodeSystem, ValueSet and ConceptMap, with versions as the publishers define them.
+- category: availability
+  text: Validation, lookup and expansion stay available when release sources can't be reached (BR-H32).
+- category: reliability
+  text: A release becomes active completely or not at all.
+- category: security
+  text: Only Terminology managers change terminology, and every change is logged.
+- category: portability
+  text: No requirement depends on a particular database, language or framework.
+constraints:
+- id: CON-H1
+  text: This module stores no patient data.
+  rationale: It answers questions about codes; keeping patient context would make it a store of health data for no purpose (GDPR Article 5(1)(c)).
+- id: CON-H2
+  text: Licensed content is loaded and shown only within the licences the hospital holds.
+  rationale: The AMA requires a licence for CPT, and SNOMED CT is free only under the affiliate licence in member countries.
+settings:
+- name: jurisdiction
+  type: us | eu
+  description: Which legal regime applies. Required.
+- name: code_systems_in_use
+  type: list
+  description: The code systems and editions loaded, such as ICD-10-CM, ICD-10-PCS, SNOMED CT US Edition, LOINC, UCUM, RxNorm and CPT in the United States, or WHO ICD-10, a national version such as ICD-10-GM, ICD-11 MMS and a national SNOMED CT edition in the EU.
+- name: code_date_rule
+  type: map
+  description: Which date picks the release, per code system and use. Default date of service; for ICD-10-CM and ICD-10-PCS on US inpatient claims, the discharge date.
+- name: dual_coding
+  type: list
+  description: Pairs of classifications coded side by side, such as ICD-10 and ICD-11, with the period. Empty by default.
+- name: local_namespace
+  type: uri
+  description: The URI base for the hospital's local code systems, and its SNOMED CT namespace if it has one. Required.
+- name: release_watch
+  type: list
+  description: 'For each code system, when the next release is expected and how long before to warn. Defaults: ICD-10-CM and ICD-10-PCS each 1 October, with possible 1 April updates; LOINC February and August; SNOMED CT International Edition and RxNorm monthly; ICD-11 yearly.'
+- name: default_language
+  type: BCP 47 tag
+  description: The language displays fall back to. Default en.
+- name: search_result_limit
+  type: integer
+  description: The most results a search returns. Default 50.
+performanceTargets:
+- id: PERF-H1
+  indicator: Validation latency
+  target: Set by each deployment as an SLO
+  measurement: 99th percentile time to answer a validation.
+- id: PERF-H2
+  indicator: Releases in time
+  target: 100%
+  measurement: Share of releases in release_watch active before their effective date.
+- id: PERF-H3
+  indicator: Validation availability
+  target: Set by each deployment as an SLO
+  measurement: Share of validations answered over a rolling 30 days.
+acceptanceCriteria:
+- id: AC-H1
+  given: ICD-10-CM releases in effect to 30 September and from 1 October, and a code added on 1 October
+  when: the new code is validated for 30 September and for 1 October, and a request is sent with no date
+  then: it is invalid for 30 September and valid for 1 October, each answer names the release used, and the request without a date fails with TERMINOLOGY_INVALID_REQUEST and HTTP 422
+  verifies:
+  - BR-H1
+  - BR-H2
+  - BR-H27
+  - FR-H1
+- id: AC-H2
+  given: code_date_rule with the discharge date for inpatient claims
+  when: Billing asks which date to use for a stay from 28 September to 3 October
+  then: the rule gives 3 October
+  verifies:
+  - BR-H3
+- id: AC-H3
+  given: a staged release whose record count doesn't match the publisher's, and an unknown code system
+  when: it is verified, a release of the unknown code system is staged, and a second copy of a loaded version is staged
+  then: verification fails with TERMINOLOGY_RELEASE_VERIFICATION_FAILED and HTTP 422 and activation fails with TERMINOLOGY_INVALID_STATUS and HTTP 409; the unknown system fails with TERMINOLOGY_UNKNOWN_CODE_SYSTEM and HTTP 422; the copy fails with TERMINOLOGY_RELEASE_EXISTS and HTTP 409
+  verifies:
+  - BR-H4
+  - FR-H2
+- id: AC-H4
+  given: the October ICD-10-CM release active, and the April update verified
+  when: the April update is activated in March, and another release overlapping it without superseding it is staged
+  then: it is active from 1 April, the October release ends 31 March, terminology.release_activated is emitted before 1 April with the changes; the overlap fails with TERMINOLOGY_RELEASE_OVERLAP and HTTP 409
+  verifies:
+  - BR-H5
+  - BR-H25
+  - FR-H2
+- id: AC-H5
+  given: an active release recalled by its publisher
+  when: it is withdrawn without a reason, then with one
+  then: without a reason it fails with TERMINOLOGY_REASON_REQUIRED and HTTP 422; then it is withdrawn, terminology.release_withdrawn is emitted, its dates use the previous release, and lookups of codes recorded with it still return their displays
+  verifies:
+  - BR-H6
+  - FR-H2
+- id: AC-H6
+  given: ICD-10-CM releases loaded from fiscal year 2016
+  when: a code is validated for a date in 2009
+  then: the answer is unknown and names the dates covered
+  verifies:
+  - BR-H7
+- id: AC-H7
+  given: a SNOMED CT concept inactivated with a REPLACED BY association
+  when: it is validated for a date after the inactivation, and looked up
+  then: validation returns inactive with the replacement; lookup returns its last display and history
+  verifies:
+  - BR-H8
+  - FR-H3
+- id: AC-H8
+  given: UCUM and SNOMED CT releases
+  when: MG is validated as a unit, and a SNOMED CT code with a wrong check digit is validated
+  then: MG is invalid; the SNOMED CT code is invalid and reported as a likely typing error
+  verifies:
+  - BR-H9
+  - BR-H10
+- id: AC-H9
+  given: the ICD-10-CM release
+  when: E11 and E11.9 are validated
+  then: E11 exists and is active but isn't valid for reporting; E11.9 is valid for reporting
+  verifies:
+  - BR-H11
+  - FR-H1
+- id: AC-H10
+  given: an ICD-11 MMS release
+  when: DA63.Z/ME24.90 is validated, and a cluster starting with an extension code
+  then: the first is valid with each part checked; the second is invalid
+  verifies:
+  - BR-H12
+  - FR-H6
+- id: AC-H11
+  given: dual_coding of ICD-10 and ICD-11 for a period
+  when: a field is given a code from each
+  then: each is validated against its own release and both are accepted
+  verifies:
+  - BR-H19
+- id: AC-H12
+  given: the SNOMED CT to ICD-10-CM map
+  when: sleep apnea is translated with age 2 days, then with no age
+  then: with the age it returns the newborn code; without it, both candidates flagged to choose, and no context is stored; the source code isn't changed anywhere
+  verifies:
+  - BR-H15
+  - BR-H16
+  - FR-H5
+  - CON-H1
+- id: AC-H13
+  given: a value set for encounter types bound to Encounters' encounter_type_codes, active at version 1
+  when: a manager edits version 1, creates version 2 with a rule naming an unknown code system, then a valid version 2, and activates it
+  then: editing version 1 fails with TERMINOLOGY_IMMUTABLE and HTTP 409; the invalid rule fails with TERMINOLOGY_INVALID_VALUE_SET and HTTP 422; version 2 becomes active and terminology.value_set_activated is emitted; expanding on a date uses the releases in effect then
+  verifies:
+  - BR-H13
+  - BR-H14
+  - BR-H25
+  - FR-H4
+- id: AC-H14
+  given: a local code system under local_namespace
+  when: a manager adds a local code, then adds one to LOINC, then loads a map whose entry names a code not in its releases, and a valid map, and activates it
+  then: the local code is added; LOINC fails with TERMINOLOGY_LOCAL_CODE_NOT_ALLOWED and HTTP 422; the bad map fails with TERMINOLOGY_INVALID_MAP and HTTP 422; the valid map becomes active and terminology.map_activated is emitted
+  verifies:
+  - BR-H20
+  - FR-H7
+- id: AC-H15
+  given: CPT with no licence recorded
+  when: a verified CPT release is activated, and a caller without terminology.licensed looks up a CPT code
+  then: activation fails with TERMINOLOGY_LICENCE_NOT_HELD and HTTP 409; the lookup fails with TERMINOLOGY_LICENCE_REQUIRED and HTTP 403
+  verifies:
+  - BR-H21
+  - FR-H8
+  - CON-H2
+- id: AC-H16
+  given: release_watch expecting ICD-10-CM on 1 October with a warning on 1 September
+  when: nothing is loaded by 1 September
+  then: it is listed as overdue and terminology.release_overdue is emitted
+  verifies:
+  - BR-H24
+  - FR-H10
+- id: AC-H17
+  given: the release source unreachable
+  when: codes are validated, and a release is staged from it
+  then: validation answers from the active releases; staging fails with TERMINOLOGY_DEPENDENCY_UNAVAILABLE and HTTP 503
+  verifies:
+  - BR-H32
+- id: AC-H18
+  given: a draft value set at revision 3, changed to revision 4
+  when: a manager saves with revision 3
+  then: it fails with TERMINOLOGY_REVISION_CONFLICT and HTTP 409
+  verifies:
+  - BR-H31
+- id: AC-H19
+  given: a clinician
+  when: they register a code system, and a manager registers one without a licence, stages a release with effective_to set, and registers twice with one retry key but different bodies
+  then: the clinician gets TERMINOLOGY_FORBIDDEN and HTTP 403; no licence fails with TERMINOLOGY_INVALID_CODE_SYSTEM and HTTP 422; effective_to fails with TERMINOLOGY_READ_ONLY_FIELD and HTTP 422; the reused key fails with TERMINOLOGY_IDEMPOTENCY_KEY_REUSED and HTTP 422
+  verifies:
+  - BR-H26
+  - FR-H11
+- id: AC-H20
+  given: a release activated by a manager
+  when: the change log is read
+  then: it shows who staged, verified and activated it, when and why
+  verifies:
+  - BR-H26
+  - FR-H11
+- id: AC-H21
+  given: an unknown value set id
+  when: it is fetched
+  then: it fails with TERMINOLOGY_NOT_FOUND and HTTP 404
+  verifies:
+  - FR-H4
+- id: AC-H22
+  given: a code with a German designation and one without
+  when: both are looked up in German
+  then: the first returns the German display; the second the preferred display marked as a fallback
+  verifies:
+  - BR-H22
+  - FR-H3
+- id: AC-H23
+  given: a value set with an inactive code
+  when: it is searched for text matching both
+  then: only the active code is returned, within search_result_limit
+  verifies:
+  - BR-H23
+- id: AC-H24
+  given: an Encounters validation of a code no value set rule of Encounters allows
+  when: it is validated without a value set
+  then: it is answered on the code and date only
+  verifies:
+  - BR-H28
+- id: AC-H25
+  given: the ICD-10-CM conversion table
+  when: a code renamed in a new fiscal year is translated to the new release
+  then: the target from the CDC conversion table is returned; GEMs aren't used
+  verifies:
+  - BR-H17
+- id: AC-H26
+  given: WHO transition tables for an ICD-11 version
+  when: an ICD-10 code is translated to ICD-11
+  then: candidates from the transition table are returned with the ICD-11 version
+  verifies:
+  - BR-H18
+- id: AC-H27
+  given: a US deployment
+  when: the code systems in use are listed
+  then: ICD-10-CM, ICD-10-PCS, HCPCS, CPT, CDT, NDC, SNOMED CT US Edition and LOINC are registered with their licences
+  verifies:
+  - BR-H29
+  jurisdiction: us
+- id: AC-H28
+  given: an implementing act naming coding systems for a field in the European exchange format
+  when: the value set for that field is reviewed
+  then: its rules use those coding systems
+  verifies:
+  - BR-H30
+  jurisdiction: eu
+- id: AC-H29
+  given: a validation answer
+  when: it is read with Accept application/fhir+json through $validate-code
+  then: it is a FHIR R5 Parameters resource with result, display and the code system version
+  verifies:
+  - FR-H9
+- id: AC-H30
+  given: release activation
+  when: a failure happens halfway
+  then: no concept of the release is active and the previous release still answers
+  verifies:
+  - BR-H5
+operations:
+- name: Validate a code
+  actor: System
+  description: Check a code, optionally in a value set, on a date (FHIR $validate-code).
+  method: GET
+  path: /validate-code
+  success: 200
+  input: system, code, date, and optional value set, display and edition
+  output: valid, invalid, inactive or unknown; active; valid_for_reporting; display; replacements; releases used
+  errors:
+  - TERMINOLOGY_INVALID_REQUEST
+  - TERMINOLOGY_UNKNOWN_CODE_SYSTEM
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_LICENCE_REQUIRED
+- name: Look up a code
+  actor: System
+  description: A code's displays, properties, parents and history on a date (FHIR $lookup).
+  method: GET
+  path: /lookup
+  success: 200
+  input: system, code, date and optional language
+  output: the concept as of that date, and the release used
+  errors:
+  - TERMINOLOGY_INVALID_REQUEST
+  - TERMINOLOGY_UNKNOWN_CODE_SYSTEM
+  - TERMINOLOGY_LICENCE_REQUIRED
+- name: Expand a value set
+  actor: System
+  description: The codes a value set allows on a date, optionally filtered by text (FHIR $expand).
+  method: GET
+  path: /expand
+  success: 200
+  input: value set url and optional version, date, text filter, language, limit and cursor
+  output: codes with displays, the releases used, and next_cursor
+  errors:
+  - TERMINOLOGY_INVALID_REQUEST
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_LICENCE_REQUIRED
+- name: Check subsumption
+  actor: System
+  description: Whether one code is the same as, above or below another on a date (FHIR $subsumes).
+  method: GET
+  path: /subsumes
+  success: 200
+  input: system, two codes, date
+  output: equivalent, subsumes, subsumed-by or not-subsumed
+  errors:
+  - TERMINOLOGY_INVALID_REQUEST
+  - TERMINOLOGY_UNKNOWN_CODE_SYSTEM
+- name: Translate a code
+  actor: Coder
+  description: Candidate codes in another code system (FHIR $translate).
+  method: POST
+  path: /translate
+  success: 200
+  input: system, code, date, target system, and optional map and patient context such as age and sex
+  output: candidates with relationship and, when context was missing, a flag to choose
+  errors:
+  - TERMINOLOGY_INVALID_REQUEST
+  - TERMINOLOGY_UNKNOWN_CODE_SYSTEM
+  - TERMINOLOGY_NOT_FOUND
+- name: Validate an ICD-11 cluster
+  actor: Coder
+  description: Check a postcoordinated ICD-11 cluster on a date.
+  method: GET
+  path: /validate-cluster
+  success: 200
+  input: cluster and date
+  output: valid or not, each part checked, and the release used
+  errors:
+  - TERMINOLOGY_INVALID_REQUEST
+  - TERMINOLOGY_NOT_FOUND
+- name: List code systems
+  actor: System
+  description: The code systems in use, with editions, licences and the releases in effect.
+  method: GET
+  path: /code-systems
+  success: 200
+  input: limit and cursor
+  output: code systems
+  errors: []
+- name: Register a code system
+  actor: Terminology manager
+  description: Add a code system, with its licence.
+  method: POST
+  path: /code-systems
+  success: 201
+  input: uri, name, publisher, kind, edition, case sensitivity, check digit and licence
+  output: the code system
+  errors:
+  - TERMINOLOGY_INVALID_CODE_SYSTEM
+  - TERMINOLOGY_FORBIDDEN
+  - TERMINOLOGY_IDEMPOTENCY_KEY_REUSED
+- name: Update a code system's licence
+  actor: Terminology manager
+  description: Record that a licence is held, ends, or changes.
+  method: PUT
+  path: /code-systems/{id}/licence
+  success: 200
+  input: licence and revision
+  output: the code system
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_INVALID_CODE_SYSTEM
+  - TERMINOLOGY_FORBIDDEN
+  - TERMINOLOGY_REVISION_CONFLICT
+- name: Stage a release
+  actor: Terminology manager
+  description: Load a release's files from the publisher. Accepts a retry key.
+  method: POST
+  path: /releases
+  success: 201
+  input: code system, version, effective_from, files and the publisher's checksum or counts
+  output: the staged release
+  errors:
+  - TERMINOLOGY_UNKNOWN_CODE_SYSTEM
+  - TERMINOLOGY_RELEASE_EXISTS
+  - TERMINOLOGY_RELEASE_OVERLAP
+  - TERMINOLOGY_READ_ONLY_FIELD
+  - TERMINOLOGY_FORBIDDEN
+  - TERMINOLOGY_IDEMPOTENCY_KEY_REUSED
+  - TERMINOLOGY_DEPENDENCY_UNAVAILABLE
+- name: Verify a release
+  actor: Terminology manager
+  description: Check a staged release and list what changed.
+  method: POST
+  path: /releases/{id}/verify
+  success: 200
+  input: release id
+  output: the verified release with its changes
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_RELEASE_VERIFICATION_FAILED
+  - TERMINOLOGY_INVALID_STATUS
+  - TERMINOLOGY_FORBIDDEN
+- name: Activate a release
+  actor: Terminology manager
+  description: Put a verified release into effect from its date.
+  method: POST
+  path: /releases/{id}/activate
+  success: 200
+  input: reason
+  output: the active release
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_INVALID_STATUS
+  - TERMINOLOGY_LICENCE_NOT_HELD
+  - TERMINOLOGY_RELEASE_OVERLAP
+  - TERMINOLOGY_FORBIDDEN
+- name: Withdraw a release
+  actor: Terminology manager
+  description: Withdraw a staged, verified or recalled active release, with a reason.
+  method: POST
+  path: /releases/{id}/withdraw
+  success: 200
+  input: reason
+  output: the withdrawn release
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_INVALID_STATUS
+  - TERMINOLOGY_REASON_REQUIRED
+  - TERMINOLOGY_FORBIDDEN
+- name: List releases
+  actor: System
+  description: Releases by code system and status, with their periods.
+  method: GET
+  path: /releases
+  success: 200
+  input: filters, limit and cursor
+  output: releases
+  errors: []
+- name: Get a release's changes
+  actor: Terminology manager
+  description: Codes added, inactivated and with changed displays, and the value sets that use them.
+  method: GET
+  path: /releases/{id}/changes
+  success: 200
+  input: release id, limit and cursor
+  output: changes
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+- name: Create a value set version
+  actor: Terminology manager
+  description: Create a value set, or a new draft version of one.
+  method: POST
+  path: /value-sets
+  success: 201
+  input: url, name, rules, binding and used_by
+  output: the draft version
+  errors:
+  - TERMINOLOGY_INVALID_VALUE_SET
+  - TERMINOLOGY_FORBIDDEN
+  - TERMINOLOGY_IDEMPOTENCY_KEY_REUSED
+- name: Edit a draft value set
+  actor: Terminology manager
+  description: Change a draft version's rules.
+  method: PATCH
+  path: /value-sets/{id}
+  success: 200
+  input: changed fields and revision
+  output: the draft
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_INVALID_VALUE_SET
+  - TERMINOLOGY_IMMUTABLE
+  - TERMINOLOGY_REVISION_CONFLICT
+  - TERMINOLOGY_FORBIDDEN
+- name: Activate a value set version
+  actor: Terminology manager
+  description: Make a draft version active, retiring the previous one.
+  method: POST
+  path: /value-sets/{id}/activate
+  success: 200
+  input: revision
+  output: the active version
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_INVALID_STATUS
+  - TERMINOLOGY_REVISION_CONFLICT
+  - TERMINOLOGY_FORBIDDEN
+- name: Get a value set
+  actor: System
+  description: A value set version and its rules.
+  method: GET
+  path: /value-sets/{id}
+  success: 200
+  input: id or url and version
+  output: the value set
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+- name: Load a map
+  actor: Terminology manager
+  description: Load a map from a publisher, a transition table, or the hospital's own.
+  method: POST
+  path: /maps
+  success: 201
+  input: source and target releases, kind, entries
+  output: the draft map
+  errors:
+  - TERMINOLOGY_INVALID_MAP
+  - TERMINOLOGY_FORBIDDEN
+  - TERMINOLOGY_IDEMPOTENCY_KEY_REUSED
+- name: Activate a map
+  actor: Terminology manager
+  description: Make a map active for translation.
+  method: POST
+  path: /maps/{id}/activate
+  success: 200
+  input: revision
+  output: the active map
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_INVALID_STATUS
+  - TERMINOLOGY_REVISION_CONFLICT
+  - TERMINOLOGY_FORBIDDEN
+- name: Add a local code
+  actor: Terminology manager
+  description: Add a code to one of the hospital's local code systems, optionally mapped to a standard code.
+  method: POST
+  path: /code-systems/{id}/concepts
+  success: 201
+  input: code, display, designations and optional standard code
+  output: the concept
+  errors:
+  - TERMINOLOGY_NOT_FOUND
+  - TERMINOLOGY_LOCAL_CODE_NOT_ALLOWED
+  - TERMINOLOGY_FORBIDDEN
+  - TERMINOLOGY_IDEMPOTENCY_KEY_REUSED
+- name: List overdue releases
+  actor: Terminology manager
+  description: Code systems whose expected release isn't loaded by its warning date.
+  method: GET
+  path: /releases/overdue
+  success: 200
+  input: none
+  output: code systems with the release expected
+  errors: []
+- name: Get the change log
+  actor: Terminology manager
+  description: Who loaded, activated, withdrew or changed what, when and why.
+  method: GET
+  path: /change-log
+  success: 200
+  input: filters, limit and cursor
+  output: log entries
+  errors:
+  - TERMINOLOGY_FORBIDDEN
+apiConventions:
+- topic: Authentication
+  text: Every request carries the caller's identity from Identity. Permissions are checked against it (Permission matrix).
+- topic: Errors
+  text: Errors use problem details (application/problem+json) with a code member, such as TERMINOLOGY_RELEASE_OVERLAP. A validation that finds a code invalid is a 200 with the result, not an error.
+  reference: RFC 9457
+- topic: Pagination
+  text: 'Lists and expansions are cursor-based: limit and an optional cursor in, next_cursor out.'
+- topic: Concurrency
+  text: Every change sends the revision it read. A stale revision fails with TERMINOLOGY_REVISION_CONFLICT (BR-H31).
+- topic: Retries
+  text: Every create accepts an Idempotency-Key header; a retry returns the original result.
+  reference: IETF draft-ietf-httpapi-idempotency-key-header
+- topic: FHIR
+  text: Validate, look up, expand, subsumes and translate are also served as the FHIR R5 operations $validate-code, $lookup, $expand, $subsumes and $translate on CodeSystem, ValueSet and ConceptMap (FR-H9).
+- topic: Caching
+  text: Answers carry the releases used and an ETag; callers may cache them until terminology.release_activated or terminology.value_set_activated (BR-H25, BR-H27).
+events:
+- name: terminology.release_activated
+  description: A release was activated, effective from its date.
+  payload:
+  - code_system
+  - version
+  - effective_from
+  - codes_added
+  - codes_inactivated
+  - value_sets_affected
+- name: terminology.release_withdrawn
+  description: A release was withdrawn; dates it covered fall back to the previous release.
+  payload:
+  - code_system
+  - version
+  - reason
+- name: terminology.value_set_activated
+  description: A value set version became active.
+  payload:
+  - url
+  - version
+  - used_by
+- name: terminology.map_activated
+  description: A map became active.
+  payload:
+  - map_id
+  - source
+  - target
+- name: terminology.release_overdue
+  description: An expected release isn't loaded by its warning date.
+  payload:
+  - code_system
+  - expected
+deliveryGuarantees:
+- id: DG-H1
+  text: Events are published at least once; consumers drop one with a source and id they have seen.
+  rationale: A relay can publish twice after a crash. CloudEvents defines source plus id as the duplicate check.
+- id: DG-H2
+  text: Every event carries a unique id, its type, when the change happened, and the code system or value set it is about.
+  rationale: Consumers order and deduplicate by these.
+- id: DG-H3
+  text: A release_activated event is published before its effective date when the release is activated ahead.
+  rationale: Modules need time to refresh caches before the release takes effect.
+permissions:
+- name: terminology.read
+  description: Validate, look up, expand, translate and search.
+- name: terminology.manage
+  description: Register code systems, load and activate releases, and manage value sets, maps and local codes.
+- name: terminology.licensed
+  description: See licensed content, such as CPT descriptions, within the hospital's licence.
+accessMatrix:
+- action: Validate, look up, expand, check subsumption, validate clusters, list code systems and releases, get value sets
+  roles:
+    Terminology manager: any
+    Clinician: any
+    Coder: any
+    System: any
+  permission: terminology.read
+  note: Licensed content needs terminology.licensed (BR-H21).
+- action: Translate a code
+  roles:
+    Terminology manager: any
+    Clinician: none
+    Coder: any
+    System: any
+  permission: terminology.read
+- action: Register code systems, update licences, stage, verify, activate and withdraw releases
+  roles:
+    Terminology manager: any
+    Clinician: none
+    Coder: none
+    System: none
+  permission: terminology.manage
+- action: Create, edit and activate value sets and maps, add local codes
+  roles:
+    Terminology manager: any
+    Clinician: none
+    Coder: none
+    System: none
+  permission: terminology.manage
+- action: Get release changes, overdue releases and the change log
+  roles:
+    Terminology manager: any
+    Clinician: none
+    Coder: any
+    System: none
+  permission: terminology.manage
+personalData:
+- field: release.loaded_by
+  category: personal data of staff
+  purpose: Showing who loaded and activated each release
+  retention: As long as the release
+- field: change log
+  category: personal data of staff
+  purpose: Auditing changes to terminology
+  retention: As long as any record coded with the releases it concerns
+- field: patient context sent to translation
+  category: health data
+  purpose: Evaluating map rules
+  retention: Not kept; used only for the request (BR-H16)
+errors:
+- code: TERMINOLOGY_NOT_FOUND
+  http: 404
+  message: No release, value set, map or code system exists with that id.
+- code: TERMINOLOGY_FORBIDDEN
+  http: 403
+  message: Your role doesn't allow this.
+- code: TERMINOLOGY_INVALID_REQUEST
+  http: 422
+  message: A required parameter is missing or malformed, such as the date.
+- code: TERMINOLOGY_UNKNOWN_CODE_SYSTEM
+  http: 422
+  message: That code system isn't registered here.
+- code: TERMINOLOGY_LICENCE_REQUIRED
+  http: 403
+  message: This content needs a licence you aren't covered by.
+- code: TERMINOLOGY_LICENCE_NOT_HELD
+  http: 409
+  message: The code system's licence isn't recorded as held, so its release can't be activated.
+- code: TERMINOLOGY_INVALID_CODE_SYSTEM
+  http: 422
+  message: The code system's URI or licence is missing or invalid, or it is already registered.
+- code: TERMINOLOGY_RELEASE_EXISTS
+  http: 409
+  message: That version of this code system is already loaded.
+- code: TERMINOLOGY_RELEASE_OVERLAP
+  http: 409
+  message: The release's period overlaps an active release it doesn't supersede.
+- code: TERMINOLOGY_RELEASE_VERIFICATION_FAILED
+  http: 422
+  message: The files don't match the publisher's checksum or counts, or don't parse.
+- code: TERMINOLOGY_INVALID_STATUS
+  http: 409
+  message: The release, value set or map isn't in a status that allows this.
+- code: TERMINOLOGY_IMMUTABLE
+  http: 409
+  message: An active or retired version can't change; create a new version.
+- code: TERMINOLOGY_INVALID_VALUE_SET
+  http: 422
+  message: A rule names an unknown code system, an invalid filter, or a code not in the release.
+- code: TERMINOLOGY_INVALID_MAP
+  http: 422
+  message: An entry names a code not in the map's releases, or an unknown relationship.
+- code: TERMINOLOGY_LOCAL_CODE_NOT_ALLOWED
+  http: 422
+  message: Codes can only be added to local code systems, and must be unique there.
+- code: TERMINOLOGY_REASON_REQUIRED
+  http: 422
+  message: This needs a reason.
+- code: TERMINOLOGY_READ_ONLY_FIELD
+  http: 422
+  message: That field is set by the service.
+- code: TERMINOLOGY_REVISION_CONFLICT
+  http: 409
+  message: It changed since you read it. Read it again.
+- code: TERMINOLOGY_IDEMPOTENCY_KEY_REUSED
+  http: 422
+  message: That retry key was used with a different request.
+- code: TERMINOLOGY_DEPENDENCY_UNAVAILABLE
+  http: 503
+  message: The release source or Identity can't be reached. Try again.
+dependencies:
+- service: identity-service
+  direction: upstream
+  reason: authenticates callers
+  criticality: hard
+  contract:
+  - 'Asks: who is the caller, and do they hold this permission?'
+- service: release-sources
+  direction: upstream
+  reason: publishers' download services, such as NLM UMLS, CDC, CMS, WHO and SNOMED International
+  criticality: soft
+  contract:
+  - 'Receives: release files, with their checksums or counts and dates of effect'
+  - Content and its publication are the publishers' concern
+- service: clinical-modules
+  direction: downstream
+  reason: every module that records or checks coded data, such as Patients, Encounters, Clinical documentation, Orders and Billing
+  criticality: soft
+  contract:
+  - 'Gives: whether a code is valid on a date, its display and replacements, and the releases used'
+  - 'Gives: value set expansions for the settings bound to them'
+  - 'Gives: terminology.release_activated, terminology.release_withdrawn, terminology.value_set_activated and terminology.map_activated, to refresh caches and re-check settings'
+  - Which codes each module accepts is that module's concern
+- service: billing-service
+  direction: downstream
+  reason: coding and claims
+  criticality: soft
+  contract:
+  - 'Gives: valid_for_reporting, and translations with map rules for coders'
+  - 'Gives: code_date_rule, so claims use the right release'
+  - Choosing codes for claims is Billing's concern
+- service: notification-service
+  direction: downstream
+  reason: tells people about work waiting for them
+  criticality: soft
+  contract:
+  - 'Gives: terminology.release_overdue, for the Terminology manager'
+risks:
+- id: RISK-H1
+  risk: A new release isn't loaded in time.
+  impact: Valid new codes are refused and claims are rejected from the first day.
+  mitigation: release_watch and overdue alerts (BR-H24), loading ahead (BR-H5).
+- id: RISK-H2
+  risk: A corrupt release is activated.
+  impact: Every module accepts or refuses the wrong codes at once.
+  mitigation: Verification before activation, and atomic activation (BR-H4, BR-H5).
+- id: RISK-H3
+  risk: Unlicensed content is used.
+  impact: Licence breach and fees.
+  mitigation: Activation needs the licence recorded; licensed content is hidden outside it (BR-H21).
+- id: RISK-H4
+  risk: A map is trusted as one to one.
+  impact: Wrong codes on claims or statistics.
+  mitigation: Translation returns candidates with relationships and never replaces the source (BR-H15, BR-H16).
+decisions:
+- id: ADR-H1
+  decision: Terminology starts at the healthcare level, with an EHR layer that adds nothing.
+  rationale: Every healthcare application uses the same code systems, so they are specified once for every healthcare domain.
+  date: '2026-10-09'
+- id: ADR-H2
+  decision: Which date picks a release is a setting.
+  rationale: CDC states ICD-10-CM releases by date of service; CMS uses the discharge or through date for institutional claims.
+  date: '2026-10-09'
+- id: ADR-H3
+  decision: The service holds no patient data; map rules use context passed in the request.
+  rationale: It keeps terminology shareable across the organization without health data protection duties.
+  date: '2026-10-09'
+openQuestions: []
+references:
+- id: REF-H1
+  title: 45 CFR 162.1002, Medical data code sets
+  url: https://www.ecfr.gov/current/title-45/section-162.1002
+  note: HIPAA code sets for transactions.
+- id: REF-H2
+  title: 45 CFR 162.1011, Valid code sets
+  url: https://www.ecfr.gov/current/title-45/section-162.1011
+  note: Valid within the dates their maintainers set.
+- id: REF-H3
+  title: 45 CFR 170.207, Vocabulary standards for representing electronic health information
+  url: https://www.ecfr.gov/current/title-45/section-170.207
+  note: SNOMED CT US Edition and LOINC for certified health IT.
+- id: REF-H4
+  title: CDC, ICD-10-CM files
+  url: https://www.cdc.gov/nchs/icd/icd-10-cm/files.html
+  note: Releases and the dates of service each applies to; conversion table.
+- id: REF-H5
+  title: CDC, ICD-10-CM and ICD-10-PCS order files (FY2021 description)
+  url: https://ftp.cdc.gov/pub/Health_Statistics/NCHS/publications/ICD10CM/2021/icd10OrderFiles-p-2021.pdf
+  note: Header codes flagged as not valid for HIPAA-covered transactions.
+- id: REF-H6
+  title: CMS, MLN Matters SE1408 (archived)
+  url: https://web.archive.org/web/2016/https://www.cms.gov/Outreach-and-Education/Medicare-Learning-Network-MLN/MLNMattersArticles/downloads/SE1408.pdf
+  note: Institutional claims use the code set by discharge or through date.
+- id: REF-H7
+  title: CMS, ICD-10 files and GEMs archive
+  url: https://www.cms.gov/medicare/coding/icd10/archive-icd-10-cm-icd-10-pcs-gems
+  note: GEMs last updated for fiscal year 2018.
+- id: REF-H8
+  title: WHO, ICD-11 Reference Guide
+  url: https://icdcdn.who.int/icd11referenceguide/en/refguide.pdf
+  note: Stem and extension codes, clusters, dual coding, versions and transition tables; ICD-11 in effect from 1 January 2022.
+- id: REF-H9
+  title: SNOMED International, SNOMED CT identifiers
+  url: https://docs.snomed.org/snomed-ct-specifications/snomed-ct-release-file-specification/snomed-ct-identifiers/6.4-check-digit
+  note: Verhoeff check digit; 6 to 18 digits.
+- id: REF-H10
+  title: SNOMED International, Historical association reference sets
+  url: https://docs.snomed.org/snomed-ct-specifications/snomed-ct-release-file-specification/reference-set-release-file-specification/5.2-reference-set-types/5.2.1-content-reference-sets/5.2.1.4-association-reference-set/5.2.5.1-historical-association-reference-sets
+  note: REPLACED BY, SAME AS, POSSIBLY EQUIVALENT TO and others.
+- id: REF-H11
+  title: LOINC, Calculating mod 10 check digits
+  url: https://loinc.org/kb/users-guide/calculating-mod-10-check-digits
+  note: The algorithm and terms with known wrong check digits.
+- id: REF-H12
+  title: LOINC, Updating to new versions of LOINC
+  url: https://loinc.org/kb/users-guide/recommendations-for-best-practices-in-using-and-mapping-to-loinc/updating-to-new-versions-of-loinc
+  note: Deprecated terms and MAP_TO.
+- id: REF-H13
+  title: The Unified Code for Units of Measure
+  url: https://ucum.org/ucum
+  note: Case-sensitive symbols.
+- id: REF-H14
+  title: HL7 FHIR R5, Terminology service
+  url: https://hl7.org/fhir/R5/terminology-service.html
+  note: $validate-code, $lookup, $expand, $subsumes, $translate.
+- id: REF-H15
+  title: HL7 FHIR R5, ConceptMap
+  url: https://hl7.org/fhir/R5/conceptmap.html
+  note: Relationship codes.
+- id: REF-H16
+  title: NLM, SNOMED CT to ICD-10-CM map
+  url: https://www.nlm.nih.gov/research/umls/mapping_projects/snomedct_to_icd10cm.html
+  note: Rule-based map using age and sex.
+- id: REF-H17
+  title: NLM, SNOMED CT United States Edition
+  url: https://www.nlm.nih.gov/healthit/snomedct/us_edition.html
+  note: Distribution through UMLS; free in member countries.
+- id: REF-H18
+  title: AMA, CPT licensing
+  url: https://www.ama-assn.org/practice-management/cpt-licensing
+  note: A licence is needed to use or display CPT.
+- id: REF-H19
+  title: SNOMED International, February 2022 International Edition release notes
+  url: https://conf.spaces.snomed.org/wiki/spaces/RMT/pages/131958082
+  note: The first monthly International Edition.
+- id: REF-H20
+  title: Regulation (EU) 2025/327, European Health Data Space
+  url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
+  note: Article 15, the European exchange format and its coding systems.
+- id: REF-H21
+  title: Regulation (EU) 2016/679, GDPR
+  url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
+  note: Article 5(1)(c), data minimisation.
+changelog:
+- version: 0.1.0
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'First draft: code systems, releases by date, validation, value sets, maps, ICD-11 clusters, local codes, dual coding, licences and release watch.'
+acronyms:
+- term: CPT
+  definition: Current Procedural Terminology, maintained by the American Medical Association
+- term: GEMs
+  definition: General Equivalence Mappings between ICD-9 and ICD-10, last updated by CMS for fiscal year 2018
+- term: HCPCS
+  definition: Healthcare Common Procedure Coding System
+- term: ICD-10-CM
+  definition: ICD-10 Clinical Modification, the US diagnosis classification
+- term: ICD-10-PCS
+  definition: ICD-10 Procedure Coding System, for US inpatient procedures
+- term: ICD-11 MMS
+  definition: ICD-11 for Mortality and Morbidity Statistics
+- term: LOINC
+  definition: Logical Observation Identifiers Names and Codes
+- term: NDC
+  definition: National Drug Code
+- term: SCTID
+  definition: SNOMED CT identifier
+- term: UCUM
+  definition: Unified Code for Units of Measure
+tables:
+- name: code_systems
+  description: One row per code system and edition.
+  columns:
+  - name: uri
+    type: text
+  - name: edition
+    type: text
+    default: ''''''
+  - name: name
+    type: text
+  - name: publisher
+    type: text
+  - name: kind
+    type: text
+  - name: case_sensitive
+    type: boolean
+  - name: check_digit
+    type: text
+  - name: licence
+    type: jsonb
+  - name: revision
+    type: integer
+    default: '0'
+  indexes: []
+  constraints:
+  - name: code_systems_pkey
+    definition: PRIMARY KEY (uri, edition)
+- name: releases
+  description: One row per release.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: code_system
+    type: text
+  - name: edition
+    type: text
+    default: ''''''
+  - name: version
+    type: text
+  - name: effective
+    type: daterange
+    note: effective_from and effective_to
+  - name: status
+    type: text
+  - name: source
+    type: jsonb
+  - name: changes
+    type: jsonb
+    nullable: true
+  - name: loaded_by
+    type: uuid
+  - name: activated_by
+    type: uuid
+    nullable: true
+  indexes:
+  - name: releases_in_effect
+    definition: CREATE INDEX ON releases USING gist (code_system, edition, effective) WHERE status = 'active'
+    note: The release in effect on a date.
+  constraints:
+  - name: releases_pkey
+    definition: PRIMARY KEY (id)
+  - name: releases_version
+    definition: UNIQUE (code_system, edition, version)
+  - name: releases_no_overlap
+    definition: EXCLUDE USING gist (code_system WITH =, edition WITH =, effective WITH &&) WHERE (status = 'active')
+    note: BR-H2; needs the btree_gist extension
+- name: concepts
+  description: One row per concept per release in which it appears.
+  columns:
+  - name: release_id
+    type: uuid
+  - name: code
+    type: text
+  - name: display
+    type: text
+  - name: designations
+    type: jsonb
+    default: '''[]'''
+  - name: status
+    type: text
+  - name: valid_for_reporting
+    type: boolean
+    nullable: true
+  - name: parents
+    type: text[]
+    default: '''{}'''
+  - name: replaced_by
+    type: jsonb
+    default: '''[]'''
+  indexes:
+  - name: concepts_search
+    definition: CREATE INDEX ON concepts USING gin (to_tsvector('simple', display))
+    note: Text search; a real deployment also indexes designations per language.
+  constraints:
+  - name: concepts_pkey
+    definition: PRIMARY KEY (release_id, code)
+- name: value_sets
+  description: One row per value set version.
+  columns:
+  - name: url
+    type: text
+  - name: version
+    type: text
+  - name: name
+    type: text
+  - name: used_by
+    type: text[]
+    default: '''{}'''
+  - name: rules
+    type: jsonb
+  - name: binding
+    type: text
+  - name: status
+    type: text
+    default: '''draft'''
+  - name: revision
+    type: integer
+    default: '0'
+  indexes: []
+  constraints:
+  - name: value_sets_pkey
+    definition: PRIMARY KEY (url, version)
+- name: maps
+  description: One row per map.
+  columns:
+  - name: id
+    type: uuid
+    default: gen_random_uuid()
+  - name: source
+    type: jsonb
+  - name: target
+    type: jsonb
+  - name: kind
+    type: text
+  - name: entries
+    type: jsonb
+  - name: status
+    type: text
+    default: '''draft'''
+  - name: revision
+    type: integer
+    default: '0'
+  indexes: []
+  constraints:
+  - name: maps_pkey
+    definition: PRIMARY KEY (id)
+- name: dual_coding
+  description: 'dual_coding.pairs: classifications coded side by side, and when.'
+  columns:
+  - name: first_system
+    type: text
+  - name: second_system
+    type: text
+  - name: uses
+    type: text[]
+  - name: period
+    type: daterange
+  indexes: []
+  constraints:
+  - name: dual_coding_pkey
+    definition: PRIMARY KEY (first_system, second_system, period)
+- name: terminology_change_log
+  description: Every change, with who, when and why.
+  columns:
+  - name: id
+    type: bigint
+    default: generated always as identity
+  - name: subject
+    type: text
+  - name: action
+    type: text
+  - name: actor
+    type: uuid
+  - name: reason
+    type: text
+    nullable: true
+  - name: at
+    type: timestamptz
+    default: now()
+  indexes: []
+  constraints: []
+technicalNotes:
+- id: TN-H1
+  title: Activate in one transaction
+  text: Load concepts into staging tables keyed by release id, then flip the release status and the previous release's effective_to in one transaction, so readers see the old or the new release, never a mix.
+- id: TN-H2
+  title: Pick the release by date
+  text: Store each release's period as a date range and find the release in effect with a range containment query; an exclusion constraint stops overlaps.
+- id: TN-H3
+  title: Cache safely
+  text: Key cached answers by code system, edition, release version and value set version, and drop them on terminology.release_activated and terminology.value_set_activated.
+compliance:
+- id: CMP-H1
+  regulation: HIPAA Transactions and Code Sets
+  provision: 45 CFR 162.1002
+  obligation: Use ICD-10-CM, ICD-10-PCS, HCPCS and CPT, CDT and NDC in transactions.
+  how: These code sets are registered and loaded.
+  status: met
+  covered_by:
+  - BR-H29
+  jurisdiction: us
+- id: CMP-H2
+  regulation: HIPAA Transactions and Code Sets
+  provision: 45 CFR 162.1011
+  obligation: Code sets are valid within the dates their maintainers set.
+  how: Validation by the release in effect on the date.
+  status: met
+  covered_by:
+  - BR-H2
+  - BR-H5
+  jurisdiction: us
+- id: CMP-H3
+  regulation: ONC Health IT Certification
+  provision: 45 CFR 170.207
+  obligation: Use the named vocabulary standards, such as SNOMED CT US Edition and LOINC.
+  how: Loaded at the versions named.
+  status: met
+  covered_by:
+  - BR-H29
+  jurisdiction: us
+- id: CMP-H4
+  regulation: European Health Data Space (EU) 2025/327
+  provision: Article 15
+  obligation: Use the coding systems the European exchange format's implementing acts name.
+  how: Value sets for exchanged fields follow the implementing acts as they are adopted.
+  status: partly met
+  covered_by:
+  - BR-H30
+  jurisdiction: eu
+- id: CMP-H5
+  regulation: GDPR (EU) 2016/679
+  provision: Article 5(1)(c)
+  obligation: Data minimisation.
+  how: No patient data stored; map context is used only for the request.
+  status: met
+  covered_by:
+  - CON-H1
+  - BR-H16
+  jurisdiction: eu
+---
+
+Every module that records a diagnosis, a test or a unit asks this one what
+the code means and whether it is allowed. It holds each release of each code
+system with the dates it applies to, so the answer depends on when the care
+happened, not on when someone asks.
+
+## A code is checked against the release in effect on the day
+
+ICD-10-CM changes every 1 October and sometimes on 1 April, LOINC twice a
+year, and SNOMED CT's International Edition every month. A code valid last
+September may not be valid now, and the reverse. So every validation names a
+date, and the answer names the release it used (BR-H2, BR-H27). Which date to
+use is a setting, because CDC states releases by date of service while CMS
+uses the discharge date for inpatient claims (BR-H3).
+
+## Nothing is ever deleted
+
+Releases are added, never changed or removed, and inactive codes keep their
+meaning. A record coded in 2016 reads the same today, and the publisher's
+suggested replacement is offered without rewriting it (BR-H6, BR-H8).
+
+## A map suggests, a person decides
+
+Maps between code systems are rarely one to one. A translation returns
+candidates and how closely each matches, uses the patient's age or sex only
+for the request, and never replaces the code a clinician chose (BR-H15,
+BR-H16).
+
+## A late release is everyone's problem
+
+When a new release isn't loaded on time, valid new codes are refused in every
+module at once. The service watches for releases that are due, and a release
+can be loaded weeks ahead to take effect on its own date (BR-H5, BR-H24).
