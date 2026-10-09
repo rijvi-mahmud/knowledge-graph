@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.5.0
+version: 0.6.0
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -207,11 +207,11 @@ businessRules:
   text: Passwords are at least 15 characters when used alone, or 8 when used with another factor, are checked against a list of common and compromised passwords, and have no composition rules and no forced periodic change; a password is changed when there is evidence it is compromised.
   rationale: NIST SP 800-63B-4 sets these lengths, requires the blocklist check, and forbids composition rules and periodic changes, which push people to weaker, predictable passwords.
 - id: BR-H7
-  text: Failed sign-ins are throttled and recorded. Unusual patterns, such as many failures or sign-ins from a new country, are reported to the privacy officer, and an account under attack is locked until verified.
-  rationale: HIPAA expects procedures for monitoring log-in attempts and reporting discrepancies (45 CFR 164.308(a)(5)(ii)(C)), and NIST SP 800-63B requires limiting failed attempts.
+  text: Failed sign-ins are recorded and throttled per authenticator, with waits that grow as failures add up and a bot check where useful. After max_failed_attempts failures in a row, that authenticator is disabled and must be registered again through recovery (BR-H19); the account itself isn't locked, and a success resets the count. Unusual patterns, such as many failures or sign-ins from a new country, emit identity.signin_anomaly for the privacy officer, who, like an account administrator, can lock an account they suspect is compromised until the holder is verified.
+  rationale: NIST SP 800-63B-4 caps consecutive failures at 100 by disabling the authenticator, and suggests growing waits so an attacker can't lock the real user out; locking a clinician's whole account on failed guesses would let anyone stop them working mid-shift. HIPAA expects log-in monitoring (45 CFR 164.308(a)(5)(ii)(C)).
 - id: BR-H8
-  text: A session pauses after session_inactivity_timeout without activity and ends after session_max_duration, both set for the session's AAL; pausing or ending it clears patient data from the screen. At AAL2, a paused session may be resumed with the user's password or PIN alone, together with the session they still hold. At AAL3, and after session_max_duration, the user authenticates in full.
-  rationale: HIPAA expects sessions to end after inactivity (45 CFR 164.312(a)(2)(iii)). NIST SP 800-63B-4 sets at most 1 hour of inactivity and 24 hours overall at AAL2, allows reauthentication with a password and the session secret after an inactivity timeout, and sets 15 minutes and 12 hours at AAL3 with full reauthentication.
+  text: A session pauses after session_inactivity_timeout without activity and ends after session_max_duration, both set for the session's AAL; pausing or ending it clears patient data from the screen. At AAL2, a paused session may be resumed with the user's password or PIN alone, together with the session they still hold. At AAL3, and after session_max_duration, the user authenticates in full. The user is warned at least 2 minutes before a pause and can stay signed in with one simple action, at least ten times; they are prompted to save their work before session_max_duration.
+  rationale: HIPAA expects sessions to end after inactivity (45 CFR 164.312(a)(2)(iii)). NIST SP 800-63B-4 sets at most 1 hour of inactivity and 24 hours overall at AAL2, allows reauthentication with a password and the session secret after an inactivity timeout, and sets 15 minutes and 12 hours at AAL3 with full reauthentication. WCAG 2.1 success criterion 2.2.1 requires a warning and at least 20 seconds to extend a time limit with a simple action, at least ten times, and NIST suggests prompting about 2 minutes ahead.
 - id: BR-H9
   text: A module can ask for a fresh authentication before a sensitive action, such as signing a note or a prescription, and say whether every factor of the required level must be presented at that moment. The answer says whether the user authenticated at that level within the freshness asked for; a resumption with a password or PIN alone never counts as presenting every factor.
   rationale: A signature or prescription must be made by the person themselves at that moment, not by whoever finds an open session; some signatures, such as controlled substance prescriptions in the United States, legally need the full two-factor protocol at signing (21 CFR 1311.140).
@@ -292,6 +292,9 @@ businessRules:
 - id: BR-H33
   text: A minor may hold their own patient account from minor_own_account_age. Because many minors have no identity documents, they can be proofed with a trusted referee or an applicant reference, such as a parent or clinician who knows them, at patient_identity_assurance.
   rationale: Which minors may see their own record, and which parts, is set by state and member state law, so the age is a setting; NIST SP 800-63A-4 requires support for applicant references for people under 18 and names trusted referees for those without documents.
+- id: BR-H34
+  text: 'Sign-in, enrolment, recovery, step-up and app approval screens meet WCAG 2.1 Level AA, including in the authenticators offered: at least one way to authenticate doesn''t depend on remembering, transcribing or solving a puzzle.'
+  rationale: People with disabilities must be able to reach their own care and do their jobs; US recipients of federal funds with 15 or more employees must meet WCAG 2.1 AA from 11 May 2027 (45 CFR 84.84), and EU public sector bodies must make their websites and apps accessible (Directive (EU) 2016/2102). Passkeys and security keys need no memory or transcription.
 validations:
 - field: account.subject
   rule: An existing practitioner, staff record, patient, representative relationship or registered system
@@ -340,10 +343,10 @@ stateMachine:
     trigger: identity proofed and first authenticator registered (BR-H12)
   - from: active
     to: locked
-    trigger: too many failed sign-ins or suspected attack (BR-H7)
+    trigger: an administrator or the privacy officer suspects compromise (BR-H7)
   - from: locked
     to: active
-    trigger: unlocked after verification
+    trigger: unlocked after the holder is verified (BR-H7)
   - from: active
     to: suspended
     trigger: an administrator suspends it (BR-H24)
@@ -527,6 +530,12 @@ edgeCases:
   behaviour: They are proofed with a trusted referee, such as a social worker, as NIST allows.
   covers:
   - BR-H33
+- id: EC-H21
+  situation: Someone types a surgeon's username with wrong passwords all morning to stop them signing in.
+  behaviour: Waits grow and the password may be disabled, but the surgeon still signs in with their security key or badge, and the privacy officer sees the anomaly.
+  covers:
+  - BR-H7
+  - AC-H7
 functionalRequirements:
 - id: FR-H1
   text: The service must create, disable and lock accounts, one per person or system.
@@ -586,6 +595,10 @@ functionalRequirements:
   text: The service must enforce token lifetimes, PKCE, exact redirect matching, refresh token rotation and assertion replay checks.
   priority: must
   verification: test
+- id: FR-H15
+  text: The service must throttle and disable authenticators after repeated failures without locking the account, warn before timeouts, and keep its screens accessible.
+  priority: must
+  verification: test
 nonFunctionalRequirements:
 - category: security
   text: Authenticators are verified with phishing-resistant protocols where the authenticator supports them, and secrets never leave the service.
@@ -643,6 +656,9 @@ settings:
 - name: minor_own_account_age
   type: integer
   description: The age from which a minor may hold their own patient account. Set from state or member state law and organization policy; it varies by place and needs legal advice. Unset means only from age_of_majority, which the Patients module holds.
+- name: max_failed_attempts
+  type: integer
+  description: Consecutive failures before an authenticator is disabled. At most 100 (NIST SP 800-63B-4); default 100, because lower values make it easier for an attacker to lock a real user out.
 performanceTargets:
 - id: PERF-H1
   indicator: Permission check latency
@@ -702,11 +718,12 @@ acceptanceCriteria:
   verifies:
   - BR-H6
 - id: AC-H7
-  given: repeated failed sign-ins to one account
-  when: they continue past the throttle
-  then: sign-ins are slowed, then the account is locked with identity.account_locked and identity.signin_anomaly emitted; a later sign-in fails with IDENTITY_ACCOUNT_LOCKED and HTTP 403, and unlocking without verification fails with IDENTITY_REASON_REQUIRED and HTTP 422
+  given: max_failed_attempts of 100, and an attacker guessing a nurse's password
+  when: the guesses continue past the throttle, then the nurse signs in with their security key, then the privacy officer locks the account
+  then: waits grow, identity.signin_anomaly is emitted, and after 100 failures the password is disabled but the account isn't; the nurse signs in with the key and is told to register a new password; the lock emits identity.account_locked, sign-in then fails with IDENTITY_ACCOUNT_LOCKED and HTTP 403, and unlocking without a verification record fails with IDENTITY_REASON_REQUIRED and HTTP 422
   verifies:
   - BR-H7
+  - FR-H15
 - id: AC-H8
   given: session_inactivity_timeout of 30 minutes and session_max_duration of 12 hours at AAL2
   when: a session is idle for 31 minutes, and another reaches 12 hours
@@ -949,6 +966,20 @@ acceptanceCriteria:
   then: the 12-year-old's enrolment fails with IDENTITY_UNDER_ACCOUNT_AGE and HTTP 422; the 14-year-old gets a pending account
   verifies:
   - BR-H33
+- id: AC-H44
+  given: session_inactivity_timeout of 30 minutes
+  when: a user is idle for 28 minutes, then presses a key on the warning, ten times over
+  then: each time they are warned at least 2 minutes before the pause and stay signed in
+  verifies:
+  - BR-H8
+  - FR-H15
+- id: AC-H45
+  given: the sign-in, enrolment and recovery screens
+  when: they are tested against WCAG 2.1 Level AA, and a user signs in with a passkey
+  then: they conform, and the passkey sign-in needs no remembering or transcription
+  verifies:
+  - BR-H34
+  - FR-H15
 operations:
 - name: Create an account
   actor: Account administrator
@@ -1194,6 +1225,20 @@ operations:
   - IDENTITY_NOT_FOUND
   - IDENTITY_INVALID_STATUS
   - IDENTITY_REASON_REQUIRED
+  - IDENTITY_FORBIDDEN
+- name: Lock an account
+  actor: Privacy officer
+  description: Lock an account suspected of compromise, ending its sessions and tokens, until the holder is verified.
+  method: POST
+  path: /accounts/{id}/lock
+  success: 200
+  input: reason and revision
+  output: the account
+  errors:
+  - IDENTITY_NOT_FOUND
+  - IDENTITY_INVALID_STATUS
+  - IDENTITY_REASON_REQUIRED
+  - IDENTITY_REVISION_CONFLICT
   - IDENTITY_FORBIDDEN
 - name: Suspend an account
   actor: Account administrator
@@ -1580,6 +1625,16 @@ accessMatrix:
     System: any
   permission: none
   note: Public, needs no token.
+- action: Lock an account suspected of compromise
+  roles:
+    Account administrator: any
+    Staff member: none
+    Patient: none
+    Privacy officer: any
+    App: none
+    System: none
+  permission: identity.audit
+  note: Account administrators lock under identity.admin.
 personalData:
 - field: account.subject, account.username, account.kind, account.status, account.roles, account.revision
   category: personal
@@ -1635,7 +1690,7 @@ errors:
   message: The authorization request is missing PKCE with S256, or its redirect URI isn't registered.
 - code: IDENTITY_ACCOUNT_LOCKED
   http: 403
-  message: The account is locked; an administrator must verify you to unlock it.
+  message: The account is locked because it may be compromised; an administrator must verify you to unlock it.
 - code: IDENTITY_AAL_TOO_LOW
   http: 401
   message: This needs a stronger or fresher authentication, or stronger identity proofing; step up and try again.
@@ -1836,7 +1891,26 @@ references:
   title: HL7 SMART App Launch 2.0.0, Backend Services and asymmetric client authentication
   url: https://hl7.org/fhir/smart-app-launch/STU2/backend-services.html
   note: Backend tokens of at most 300 seconds; assertions at most 5 minutes ahead with unique ids.
+- id: REF-H19
+  title: W3C, Web Content Accessibility Guidelines (WCAG) 2.1
+  url: https://www.w3.org/TR/WCAG21/
+  note: Success criterion 2.2.1, Timing Adjustable.
+- id: REF-H20
+  title: 45 CFR 84.84, Requirements for web and mobile accessibility
+  url: https://www.ecfr.gov/current/title-45/section-84.84
+  note: WCAG 2.1 Level AA from 11 May 2027.
+- id: REF-H21
+  title: Directive (EU) 2016/2102, accessibility of public sector websites and mobile applications
+  url: https://eur-lex.europa.eu/eli/dir/2016/2102/oj/eng
+  note: Articles 1, 4 and 6.
 changelog:
+- version: 0.6.0
+  date: '2026-10-09'
+  breaking: true
+  changes:
+  - 'Breaking: repeated failed sign-ins disable the authenticator after max_failed_attempts, not the whole account; only an administrator or the privacy officer locks an account (BR-H7, NIST SP 800-63B-4, new POST /accounts/{id}/lock).'
+  - Timeouts warn at least 2 minutes ahead and can be extended (BR-H8, WCAG 2.1 2.2.1).
+  - Accessible sign-in, enrolment and recovery (BR-H34, 45 CFR 84.84, Directive (EU) 2016/2102).
 - version: 0.5.0
   date: '2026-10-09'
   breaking: true
@@ -2234,6 +2308,26 @@ compliance:
   status: met
   covered_by:
   - BR-H28
+  jurisdiction: eu
+- id: CMP-H11
+  regulation: Section 504 of the Rehabilitation Act
+  provision: 45 CFR 84.84
+  obligation: Web content and mobile apps meet WCAG 2.1 Level AA from 11 May 2027 for recipients with 15 or more employees.
+  how: Accessible sign-in, enrolment and recovery, with timeouts that warn and extend.
+  status: met
+  covered_by:
+  - BR-H34
+  - BR-H8
+  jurisdiction: us
+- id: CMP-H12
+  regulation: Web Accessibility Directive (EU) 2016/2102
+  provision: Articles 1, 4 and 6
+  obligation: Public sector bodies' websites and mobile apps are accessible; harmonised standards give a presumption of conformity.
+  how: Accessible sign-in, enrolment and recovery. Applies when the organization is a public sector body.
+  status: met
+  covered_by:
+  - BR-H34
+  - BR-H8
   jurisdiction: eu
 ---
 
