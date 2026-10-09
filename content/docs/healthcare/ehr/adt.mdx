@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.7.0
+version: 0.7.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -2475,6 +2475,12 @@ compliance:
   covered_by: []
   jurisdiction: us
 changelog:
+- version: 0.7.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Items that apply in one jurisdiction are tagged and labelled "US only" or "EU only", and the spec can be filtered by jurisdiction.
+  - BR-E35 no longer cites a rule it does not have; the Medicare narrative names the United States in its heading.
 - version: 0.7.0
   date: '2026-10-08'
   breaking: false

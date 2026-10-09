@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments for outpatients and patients in a hospital stay: departments, rooms and equipment, referrals, walk-ins, overbooking, linked appointments, and the link to the patient''s encounter.'
 module: appointment
-version: 0.10.0
+version: 0.10.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -1215,6 +1215,12 @@ references:
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 changelog:
+- version: 0.10.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - Items that apply in one jurisdiction are tagged and labelled "US only" or "EU only", and the spec can be filtered by jurisdiction.
+  - AC-H17 and EC-H11 apply in the United States only.
 - version: 0.10.0
   date: '2026-10-08'
   breaking: false
