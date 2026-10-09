@@ -2,7 +2,7 @@
 title: Consent
 description: 'Hospital consent rules: informed consent in the chart before surgery, procedures the medical staff require written consent for, and advance directives at inpatient admission, built on the healthcare consent rules.'
 module: consent
-version: 0.1.2
+version: 0.1.3
 status: draft
 industry: healthcare
 domain: ehr
@@ -24,7 +24,7 @@ businessRules:
   rationale: The medical record must contain properly executed informed consent forms for procedures and treatments the medical staff, or law, specify (42 CFR 482.24(c)(4)(v)).
   jurisdiction: us
 - id: BR-E3
-  text: In the United States, an adult admitted as an inpatient is given advance directive information at admission, and whether they have executed one is recorded.
+  text: In the United States, an adult admitted as an inpatient is given advance directive information at admission, which starts when ADT reports stay.admitted, and whether they have executed one is recorded.
   rationale: Hospitals furnish the information at the time of inpatient admission (42 CFR 489.102(b)(1)).
   jurisdiction: us
 edgeCases:
@@ -72,6 +72,12 @@ dependencies:
   contract:
   - 'Answers: is a properly executed informed consent for this operation, on this patient, on file?'
   - 'Gives: consent.revoked and consent.refused, so an operation whose consent was withdrawn or refused doesn''t start'
+- service: adt-service
+  direction: upstream
+  reason: admits inpatients
+  criticality: soft
+  contract:
+  - 'Receives: stay.admitted, so advance directive information is given at inpatient admission'
 decisions:
 - id: ADR-E1
   decision: The theatre asks whether consent is on file; this module doesn't schedule or stop operations.
@@ -87,6 +93,11 @@ references:
   url: https://www.ecfr.gov/current/title-42/section-482.24
   note: (c)(4)(v), properly executed informed consent forms.
 changelog:
+- version: 0.1.3
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - BR-E3 starts from stay.admitted, received from ADT.
 - version: 0.1.2
   date: '2026-10-10'
   breaking: false

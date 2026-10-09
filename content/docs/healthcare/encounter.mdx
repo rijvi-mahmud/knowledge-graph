@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.3.0
+version: 0.3.1
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.3.1
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - The Consent contract gives encounter.started for notices owed at first service.
 - version: 0.3.0
   date: '2026-10-10'
   breaking: true
@@ -2160,6 +2165,7 @@ dependencies:
   criticality: soft
   contract:
   - 'Gives: the sensitivity codes of each encounter'
+  - 'Gives: encounter.started, so notices owed at first service or admission are given'
   - 'Receives: consent.restriction_decided, for self-pay restrictions covering an encounter''s services'
   - Disclosure decisions, including under 42 CFR Part 2, are Consent's concern
 - service: identity-service

@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.4.1
+version: 0.4.2
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -182,8 +182,24 @@ dataModel:
 - name: check.id
   type: string
   required: true
-  description: The disclosure check id, with who asked, the data, purpose, recipient, the answer, its basis and when.
+  description: The disclosure check id.
   constraints: set by the service
+- name: check.request
+  type: object
+  required: true
+  description: Who asked, the patient, the records or labels, the purpose and the recipient.
+- name: check.answer
+  type: object
+  required: true
+  description: 'For each record: permit, deny or leave out silently, with the consents or law relied on, the obligations, and when.'
+- name: consent.review
+  type: object
+  required: false
+  description: Why it was listed for review and how a privacy officer resolved it.
+- name: emergency_use.review
+  type: object
+  required: false
+  description: Whether a privacy officer judged the emergency use justified, with notes.
 relationships:
 - type: belongs_to
   target: patient
@@ -266,7 +282,7 @@ businessRules:
   rationale: Withholding to reduce exposure to legal action isn't information blocking when tailored and based on a written policy, and the patient can nullify it (45 CFR 171.206(a) and (b)); the attestation in 45 CFR 164.509 was vacated nationwide in Purl v. HHS (N.D. Tex. 2025), and the appeal was dismissed on 10 September 2025.
   jurisdiction: us
 - id: BR-H17
-  text: In the United States, a patient is given the Notice of Privacy Practices by their first service, or as soon as practicable after emergency treatment, and is asked for a written acknowledgment; if it isn't obtained, the good-faith attempt and the reason are recorded. Patients of a Part 2 program are also told at admission, or when they regain capacity, that federal law protects their SUD records.
+  text: In the United States, a patient is given the Notice of Privacy Practices by their first service, which starts when the Encounters module reports their first encounter started, or as soon as practicable after emergency treatment, and is asked for a written acknowledgment; if it isn't obtained, the good-faith attempt and the reason are recorded. Patients whose encounter starts in a department the Organization module reports as a Part 2 program are also told at that admission, or when they regain capacity, that federal law protects their SUD records.
   rationale: Providers must give the notice and try to get an acknowledgment (45 CFR 164.520(c)(2)); Part 2 programs must give their notice at admission (42 CFR 2.22(a)).
   jurisdiction: us
 - id: BR-H18
@@ -1013,6 +1029,13 @@ acceptanceCriteria:
   then: the answer is no opt-out, and reminders continue
   verifies:
   - BR-H27
+- id: AC-H52
+  given: jurisdiction us, a patient registered last week, and a department the Organization module reports as a Part 2 program
+  when: their first encounter starts in that department
+  then: the Notice of Privacy Practices and the Part 2 notice become due, and consent.notice_due is emitted for each
+  verifies:
+  - BR-H17
+  jurisdiction: us
 operations:
 - name: Record a consent
   actor: Registrar
@@ -1484,9 +1507,13 @@ personalData:
   category: health data
   purpose: Documenting emergency use of restricted data
   retention: consent_retention
-- field: consent.id, check.id
+- field: consent.id, check.id, check.request, check.answer
   category: health data; names the patient, data and recipient
   purpose: Showing what each use or disclosure relied on
+  retention: consent_retention
+- field: consent.review, emergency_use.review
+  category: health data
+  purpose: Resolving reviews and judging emergency uses
   retention: consent_retention
 errors:
 - code: CONSENT_NOT_FOUND
@@ -1569,6 +1596,7 @@ dependencies:
   contract:
   - 'Asks: the sensitivity codes of an encounter'
   - 'Gives: consent.restriction_decided with the encounters a self-pay restriction covers, so Encounters marks them'
+  - 'Receives: encounter.started, so the privacy notice is owed at first service and the Part 2 notice at admission to a Part 2 program'
 - service: clinical-documentation-service
   direction: upstream
   reason: labels notes
@@ -1727,6 +1755,12 @@ references:
   url: https://www.ecfr.gov/current/title-45/section-164.514
   note: (f), fundraising communications and the opt-out.
 changelog:
+- version: 0.4.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'BR-H17: notices are owed when the first encounter starts (encounter.started), and the Part 2 notice when it starts in a Part 2 program; registration alone no longer triggers the US notice.'
+  - Data model fields for disclosure check requests and answers, and for review outcomes.
 - version: 0.4.1
   date: '2026-10-10'
   breaking: false
@@ -1838,6 +1872,9 @@ tables:
   - name: revision
     type: integer
     default: '0'
+  - name: review
+    type: jsonb
+    nullable: true
   indexes:
   - name: consents_patient
     definition: CREATE INDEX ON consents (patient_id, status)

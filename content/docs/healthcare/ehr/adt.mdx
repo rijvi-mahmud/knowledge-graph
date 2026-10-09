@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.9.2
+version: 0.9.3
 status: draft
 industry: healthcare
 domain: ehr
@@ -2246,6 +2246,13 @@ dependencies:
   - 'Asks: is this practitioner active, with admitting privileges, on this date?'
   - 'Receives: practitioner.suspended, practitioner.privileges_changed and practitioner.merged'
   - Credentialing and privileges are the Practitioners module's concern
+- service: consent-service
+  direction: downstream
+  reason: gives advance directive information at admission
+  criticality: soft
+  contract:
+  - 'Gives: stay.admitted, so advance directive information is given and recorded at inpatient admission'
+  - Consents and advance directives are Consent's concern
 risks:
 - id: RISK-E1
   risk: Two patients are placed in one bed.
@@ -2654,6 +2661,11 @@ compliance:
   - BR-E47
   jurisdiction: us
 changelog:
+- version: 0.9.3
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - 'Dependency on Consent: gives stay.admitted for advance directive information at admission.'
 - version: 0.9.2
   date: '2026-10-09'
   breaking: false
