@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.3
+version: 0.2.4
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.2.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H55: only active practitioners sign or cosign; BR-H5 also asks for a cosignature when the Practitioners module reports requires_supervision.'
 - version: 0.2.3
   date: '2026-10-09'
   breaking: false
@@ -505,7 +510,7 @@ businessRules:
   text: Only the responsible author signs a note, with their own credential confirmed again at signing. Nobody signs for someone else, signing can't be delegated or automatic, and a stamped or typed name isn't a signature. Signing records signed_at and needs every required section of the note type to have text.
   rationale: Medicare reviewers need the person responsible for each entry identifiable by a handwritten or electronic signature (Program Integrity Manual chapter 3, 3.3.2.4), and HIPAA requires protecting information from improper alteration (45 CFR 164.312(c)(1)); US hospitals must also authenticate every entry (42 CFR 482.24(c)(1)). Medicare doesn't accept stamped signatures except for a documented disability (Program Integrity Manual chapter 3, 3.3.2.4).
 - id: BR-H5
-  text: When cosign_rules say a note type written by an author's role needs a cosignature, the author names the cosigner when signing, signing makes it preliminary and opens an uncosigned deficiency for the cosigner. The cosigner signs it final, optionally with an attestation statement; they can't change the author's text. Changes they want are made by the author as a correction, or by the cosigner as an addendum.
+  text: When cosign_rules say a note type written by an author's role needs a cosignature, or the Practitioners module reports the author requires_supervision, the author names the cosigner when signing, signing makes it preliminary and opens an uncosigned deficiency for the cosigner. The cosigner signs it final, optionally with an attestation statement; they can't change the author's text. Changes they want are made by the author as a correction, or by the cosigner as an addendum.
   rationale: Supervising practitioners take responsibility for trainees' notes as medical staff bylaws require. The author's words stay theirs, so the record shows who said what. HL7 v2 marks such a note pre-authenticated until it is authenticated (Table 0271 PA, AU).
 - id: BR-H6
   text: A scribe enters a note for a named practitioner. The note records the scribe as data_enterer and the practitioner as author. Only the practitioner signs it, with their own date and time, and the scribe can never sign or cosign.
@@ -643,6 +648,9 @@ businessRules:
 - id: BR-H54
   text: Events from Encounters about one encounter are applied in revision order; an event with a lower revision than one already applied is ignored.
   rationale: Encounters sends events at least once and possibly out of order, each with the encounter's revision. Applying an older one, such as discharged after completed, would reopen a finished record.
+- id: BR-H55
+  text: An author or cosigner can sign only while the Practitioners module reports them active. A suspended practitioner's drafts stay drafts until they are reinstated, or until an HIM specialist closes the deficiency as unresolvable; notes they signed before stay as they are.
+  rationale: A signature attests responsibility for care, which a practitioner without a valid licence can't take on; what they signed earlier remains the record.
 validations:
 - field: note.encounter_id
   rule: Encounters confirms an encounter of a patient in use that is not cancelled or entered in error
@@ -1614,6 +1622,13 @@ acceptanceCriteria:
   - BR-H37
   - BR-H39
   - BR-H36
+- id: AC-H64
+  given: an author the Practitioners module has suspended, and a resident it reports requires_supervision
+  when: the author signs a draft, and the resident signs a note whose type cosign_rules don't list
+  then: the author fails with NOTE_AUTHOR_NOT_PERMITTED and HTTP 403 and the draft stays a draft; the resident's note becomes preliminary and needs a cosigner
+  verifies:
+  - BR-H55
+  - BR-H5
 operations:
 - name: Start a note
   actor: Clinician
@@ -1694,6 +1709,7 @@ operations:
   - NOTE_COSIGNER_NOT_PERMITTED
   - NOTE_REVISION_CONFLICT
   - NOTE_DEPENDENCY_UNAVAILABLE
+  - NOTE_AUTHOR_NOT_PERMITTED
 - name: Cosign a note
   actor: Clinician
   description: Cosign a preliminary note as the assigned cosigner, optionally with an attestation statement.
@@ -2807,6 +2823,14 @@ dependencies:
   contract:
   - 'Gives: the note ids that scanned downtime pages belong to'
   - Scanning and storing paper is Document imaging's concern
+- service: practitioner-service
+  direction: upstream
+  reason: knows who may practise
+  criticality: soft
+  contract:
+  - 'Asks: is this practitioner active on this date, and do they require supervision (requires_supervision)?'
+  - 'Receives: practitioner.suspended, practitioner.reinstated and practitioner.merged'
+  - Who may supervise whom is Organization's concern
 risks:
 - id: RISK-H1
   risk: A note is written on the wrong patient.

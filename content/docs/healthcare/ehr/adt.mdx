@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.8.4
+version: 0.8.5
 status: draft
 industry: healthcare
 domain: ehr
@@ -413,6 +413,9 @@ businessRules:
   text: In the United States, at discharge Care management is given the number of consecutive calendar days the patient was an inpatient, not counting the day of discharge. Days under observation are not inpatient days.
   rationale: Medicare covers a skilled nursing facility stay only after at least 3 consecutive calendar days of medically necessary inpatient care, not counting the discharge day (42 CFR 409.30(a)); observation is outpatient care, so a patient who spent nights under observation may not qualify.
   jurisdiction: us
+- id: BR-E46
+  text: When the Practitioners module reports an attending practitioner suspended, or their admitting privileges end, each stay they attend is listed for a bed manager or medical director to name a new attending.
+  rationale: A stay must always have an attending who may practise; the change is a person's decision, so it is listed rather than made automatically.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use, not deceased
@@ -424,7 +427,7 @@ validations:
   rule: Orders confirms an open order of the right kind for this patient
   error: STAY_ORDER_REQUIRED
 - field: attending_practitioner_id
-  rule: Organization confirms admitting privileges on the date
+  rule: The Practitioners module confirms the practitioner is active and holds admitting privileges on the date
   error: STAY_INVALID_PRACTITIONER
 - field: bed_id, waiting_location_id, discharge_destination_id, temporary_location
   rule: Organization confirms the bed or location; a bed must be able to take the patient (BR-E5)
@@ -1256,6 +1259,12 @@ acceptanceCriteria:
   verifies:
   - BR-E45
   jurisdiction: us
+- id: AC-E60
+  given: two admitted stays attended by one practitioner
+  when: the Practitioners module reports practitioner.suspended, and someone makes them attending of a third stay
+  then: both stays are listed for a new attending; the third fails with STAY_INVALID_PRACTITIONER and HTTP 422
+  verifies:
+  - BR-E46
 operations:
 - name: Request an admission
   actor: Clinician
@@ -2181,6 +2190,14 @@ dependencies:
   - 'Asks: is this code valid in this code system on this date?'
   - 'Asks: which codes the value set bound to each coded setting allows on this date'
   - 'Receives: terminology.release_activated and terminology.value_set_activated, to refresh cached code lists'
+- service: practitioner-service
+  direction: upstream
+  reason: knows who may practise and their admitting privileges
+  criticality: soft
+  contract:
+  - 'Asks: is this practitioner active, with admitting privileges, on this date?'
+  - 'Receives: practitioner.suspended and practitioner.privileges_changed'
+  - Credentialing and privileges are the Practitioners module's concern
 risks:
 - id: RISK-E1
   risk: Two patients are placed in one bed.
@@ -2576,6 +2593,11 @@ compliance:
   - CON-E1
   jurisdiction: eu
 changelog:
+- version: 0.8.5
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-E46: stays attended by a suspended practitioner are listed for a new attending; admitting privileges come from the Practitioners module.'
 - version: 0.8.4
   date: '2026-10-09'
   breaking: false

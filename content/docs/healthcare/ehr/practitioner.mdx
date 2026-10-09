@@ -2,7 +2,7 @@
 title: Medical staff and privileges
 description: 'Hospital practitioners: medical staff appointment, clinical privileges, National Practitioner Data Bank queries and reappointment, built on the practitioner rules.'
 module: practitioner
-version: 0.1.0
+version: 0.1.1
 status: draft
 industry: healthcare
 domain: ehr
@@ -32,7 +32,7 @@ dataModel:
 - name: npdb_queries
   type: query[]
   required: false
-  description: 'NPDB queries: date, purpose and the report reference.'
+  description: 'NPDB queries and Continuous Query enrollments: date, purpose, enrollment period and report references.'
   constraints: append-only
   jurisdiction: us
 businessRules:
@@ -44,8 +44,8 @@ businessRules:
   text: Clinical privileges are granted one procedure or service at a time from privilege_catalogue, by the criteria the bylaws set, and never beyond what the practitioner's licence allows. A practitioner may perform or order only what they are privileged for; Theatre, Orders and Clinical documentation ask before allowing it.
   rationale: Hospital bylaws must include criteria for determining the privileges granted to individual practitioners (42 CFR 482.22(c)(6)); privileges are how a hospital limits each practitioner to what they have shown they can do.
 - id: BR-E3
-  text: In the United States, the NPDB is queried when a practitioner applies for appointment or privileges and every 2 years after; privileges are not granted without a current query, and a query falls due 2 years after the last.
-  rationale: Hospitals must request information from the NPDB at application and every 2 years, and are presumed to know what it holds if they don't (45 CFR 60.17).
+  text: In the United States, the NPDB is queried when a practitioner applies for appointment or privileges, and every 2 years after unless they are enrolled in NPDB Continuous Query, which is renewed every 12 months. Privileges are not granted without a query from the last 2 years or a current enrollment. A new report received through Continuous Query is reviewed by the credentials committee.
+  rationale: Hospitals must request information from the NPDB at application and every 2 years, and are presumed to know what it holds if they don't (45 CFR 60.17). HRSA's NPDB Guidebook says hospitals that enroll practitioners in Continuous Query fulfill the mandatory query requirements; enrollment lasts 12 months, and new reports arrive within 24 hours.
   jurisdiction: us
 - id: BR-E4
   text: In the United States, each member of the medical staff is appraised and reappointed every reappointment_interval; practitioner.reappointment_due is emitted ahead, and a member not reappointed by reappoint_by loses their privileges.
@@ -130,6 +130,13 @@ acceptanceCriteria:
   then: their privileges are suspended at once with practitioner.privileges_changed, then restored
   verifies:
   - BR-E6
+- id: AC-E7
+  given: a practitioner enrolled in Continuous Query 8 months ago with no one-time query in 2 years
+  when: privileges are granted, and later a new report arrives
+  then: the grant succeeds because the enrollment is current; the report emits practitioner.npdb_report_received and is listed for the credentials committee
+  verifies:
+  - BR-E3
+  jurisdiction: us
 operations:
 - name: Appoint to the medical staff
   actor: Credentials committee
@@ -211,11 +218,11 @@ operations:
   - PRACTITIONER_NOT_FOUND
 - name: Record an NPDB query
   actor: Credentialing specialist
-  description: Record an NPDB query and its report reference.
+  description: Record an NPDB query, a Continuous Query enrollment or renewal, or a new report it delivered.
   method: POST
   path: /practitioners/{id}/npdb-queries
   success: 201
-  input: date, purpose and report reference
+  input: date, purpose (query, enrollment or report), enrollment period and report reference
   output: the query
   errors:
   - PRACTITIONER_NOT_FOUND
@@ -240,6 +247,13 @@ events:
   - practitioner_id
   - revision
   - reappoint_by
+- name: practitioner.npdb_report_received
+  description: Continuous Query delivered a new NPDB report for review.
+  payload:
+  - practitioner_id
+  - revision
+  - received_at
+  jurisdiction: us
 permissions:
 - name: practitioner.privileges
   description: Grant, revoke and check privileges.
@@ -322,6 +336,7 @@ dependencies:
   contract:
   - 'Gives: practitioner.credential_expiring and practitioner.credential_expired, for the practitioner and credentialing staff'
   - 'Gives: practitioner.npdb_query_due and practitioner.reappointment_due'
+  - 'Gives: practitioner.npdb_report_received, for the credentials committee'
 decisions:
 - id: ADR-E1
   decision: Privileges are granted per procedure or service from a catalogue.
@@ -336,7 +351,16 @@ references:
   title: 45 CFR 60.17, Information which hospitals must request from the NPDB
   url: https://www.ecfr.gov/current/title-45/section-60.17
   note: At application and every 2 years.
+- id: REF-E3
+  title: NPDB Guidebook, Submitting a query
+  url: https://www.npdb.hrsa.gov/guidebook/DSubmittingaQuery.jsp
+  note: Continuous Query enrollment fulfills the mandatory query requirements; 12-month enrollment.
 changelog:
+- version: 0.1.1
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-E3: NPDB Continuous Query enrollment satisfies the 2-year query, and new reports go to the credentials committee.'
 - version: 0.1.0
   date: '2026-10-09'
   breaking: false

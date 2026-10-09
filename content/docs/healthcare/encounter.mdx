@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.8
+version: 0.1.9
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.9
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'BR-H50: only practitioners the Practitioners module reports active can take part in encounters.'
 - version: 0.1.8
   date: '2026-10-09'
   breaking: false
@@ -459,6 +464,9 @@ businessRules:
 - id: BR-H49
   text: An encounter for care given during an EHR downtime is opened afterwards with the times the care actually happened and downtime_entry set. Check-ins and arrivals replayed from other modules keep their original times, and the record due date counts from the real end of care.
   rationale: Paper records must be entered and reconciled after recovery (REF-H22); using the time of entry would misstate when care happened and shorten the time to complete the record.
+- id: BR-H50
+  text: A practitioner is added as a participant only while the Practitioners module reports them active on the date. When it reports practitioner.suspended, their participations already recorded stay as they are, but they can't be added to encounters or start one until reinstated.
+  rationale: Care by a practitioner whose licence lapsed or who is excluded is unlawful and unpaid; what they already did stays part of the record.
 validations:
 - field: patient_id
   rule: Patients confirms a record in use
@@ -482,7 +490,7 @@ validations:
   rule: RFC 3339 instants; actual_end not before actual_start; actual times not in the future
   error: ENCOUNTER_INVALID_PERIOD
 - field: participants
-  rule: a role code and a practitioner who holds a role in the department on the date; one attending at a time for inpatient and observation
+  rule: a role code and a practitioner the Practitioners module reports active, who holds a role in the department on the date; one attending at a time for inpatient and observation
   error: ENCOUNTER_INVALID_PARTICIPANT
 - field: locations
   rule: Organization confirms the location; at most one active; period within the encounter's
@@ -1227,6 +1235,13 @@ acceptanceCriteria:
   then: the encounter is discharged with disposition hosp, and encounter.discharged carries it
   verifies:
   - BR-H9
+  variant: ambulatory
+- id: AC-H74
+  given: a practitioner the Practitioners module has suspended
+  when: they are added to an ambulatory encounter
+  then: it fails with ENCOUNTER_INVALID_PARTICIPANT and HTTP 422; their earlier participations are unchanged
+  verifies:
+  - BR-H50
   variant: ambulatory
 operations:
 - name: Open an encounter
@@ -2103,6 +2118,14 @@ dependencies:
   - 'Gives: this module''s data for a single-patient electronic health information export (45 CFR 170.315(b)(10)); producing the export is Release of information''s concern'
   - 'Gives: encounter.correction_decided, with any statement of disagreement, to include with later disclosures (45 CFR 164.526(d)(5))'
   - Accounting of disclosures (45 CFR 164.528) and copies in other forms are Release of information's concern
+- service: practitioner-service
+  direction: upstream
+  reason: knows who may practise
+  criticality: soft
+  contract:
+  - 'Asks: is this practitioner active on this date?'
+  - 'Receives: practitioner.suspended, practitioner.reinstated and practitioner.merged'
+  - Credentialing is the Practitioners module's concern
 risks:
 - id: RISK-H1
   risk: Records stay incomplete past the deadline.
