@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.1.7
+version: 0.1.8
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,12 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.1.8
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - A disposition field for every encounter, as USCDI Encounter Disposition requires (BR-H9).
+  - WCAG 2.1 AA for patient-facing features and NIS2 incident reporting, as deployment duties.
 - version: 0.1.7
   date: '2026-10-09'
   breaking: false
@@ -266,6 +272,11 @@ dataModel:
   required: false
   description: Changes after locking, with who, when, why and the previous value.
   constraints: append-only; set by the service
+- name: disposition
+  type: code
+  required: false
+  description: Where the patient went, or the setting they left to, when the encounter ended, such as home or another facility.
+  constraints: 'set when the encounter is discharged or discontinued; codes: HL7 discharge-disposition (such as home, other-hcf, hosp, snf, aadvice, exp)'
 - name: departure_reason
   type: code
   required: false
@@ -363,7 +374,7 @@ businessRules:
   text: A completed encounter is locked. Any later change is an amendment that records who, when, why and the previous value, and emits encounter.amended.
   rationale: Hospitals must keep record entries complete and protect their integrity (42 CFR 482.24(b)). Silent changes after completion would change a record others have relied on, including claims.
 - id: BR-H9
-  text: A planned encounter that never starts is cancelled. An encounter that started but ended early, such as the patient leaving against advice or without being seen, is discontinued with a departure reason.
+  text: A planned encounter that never starts is cancelled. An encounter that started but ended early, such as the patient leaving against advice or without being seen, is discontinued with a departure reason. Every encounter that ends records its disposition.
   rationale: FHIR separates encounters that never happened from those cut short. A patient who left is part of the record and of quality reporting, so nothing is deleted.
 - id: BR-H10
   text: An encounter can be marked entered in error only while no clinical data has been recorded against it (has_clinical_data unset). Otherwise its data is moved to the right encounter first.
@@ -823,6 +834,8 @@ nonFunctionalRequirements:
   text: Opening an encounter never waits on Billing, Consent or Clinical documentation.
 - category: portability
   text: No requirement depends on a particular database, language or framework.
+- category: usability
+  text: Patient-facing screens, messages and documents meet WCAG 2.1 Level AA, and work with assistive technology.
 constraints:
 - id: CON-H1
   text: Encounter data is encrypted in transit and at rest.
@@ -1207,6 +1220,13 @@ acceptanceCriteria:
   then: actual_start is 09:10, actual_end 09:40, downtime_entry is set, and record_due_at counts from 09:40
   verifies:
   - BR-H49
+  variant: ambulatory
+- id: AC-H73
+  given: an ambulatory visit where the patient is sent to the emergency department
+  when: it is ended with disposition hosp
+  then: the encounter is discharged with disposition hosp, and encounter.discharged carries it
+  verifies:
+  - BR-H9
   variant: ambulatory
 operations:
 - name: Open an encounter
@@ -1601,6 +1621,7 @@ events:
   payload:
   - encounter_id
   - actual_end
+  - disposition
   - record_due_at
   - revision
 - name: encounter.discontinued
@@ -1846,7 +1867,7 @@ personalData:
   category: health data
   purpose: Care, quality reporting and billing
   retention: record_retention of the Patients module
-- field: departure_reason
+- field: departure_reason, disposition
   category: health data; reveals origin, destination and outcome
   purpose: The stay's admission and discharge
   retention: record_retention of the Patients module
@@ -2170,6 +2191,22 @@ references:
   title: ONC, SAFER Guides (2025), Contingency Planning
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
+- id: REF-H23
+  title: ONC, United States Core Data for Interoperability, Version 5
+  url: https://www.healthit.gov/isp/sites/isp/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
+  note: 'Encounter information: type, identifier, diagnosis, time, location and disposition.'
+- id: REF-H24
+  title: 45 CFR 84.84, Requirements for web and mobile accessibility
+  url: https://www.ecfr.gov/current/title-45/section-84.84
+  note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+- id: REF-H25
+  title: 45 CFR 92.204, Accessibility of information and communication technology
+  url: https://www.ecfr.gov/current/title-45/section-92.204
+  note: Health programs provided through ICT must be accessible.
+- id: REF-H26
+  title: Directive (EU) 2022/2555 (NIS2)
+  url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
+  note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
 acronyms:
 - term: AMB, EMER, IMP, OBSENC, VR
   definition: 'HL7 encounter classes: ambulatory, emergency, inpatient, observation, virtual'
@@ -2266,6 +2303,9 @@ tables:
   - name: downtime_entry
     type: boolean
     default: '''false'''
+  - name: disposition
+    type: text
+    nullable: true
   indexes:
   - name: encounters_by_patient
     definition: (patient_id, lower(actual_period))
@@ -2644,6 +2684,25 @@ compliance:
   how: Where data is stored and who processes it is a deployment choice.
   status: deployment
   covered_by: []
+  jurisdiction: eu
+- id: CMP-H27
+  regulation: Section 504 and Section 1557 (Affordable Care Act)
+  provision: 45 CFR 84.84 and 92.204
+  obligation: Patient-facing web content and mobile apps meet WCAG 2.1 Level AA from 11 May 2027 (May 2028 for providers with fewer than 15 employees).
+  how: Patient-facing screens, messages and documents are built to WCAG 2.1 AA; testing them is the deployment's duty.
+  status: deployment
+  covered_by:
+  - BR-H39
+  jurisdiction: us
+- id: CMP-H28
+  regulation: NIS2 Directive (EU) 2022/2555
+  provision: Articles 21 and 23
+  obligation: Healthcare providers that are essential or important entities manage cybersecurity risk and report significant incidents within 24 hours, with an update within 72 hours and a final report within a month.
+  how: Access logging and encryption here support it; risk management and reporting are the organization's.
+  status: deployment
+  covered_by:
+  - BR-H18
+  - CON-H1
   jurisdiction: eu
 ---
 

@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.8.3
+version: 0.8.4
 status: draft
 industry: healthcare
 domain: ehr
@@ -2267,6 +2267,10 @@ references:
   title: 42 CFR 409.30, Basic requirements for SNF coverage
   url: https://www.ecfr.gov/current/title-42/section-409.30
   note: At least 3 consecutive inpatient calendar days, not counting the discharge day.
+- id: REF-E21
+  title: Directive (EU) 2022/2555 (NIS2)
+  url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
+  note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
@@ -2562,7 +2566,21 @@ compliance:
   covered_by:
   - BR-E45
   jurisdiction: us
+- id: CMP-E34
+  regulation: NIS2 Directive (EU) 2022/2555
+  provision: Articles 21 and 23
+  obligation: Healthcare providers that are essential or important entities manage cybersecurity risk and report significant incidents within 24 hours, with an update within 72 hours and a final report within a month.
+  how: Access logging and encryption here support it; risk management and reporting are the organization's.
+  status: deployment
+  covered_by:
+  - CON-E1
+  jurisdiction: eu
 changelog:
+- version: 0.8.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - NIS2 incident reporting, as a deployment duty.
 - version: 0.8.3
   date: '2026-10-09'
   breaking: false

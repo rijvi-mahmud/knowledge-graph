@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.11.3
+version: 0.11.4
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -981,6 +981,10 @@ nonFunctionalRequirements:
   text: The jurisdiction setting decides which retention and communication rules apply. United States and European Union are supported.
 - category: compatibility
   text: 'Statuses map to FHIR R5: pending to pending, booked to booked, checked_in to checked-in, completed to fulfilled, no_show to noshow, cancelled to cancelled, entered_in_error to entered-in-error.'
+- category: compatibility
+  text: 'Events map to HL7 v2 SIU messages for systems that use them: appointment.booked to S12, appointment.rescheduled to S13, appointment.updated to S14, appointment.cancelled to S15, appointment.entered_in_error to S17, and appointment.no_show to S26.'
+- category: usability
+  text: Patient-facing screens, messages and documents meet WCAG 2.1 Level AA, and work with assistive technology.
 constraints:
 - id: CON-H1
   text: Appointment data is encrypted in transit and at rest.
@@ -2094,7 +2098,33 @@ references:
   title: ONC, SAFER Guides (2025), Contingency Planning
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
+- id: REF-H41
+  title: HL7 v2 Table 0003, Event type
+  url: https://terminology.hl7.org/CodeSystem-v2-0003.html
+  note: SIU events S12 to S26.
+- id: REF-H42
+  title: 45 CFR 84.84, Requirements for web and mobile accessibility
+  url: https://www.ecfr.gov/current/title-45/section-84.84
+  note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+- id: REF-H43
+  title: 45 CFR 92.204, Accessibility of information and communication technology
+  url: https://www.ecfr.gov/current/title-45/section-92.204
+  note: Health programs provided through ICT must be accessible.
+- id: REF-H44
+  title: Directive (EU) 2022/2555 (NIS2)
+  url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
+  note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+- id: REF-H45
+  title: 45 CFR 92.201, Meaningful access for individuals with limited English proficiency
+  url: https://www.ecfr.gov/current/title-45/section-92.201
+  note: Language assistance services.
 changelog:
+- version: 0.11.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - HL7 v2 SIU mapping for appointment events.
+  - WCAG 2.1 AA, language assistance (45 CFR 92.201) and NIS2 entries.
 - version: 0.11.3
   date: '2026-10-09'
   breaking: false
@@ -2413,6 +2443,7 @@ compliance:
   status: met
   covered_by:
   - BR-H6
+  - BR-H11
   jurisdiction: us
 - id: CMP-H10
   regulation: No Surprises Act
@@ -2521,6 +2552,33 @@ compliance:
   status: met
   covered_by:
   - BR-H39
+  jurisdiction: us
+- id: CMP-H22
+  regulation: Section 504 and Section 1557 (Affordable Care Act)
+  provision: 45 CFR 84.84 and 92.204
+  obligation: Patient-facing web content and mobile apps meet WCAG 2.1 Level AA from 11 May 2027 (May 2028 for providers with fewer than 15 employees).
+  how: Patient-facing screens, messages and documents are built to WCAG 2.1 AA; testing them is the deployment's duty.
+  status: deployment
+  covered_by:
+  - BR-H24
+  jurisdiction: us
+- id: CMP-H23
+  regulation: NIS2 Directive (EU) 2022/2555
+  provision: Articles 21 and 23
+  obligation: Healthcare providers that are essential or important entities manage cybersecurity risk and report significant incidents within 24 hours, with an update within 72 hours and a final report within a month.
+  how: Access logging and encryption here support it; risk management and reporting are the organization's.
+  status: deployment
+  covered_by:
+  - CON-H1
+  jurisdiction: eu
+- id: CMP-H24
+  regulation: Section 1557 (Affordable Care Act)
+  provision: 45 CFR 92.201
+  obligation: Offer free language assistance, such as a qualified interpreter, to people with limited English proficiency.
+  how: The appointment records the interpreter language and accommodation needs, so they are arranged before the visit.
+  status: met
+  covered_by:
+  - BR-H8
   jurisdiction: us
 tables:
 - name: appointment_clinical

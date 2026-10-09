@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.2.2
+version: 0.2.3
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,13 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.2.3
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - 'USCDI vital signs: inhaled oxygen concentration, average blood pressure and paediatric percentiles, computed from growth_reference (BR-H39).'
+  - Each observation keeps the reference range it was judged against (BR-H37).
+  - WCAG 2.1 AA for patient-facing features (45 CFR 84.84, 92.204) and NIS2 incident reporting, as deployment duties.
 - version: 0.2.2
   date: '2026-10-09'
   breaking: false
@@ -317,7 +324,7 @@ dataModel:
   type: code
   required: true
   description: What was measured.
-  constraints: 'codes: LOINC; vital signs as the FHIR vital signs profiles: 8867-4 heart rate, 9279-1 respiratory rate, 85354-9 blood pressure panel with 8480-6 systolic and 8462-4 diastolic, 8310-5 body temperature, 2708-6 or 59408-5 oxygen saturation, 8302-2 body height, 29463-7 body weight, 9843-4 head circumference, 39156-5 BMI; assessments from assessment_instruments, such as 72514-3 pain severity 0 to 10'
+  constraints: 'codes: LOINC; vital signs as the FHIR vital signs profiles: 8867-4 heart rate, 9279-1 respiratory rate, 85354-9 blood pressure panel with 8480-6 systolic and 8462-4 diastolic, 8310-5 body temperature, 2708-6 or 59408-5 oxygen saturation, 8302-2 body height, 29463-7 body weight, 9843-4 head circumference, 39156-5 BMI, 3150-0 inhaled oxygen concentration, 96607-7 average blood pressure panel with 96608-5 mean systolic and 96609-3 mean diastolic, 59576-9 BMI percentile (2 to 20 years), 77606-2 weight-for-length percentile (birth to 24 months), 8289-1 head circumference percentile (birth to 36 months); assessments from assessment_instruments, such as 72514-3 pain severity 0 to 10'
 - name: observation.value
   type: quantity, code or integer
   required: false
@@ -327,7 +334,7 @@ dataModel:
   type: code
   required: false
   description: The unit of a quantity.
-  constraints: 'codes: UCUM, limited per code as the FHIR vital signs profiles: /min, mm[Hg], Cel or [degF], %, cm or [in_i], kg/m2; body weight only kg or g (BR-H53)'
+  constraints: 'codes: UCUM, limited per code as the FHIR vital signs profiles: /min, mm[Hg], Cel or [degF], %, cm or [in_i], kg/m2, and % for inhaled oxygen concentration and percentiles; body weight only kg or g (BR-H53)'
 - name: observation.components
   type: component[]
   required: false
@@ -383,6 +390,11 @@ dataModel:
   required: false
   description: Whether the value is outside the normal range for the patient.
   constraints: 'set by the service from vital_sign_limits; codes: HL7 v3 ObservationInterpretation N, L, H, LL, HH'
+- name: observation.reference_range
+  type: range
+  required: false
+  description: The normal range the interpretation was judged against, with the age band it applies to.
+  constraints: set by the service from vital_sign_limits when the value is recorded; never changed when the limits change later
 - name: observation.derived_from
   type: string[]
   required: false
@@ -580,14 +592,14 @@ businessRules:
   text: Vital signs use the LOINC code and the UCUM units of the FHIR vital signs profiles, except that body weight is metric only (BR-H53), and the value is kept in the unit it was entered in. A blood pressure is recorded as one observation with systolic and diastolic components.
   rationale: The FHIR vital signs profiles fix the codes and units every exchange partner expects. Converting on entry loses precision and hides what the nurse saw.
 - id: BR-H37
-  text: A value outside the plausible limits in vital_sign_limits is refused. A value outside the normal range for the patient's age is accepted and flagged with an interpretation code.
+  text: A value outside the plausible limits in vital_sign_limits is refused. A value outside the normal range for the patient's age is accepted and flagged with an interpretation code. The range used is kept with the value, so a later change to the limits never changes how an earlier value reads.
   rationale: An impossible value is a typing or unit error, such as a temperature in Fahrenheit entered as Celsius. An abnormal one is clinical information that must be recorded.
 - id: BR-H38
   text: When device_values_need_validation is set, readings from devices are preliminary until a nurse, or the clinician monitoring the patient remotely, accepts them, which makes them final and records them as performer. Rejected readings never enter the record and are kept only in the access log.
   rationale: Monitors produce artifacts, such as a reading taken while a cuff was moving. Filing them unvalidated pollutes the record that early warning and research rely on.
 - id: BR-H39
-  text: 'Derived values are computed by the service, never entered: BMI from a weight and a height measured within bmi_height_max_age. When a source value is corrected or entered in error, the derived value is recomputed or marked entered in error.'
-  rationale: A BMI typed by hand can disagree with the weight and height beside it. Keeping derived_from lets a correction reach every value built on it.
+  text: 'Derived values are computed by the service, never entered: BMI from a weight and a height measured within bmi_height_max_age, and growth percentiles from the measurement, the patient''s age and sex, and growth_reference. When a source value is corrected or entered in error, the derived value is recomputed or marked entered in error.'
+  rationale: 'A BMI typed by hand can disagree with the weight and height beside it. Keeping derived_from lets a correction reach every value built on it. Percentiles depend on which growth reference is used: CDC recommends WHO charts under 2 years and CDC charts from 2 to 19 years in the United States, and other countries use WHO or national charts.'
 - id: BR-H40
   text: A final observation is corrected by its performer or a nurse with a reason, which makes it amended and keeps the previous value in history. One recorded in error is marked entered in error with a reason, and is kept.
   rationale: FHIR marks a changed observation amended and keeps the record of what was seen before. Clinical decisions may have been made on the old value.
@@ -1041,6 +1053,12 @@ edgeCases:
   covers:
   - BR-H54
   - AC-H62
+- id: EC-H49
+  situation: A child turns 2 between two clinic visits.
+  behaviour: Percentiles before the birthday use the WHO standard and after it the CDC charts, as growth_reference sets; each value keeps the reference it was computed with.
+  covers:
+  - BR-H39
+  - AC-H63
 functionalRequirements:
 - id: FR-H1
   text: The service must let authors start, edit, sign and discard notes, and cosigners cosign them, following the note lifecycle.
@@ -1128,6 +1146,8 @@ nonFunctionalRequirements:
   text: Saving drafts and recording observations never waits on Terminology or Organization.
 - category: portability
   text: No requirement depends on a particular database, language or framework.
+- category: usability
+  text: Patient-facing screens, messages and documents meet WCAG 2.1 Level AA, and work with assistive technology.
 constraints:
 - id: CON-H1
   text: Notes and observations are encrypted in transit and at rest.
@@ -1198,6 +1218,9 @@ settings:
 - name: recording_consent
   type: map
   description: 'For each US state or EU member state where care takes place: all_parties or one_party consent to recording a conversation. Default all_parties. California and Florida require all parties (verified from statute); US federal law needs one party; the rest need legal advice.'
+- name: growth_reference
+  type: map
+  description: 'Which growth reference computes percentiles at each age. Default in the United States: WHO growth standards from birth to 24 months and CDC growth charts from 2 to 19 years, as CDC recommends. Set per member state in the EU.'
 performanceTargets:
 - id: PERF-H1
   indicator: Notes signed on time
@@ -1583,6 +1606,14 @@ acceptanceCriteria:
   then: it is ignored, and no deficiency or documentation status changes
   verifies:
   - BR-H54
+- id: AC-H63
+  given: a boy aged 18 months with a recorded weight and length, and a heart rate flagged H against a normal range of 70 to 120
+  when: the weight-for-length percentile is computed, the normal range is later changed to 80 to 140, and an inhaled oxygen concentration of 40 % is recorded
+  then: the percentile is derived from the WHO standard with derived_from naming both measurements; the heart rate keeps its H flag and the range it was judged against; the oxygen concentration is saved with unit %
+  verifies:
+  - BR-H37
+  - BR-H39
+  - BR-H36
 operations:
 - name: Start a note
   actor: Clinician
@@ -2490,7 +2521,7 @@ personalData:
   category: personal
   purpose: Handling the patient's right to correction
   retention: As long as the note, and in the United States at least 6 years from the decision (45 CFR 164.530(j)(2))
-- field: observation.patient_id, observation.encounter_id, observation.category, observation.code, observation.value, observation.unit, observation.components, observation.data_absent_reason, observation.effective_at, observation.recorded_at, observation.method, observation.interpretation, observation.derived_from, observation.instrument, observation.score, observation.order_id, observation.status
+- field: observation.patient_id, observation.encounter_id, observation.category, observation.code, observation.value, observation.unit, observation.components, observation.data_absent_reason, observation.effective_at, observation.recorded_at, observation.method, observation.interpretation, observation.reference_range, observation.derived_from, observation.instrument, observation.score, observation.order_id, observation.status
   category: health data
   purpose: The record of care
   retention: record_retention of the Patients module
@@ -2959,6 +2990,26 @@ references:
   title: ONC, Conceptualizing a data infrastructure for patient-generated health data
   url: https://www.healthit.gov/sites/default/files/onc_pghd_final_white_paper.pdf
   note: Patient-generated health data recorded outside the clinical setting.
+- id: REF-H40
+  title: ONC, United States Core Data for Interoperability, Version 5
+  url: https://www.healthit.gov/isp/sites/isp/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
+  note: Vital signs, including inhaled oxygen concentration, average blood pressure and paediatric percentiles.
+- id: REF-H41
+  title: CDC, Using the WHO growth charts
+  url: https://www.cdc.gov/growth-chart-training/hcp/using-growth-charts/who-using.html
+  note: WHO charts under 2 years, CDC charts from 2 to 19 years.
+- id: REF-H42
+  title: 45 CFR 84.84, Requirements for web and mobile accessibility
+  url: https://www.ecfr.gov/current/title-45/section-84.84
+  note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+- id: REF-H43
+  title: 45 CFR 92.204, Accessibility of information and communication technology
+  url: https://www.ecfr.gov/current/title-45/section-92.204
+  note: Health programs provided through ICT must be accessible.
+- id: REF-H44
+  title: Directive (EU) 2022/2555 (NIS2)
+  url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
+  note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
 acronyms:
 - term: AI
   definition: Artificial intelligence
@@ -3219,6 +3270,9 @@ tables:
     type: text
   - name: interpretation
     type: text
+    nullable: true
+  - name: reference_range
+    type: jsonb
     nullable: true
   - name: derived_from
     type: uuid[]
@@ -3661,6 +3715,26 @@ compliance:
   status: deployment
   covered_by:
   - BR-H7
+  jurisdiction: eu
+- id: CMP-H41
+  regulation: Section 504 and Section 1557 (Affordable Care Act)
+  provision: 45 CFR 84.84 and 92.204
+  obligation: Patient-facing web content and mobile apps meet WCAG 2.1 Level AA from 11 May 2027 (May 2028 for providers with fewer than 15 employees).
+  how: Patient-facing screens, messages and documents are built to WCAG 2.1 AA; testing them is the deployment's duty.
+  status: deployment
+  covered_by:
+  - BR-H25
+  - BR-H30
+  jurisdiction: us
+- id: CMP-H42
+  regulation: NIS2 Directive (EU) 2022/2555
+  provision: Articles 21 and 23
+  obligation: Healthcare providers that are essential or important entities manage cybersecurity risk and report significant incidents within 24 hours, with an update within 72 hours and a final report within a month.
+  how: Access logging and encryption here support it; risk management and reporting are the organization's.
+  status: deployment
+  covered_by:
+  - BR-H33
+  - CON-H1
   jurisdiction: eu
 ---
 

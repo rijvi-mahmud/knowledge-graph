@@ -384,7 +384,9 @@ every module and layer, and for every "is there any gap?" request.
    facts against real data. For example, compute daylight saving dates and
    durations with the IANA database (`python3` and `zoneinfo`) instead of
    writing them from memory. See [Research sources that worked](#research-sources-that-worked).
-3. **Run a gap check** in two parts, then report before fixing:
+3. **Run a gap check** in two parts, then report before fixing. Deep web
+   research against official sources is mandatory in every gap check, not
+   only the automated checks (the user requires it):
    - **Structural**: a short Python audit over the merged frontmatter. Look
      for errors no operation or validation raises, events nothing emits,
      settings nothing references, permissions unused, fields missing from
@@ -753,9 +755,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Terminology (`healthcare/terminology` 0.1.4, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.2 and `healthcare/ehr/clinical-documentation` 0.4.3; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.3, EHR-only), Encounters (`healthcare/encounter` 0.1.7 and `healthcare/ehr/encounter` 0.13.7), Patients (`healthcare/patient` 0.12.3, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.4.3) and Appointments
-  (`healthcare/appointment` 0.11.3, `healthcare/ehr/appointment` 0.11.3; `core/appointment` 0.12.4). All
+  drafts: Terminology (`healthcare/terminology` 0.1.4, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.2.3 and `healthcare/ehr/clinical-documentation` 0.4.4; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.8.4, EHR-only), Encounters (`healthcare/encounter` 0.1.8 and `healthcare/ehr/encounter` 0.13.8), Patients (`healthcare/patient` 0.12.4, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.4.4) and Appointments
+  (`healthcare/appointment` 0.11.4, `healthcare/ehr/appointment` 0.11.4; `core/appointment` 0.12.4). All
   support the US and EU through the `jurisdiction` setting. Next: Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

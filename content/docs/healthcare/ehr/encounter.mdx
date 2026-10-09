@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.7
+version: 0.13.8
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,11 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.8
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - admission no longer holds the discharge disposition; it is the healthcare disposition field, so the fact has one owner.
 - version: 0.13.7
   date: '2026-10-09'
   breaking: false
@@ -181,8 +186,8 @@ dataModel:
 - name: admission
   type: admission
   required: false
-  description: 'For inpatient and observation: pre-admission id, admit source, origin, re-admission, discharge disposition and destination (FHIR admission).'
-  constraints: 'codes: re-admission from HL7 v2 Table 0092 (R); admit source from HL7 admit-source (such as emd, outp, hosp-trans, born); discharge disposition from HL7 discharge-disposition (such as home, snf, aadvice, exp)'
+  description: 'For inpatient and observation: pre-admission id, admit source, origin, re-admission and destination (FHIR admission). The discharge disposition is the disposition field.'
+  constraints: 'codes: re-admission from HL7 v2 Table 0092 (R); admit source from HL7 admit-source (such as emd, outp, hosp-trans, born)'
   variant: inpatient
 - name: directory_status
   type: enum

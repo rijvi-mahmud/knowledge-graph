@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.12.3
+version: 0.12.4
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -1199,6 +1199,8 @@ nonFunctionalRequirements:
   text: 'Events map to HL7 v2 ADT messages for systems that use them: patient.registered to A28, patient.updated to A31, patient.merged to A40, an identifier change to A47. Neither HL7 v2 nor FHIR defines an unmerge, so patient.unmerged is sent as A31 for both records.'
 - category: compatibility
   text: Where the organization shares an enterprise or regional patient index, it is reached through IHE PIXm, PDQm or PMIR (by the Exchange module).
+- category: usability
+  text: Patient-facing screens, messages and documents meet WCAG 2.1 Level AA, and work with assistive technology.
 constraints:
 - id: CON-H1
   text: Patient data is encrypted in transit and at rest.
@@ -3143,7 +3145,24 @@ references:
 - id: REF-H47
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
+- id: REF-H48
+  title: 45 CFR 84.84, Requirements for web and mobile accessibility
+  url: https://www.ecfr.gov/current/title-45/section-84.84
+  note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+- id: REF-H49
+  title: 45 CFR 92.204, Accessibility of information and communication technology
+  url: https://www.ecfr.gov/current/title-45/section-92.204
+  note: Health programs provided through ICT must be accessible.
+- id: REF-H50
+  title: Directive (EU) 2022/2555 (NIS2)
+  url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
+  note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
 changelog:
+- version: 0.12.4
+  date: '2026-10-09'
+  breaking: false
+  changes:
+  - WCAG 2.1 AA for patient self-service (45 CFR 84.84, 92.204) and NIS2 incident reporting, as deployment duties.
 - version: 0.12.3
   date: '2026-10-09'
   breaking: false
@@ -3930,6 +3949,24 @@ compliance:
   how: Where data is stored and who processes it is a deployment choice.
   status: deployment
   covered_by: []
+  jurisdiction: eu
+- id: CMP-H37
+  regulation: Section 504 and Section 1557 (Affordable Care Act)
+  provision: 45 CFR 84.84 and 92.204
+  obligation: Patient-facing web content and mobile apps meet WCAG 2.1 Level AA from 11 May 2027 (May 2028 for providers with fewer than 15 employees).
+  how: Patient-facing screens, messages and documents are built to WCAG 2.1 AA; testing them is the deployment's duty.
+  status: deployment
+  covered_by:
+  - BR-H36
+  jurisdiction: us
+- id: CMP-H38
+  regulation: NIS2 Directive (EU) 2022/2555
+  provision: Articles 21 and 23
+  obligation: Healthcare providers that are essential or important entities manage cybersecurity risk and report significant incidents within 24 hours, with an update within 72 hours and a final report within a month.
+  how: Access logging and encryption here support it; risk management and reporting are the organization's.
+  status: deployment
+  covered_by:
+  - CON-H1
   jurisdiction: eu
 ---
 Every clinical module refers to a patient by id. This module keeps that id
