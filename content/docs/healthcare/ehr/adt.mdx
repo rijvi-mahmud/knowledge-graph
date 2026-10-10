@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.9.3
+version: 0.9.4
 status: draft
 industry: healthcare
 domain: ehr
@@ -70,8 +70,10 @@ glossary:
   definition: The live view of every bed's status and occupant.
 - term: Important Message from Medicare
   definition: The standardized notice of a Medicare inpatient's rights, including discharge appeal rights (42 CFR 405.1205).
+  jurisdiction: us
 - term: MOON
   definition: The Medicare Outpatient Observation Notice, given to patients in observation for more than 24 hours (42 CFR 489.20(y)).
+  jurisdiction: us
 - term: Census
   definition: The patients in beds at a point in time, such as midnight, by unit.
 - term: Temporary location
@@ -389,7 +391,7 @@ businessRules:
   text: A patient's stays can be listed, newest first, by staff who may read them and by the patient or their representative. Other modules use it to ask whether a patient has a stay that is pending or admitted.
   rationale: Patients needs this answer before merging records, Appointments before booking for an inpatient, and patients for their right of access. Each would otherwise have to know stay ids it never received.
 - id: BR-E34
-  text: Each correction request is kept and linked to the stay it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the stay record, and in the United States for at least 6 years from its decision.
+  text: Each correction request is kept and linked to the stay it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the stay record, in the United States for at least 6 years from its decision, and in the European Union for as long as member state law requires.
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). Later disclosures must include them (164.526(d)(5)).
 - id: BR-E35
   text: 'A patient can go to another location for a while, such as imaging, dialysis or theatre, without leaving their stay: the bed stays reserved for them, the stay records where they are, and their return ends it. A departure or return recorded by mistake can be cancelled with a reason. Each is reported to Encounters. A boarding patient with no bed keeps their waiting location instead, which is restored on return.'
@@ -843,7 +845,7 @@ constraints:
 settings:
 - name: jurisdiction
   type: us | eu
-  description: Which legal regime applies. The Medicare notices apply only in the United States. Required.
+  description: 'Which legal regime applies: the Medicare notices apply in the United States, and the EHDS and GDPR rules in the European Union. Required.'
 - name: hospital_time_zone
   type: IANA time zone
   description: Used to count calendar days for notices and the midnight census. Required.
@@ -867,7 +869,7 @@ settings:
 - name: readmission_window
   type: duration
   default: 30 days
-  description: How soon after a discharge an admission counts as a re-admission. The default follows 42 CFR 412.152.
+  description: How soon after a discharge an admission counts as a re-admission. In the United States the default follows 42 CFR 412.152; in the European Union it is set by the organization or member state.
 - name: pending_admission_grace
   type: duration
   default: '0'
@@ -2174,7 +2176,7 @@ dependencies:
   - 'Asks: does this practitioner have admitting privileges on this date, for admission and for a new attending?'
 - service: coverage-service
   direction: upstream
-  reason: says who is a Medicare beneficiary
+  reason: 'knows each patient''s insurance: in the United States, including who is a Medicare beneficiary, and in the European Union, their statutory health insurance'
   criticality: soft
   contract:
   - 'Asks: is this patient a Medicare beneficiary?'
@@ -2280,18 +2282,23 @@ references:
 - id: REF-E1
   title: 42 CFR 412.3, admissions (orders, two-midnight)
   url: https://www.ecfr.gov/current/title-42/section-412.3
+  jurisdiction: us
 - id: REF-E2
   title: 42 CFR 405.1205, notifying beneficiaries of hospital discharge appeal rights
   url: https://www.ecfr.gov/current/title-42/section-405.1205
+  jurisdiction: us
 - id: REF-E3
   title: 42 CFR 489.20(y), Medicare Outpatient Observation Notice
   url: https://www.ecfr.gov/current/title-42/section-489.20
+  jurisdiction: us
 - id: REF-E4
   title: 42 CFR 482.24(d), electronic notifications
   url: https://www.ecfr.gov/current/title-42/section-482.24
+  jurisdiction: us
 - id: REF-E5
   title: 42 CFR 482.43, discharge planning and transfer protocols
   url: https://www.ecfr.gov/current/title-42/section-482.43
+  jurisdiction: us
 - id: REF-E6
   title: IHE ITI-31 Patient Encounter Management
   url: https://profiles.ihe.net/ITI/TF/Volume2/ITI-31.html
@@ -2304,49 +2311,59 @@ references:
 - id: REF-E9
   title: 45 CFR 164.510, facility directories
   url: https://www.ecfr.gov/current/title-45/section-164.510
+  jurisdiction: us
 - id: REF-E10
   title: WHO, Ten steps to successful breastfeeding (Step 7, rooming-in)
   url: https://www.who.int/teams/nutrition-and-food-safety/food-and-nutrition-actions-in-health-systems/ten-steps-to-successful-breastfeeding
 - id: REF-E11
   title: 42 CFR 482.12, governing body (care of patients)
   url: https://www.ecfr.gov/current/title-42/section-482.12
+  jurisdiction: us
 - id: REF-E12
   title: 45 CFR 164.526, amendment of protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.526
+  jurisdiction: us
 - id: REF-E13
   title: 45 CFR 164.530(j), documentation and retention
   url: https://www.ecfr.gov/current/title-45/section-164.530
+  jurisdiction: us
 - id: REF-E14
   title: HL7 v2 Table 0003, event types (A17, A52 to A55)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 - id: REF-E15
   title: CMS Internet-Only Manuals (Medicare Benefit Policy Manual, Pub. 100-02, chapter 3, section 20.1)
   url: https://www.cms.gov/medicare/regulations-guidance/manuals/internet-only-manuals-ioms
+  jurisdiction: us
 - id: REF-E16
   title: 42 CFR 412.152, Hospital Readmissions Reduction Program definitions
   url: https://www.ecfr.gov/current/title-42/section-412.152
+  jurisdiction: us
 - id: REF-E17
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
+  jurisdiction: us
 - id: REF-E18
   title: HL7 v2 Table 0003, event types (A42, A44, A45)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 - id: REF-E19
-  title: ONC, SAFER Guides (2025), Contingency Planning
+  title: SAFER Guides, Office of the National Coordinator for Health IT (2025), Contingency Planning
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
 - id: REF-E20
   title: 42 CFR 409.30, Basic requirements for SNF coverage
   url: https://www.ecfr.gov/current/title-42/section-409.30
   note: At least 3 consecutive inpatient calendar days, not counting the discharge day.
+  jurisdiction: us
 - id: REF-E21
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+  jurisdiction: eu
 - id: REF-E22
   title: 42 CFR 405.1206, Expedited determination procedures for inpatient hospital care
   url: https://www.ecfr.gov/current/title-42/section-405.1206
   note: Detailed notice by noon the day after the QIO's notification; liability while review is pending.
+  jurisdiction: us
 compliance:
 - id: CMP-E1
   regulation: Medicare payment rules
@@ -2661,6 +2678,11 @@ compliance:
   - BR-E47
   jurisdiction: us
 changelog:
+- version: 0.9.4
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.9.3
   date: '2026-10-10'
   breaking: false
@@ -2794,8 +2816,10 @@ acronyms:
   definition: Integrating the Healthcare Enterprise Patient Administration Management profile
 - term: IMM
   definition: Important Message from Medicare
+  jurisdiction: us
 - term: MOON
   definition: Medicare Outpatient Observation Notice
+  jurisdiction: us
 tables:
 - name: stays
   description: One row per stay.
@@ -3016,12 +3040,16 @@ When a patient leaves, their bed goes to housekeeping until environmental
 services marks it ready (BR-E6). Transfers reserve the target bed first, so
 nobody else is placed there in between (BR-E7).
 
+<Only jurisdiction="us">
+
 ## In the United States, the law ties notices to the stay's clock
 
 Medicare inpatients get their rights notice within 2 days of admission and a
 follow-up within 2 days before discharge (BR-E12). Patients in observation get
 the MOON within 36 hours (BR-E13). This module knows the dates, so it lists
 what's due until someone records it as given.
+
+</Only>
 
 ## One doctor is responsible at every moment
 

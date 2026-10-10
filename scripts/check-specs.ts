@@ -28,10 +28,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parse } from 'yaml';
 import { docs } from '../source.config';
-import { resolveSpec, type SpecNode } from '@/lib/spec-inherit';
+import { LEAD_FIELD, resolveSpec, type SpecNode } from '@/lib/spec-inherit';
 import type { ModuleSpecData } from '@/components/module-spec';
 import { SPEC_ID } from '@/lib/spec-ids';
-import { JURISDICTIONS, jurisdictionSpec } from '@/lib/spec-jurisdiction';
+import { specToMarkdown } from '@/lib/spec-markdown';
+import { SPEC_SECTIONS } from '@/lib/spec-sections';
+import { JURISDICTIONS, jurisdictionSpec, textJurisdiction } from '@/lib/spec-jurisdiction';
 
 const root = join(import.meta.dirname, '..', 'content', 'docs');
 const strict = process.argv.includes('--strict');
@@ -251,6 +253,66 @@ for (const node of all) {
     .filter((id) => !verified.has(id));
   if (unverified.length > 0)
     warnings.push(`${where}: not verified by any acceptance criterion: ${unverified.join(', ')}`);
+}
+
+// --- jurisdiction labelling, per layer ------------------------------------------
+// A filtered view (?jurisdiction=us) may only show what applies there. Each
+// layer is checked on its own items, so a missing tag is reported once.
+
+const US_TERMS = /United States|\bUS\b|U\.S\.|HIPAA|\bCFR\b|Medicare|Medicaid|\bONC\b|\bCMS\b|\bDEA\b|NPDB|US Core|USCDI|Joint Commission|No Surprises|TCPA|Part 2\b|NPPES|\bNPI\b|state law|U\.S\.C\./;
+const EU_TERMS = /European Union|\bEurope\b|\bEU\b|GDPR|EHDS|eIDAS|NIS2|member state|EUR-Lex|Directive \(EU\)|Regulation \(EU\)|HL7 Europe/i;
+
+for (const [path, data] of own) {
+  const record = data as unknown as Record<string, unknown>;
+  // Core pages are industry-neutral and name places only as geography, such as time zones.
+  const lawCheck = Boolean(record.industry);
+  for (const [list, field] of Object.entries(LEAD_FIELD)) {
+    for (const item of (record[list] ?? []) as Record<string, unknown>[]) {
+      if (item.jurisdiction) continue;
+      const name = String(item.id ?? item.name ?? item.term ?? item.field ?? item.code ?? item.topic ?? item.action ?? item.service ?? list);
+      const lead = String(item[field] ?? '');
+      const opens = textJurisdiction(lead);
+      if (opens) {
+        warnings.push(`${path}: ${list} ${name} opens with one jurisdiction but has no jurisdiction tag`);
+        continue;
+      }
+      // The item's own words, not its rationale, say where it applies.
+      const own = [lead, item.text, item.name, item.term, item.title, item.description].filter((x) => typeof x === 'string').join(' ');
+      // A reference is classified by what it is (its title and note), not by
+      // where it is hosted: guidance on a US site, such as the SAFER Guides, applies everywhere.
+      const words = list === 'references' ? `${own} ${String(item.note ?? '')}` : own;
+      const us = US_TERMS.test(words);
+      const eu = EU_TERMS.test(words);
+      if (lawCheck && us !== eu)
+        warnings.push(`${path}: ${list} ${name} names only ${us ? 'US' : 'EU'} law or sources but has no jurisdiction tag; tag it ${us ? 'us' : 'eu'} or say what applies elsewhere`);
+    }
+  }
+  // Prose can't be tagged, so one region's paragraph goes inside <Only jurisdiction="...">.
+  const body = (rawText.get(path) ?? '').split('\n').slice(1).join('\n').replace(/<Only[\s\S]*?<\/Only>/g, '');
+  for (const line of body.split('\n'))
+    if (textJurisdiction(line.replace(/^#+\s*/, '').trim()))
+      warnings.push(`${path}: prose "${line.trim().slice(0, 60)}" is about one jurisdiction; wrap it in <Only jurisdiction="...">`);
+}
+
+// The rendered filtered views, page and section sub-pages, must not show
+// another jurisdiction's labelled items or lines that open by naming it.
+for (const node of all) {
+  if (!node.data.module) continue;
+  const spec = resolveSpec(node, (p) => nodes.get(p), all);
+  for (const j of JURISDICTIONS) {
+    const view = jurisdictionSpec(spec, j);
+    const otherLabel = j === 'us' ? 'EU only:' : 'US only:';
+    const md = [specToMarkdown(view), ...SPEC_SECTIONS.map((s) => specToMarkdown(view, s.id))].join('\n');
+    const leaks = new Set<string>();
+    for (const line of md.split('\n')) {
+      if (line.includes('Items that start with')) continue; // the reading guide explains both labels
+      // An item's text starts the line, a table cell, or follows its bold id.
+      const starts = line.split(/^\s*-\s+|\|\s*|\*\*\s+/).map((s) => s.trim());
+      const opens = starts.map((s) => textJurisdiction(s)).find((x) => x && x !== j);
+      if (line.includes(otherLabel) || opens) leaks.add(line.trim().slice(0, 80));
+    }
+    for (const l of leaks) errors.push(`${node.path}: the ${j} view shows another jurisdiction's item: "${l}"`);
+  }
 }
 
 // --- report ------------------------------------------------------------------

@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.4.3
+version: 0.4.4
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -48,16 +48,18 @@ glossary:
   definition: A recorded decision by a patient, or someone acting for them, to permit or deny something, such as a treatment or a disclosure (FHIR Consent).
 - term: Authorization
   definition: In the United States, the signed permission HIPAA requires for a use or disclosure the law doesn't otherwise allow (45 CFR 164.508).
+  jurisdiction: us
 - term: Part 2 program
   definition: A federally assisted program that provides substance use disorder treatment, whose records 42 CFR Part 2 protects.
+  jurisdiction: us
 - term: Restriction
   definition: A patient's request to limit uses or disclosures for treatment, payment or operations (45 CFR 164.522), or, in the EU, to limit professionals' access (EHDS Article 8).
 - term: Opt-out
-  definition: A patient's choice not to take part, such as in the EU from access through access services (EHDS Article 10) or from secondary use (EHDS Article 71), or from a contact channel.
+  definition: 'A patient''s choice not to take part: from a contact channel; in the United States, from fundraising; in the European Union, from access through access services (EHDS Article 10) or from secondary use (EHDS Article 71).'
 - term: Disclosure check
   definition: 'A question from a module: may this data be used or disclosed, for this purpose, to this recipient? The answer is permit or deny, with its basis and obligations.'
 - term: Advance directive
-  definition: A written instruction, such as a living will or a health care power of attorney, about care if the patient can't decide (42 CFR 489.100).
+  definition: A written instruction, such as a living will or a health care power of attorney, about care if the patient can't decide; defined in the United States by 42 CFR 489.100 and in the European Union by member state law.
 - term: Purpose of use
   definition: Why data is used or disclosed, such as treatment, payment or operations, from HL7 v3 PurposeOfUse.
 concepts:
@@ -226,7 +228,7 @@ businessRules:
   text: Every consent is about one patient whose record is in use, is of a kind listed in consent_kinds, and names its legal basis. Each kind maps to a FHIR consent category.
   rationale: One record per decision, with its basis, is what lets every later disclosure be explained; FHIR R5 Consent models a decision with its category and regulatory basis.
 - id: BR-H2
-  text: Consent to treatment is never used as permission to disclose, and permission to disclose is never used as consent to treatment. In the European Union, GDPR consent is recorded only for processing whose legal basis is consent, never for care itself.
+  text: Consent to treatment is never used as permission to disclose, and permission to disclose is never used as consent to treatment. In the United States, a consent for treatment, payment and operations never replaces an authorization. In the European Union, GDPR consent is recorded only for processing whose legal basis is consent, never for care itself.
   rationale: A HIPAA consent for treatment, payment and operations can't stand in for an authorization (45 CFR 164.506(b)(2)); in the EU, care data is processed under GDPR Article 9(2)(h), and calling it consent would let a withdrawal appear to stop care records.
 - id: BR-H3
   text: 'In the United States, a HIPAA authorization is active only when it contains every core element: a specific description of the information, who may disclose it, who may receive it, each purpose (at the request of the individual is enough when the patient starts it), an expiration date or event, and the signature and date, with a representative''s authority described. It must also state the right to revoke in writing and how, whether care can be conditioned on signing, and that disclosed information may be redisclosed, all in plain language. An authorization for marketing that a third party pays the organization for says so, and one for a sale of health information says the organization will be paid. A request missing any of them is refused, listing every missing one, and the patient gets a copy when the organization asked for the authorization.'
@@ -380,6 +382,7 @@ validations:
 - field: consent.revocation
   rule: For a HIPAA authorization or Part 2 consent, written evidence of the revocation
   error: CONSENT_REVOCATION_EVIDENCE_REQUIRED
+  jurisdiction: us
 - field: consent.status
   rule: Fields the service sets, such as status and revision, can't be written by clients
   error: CONSENT_READ_ONLY_FIELD
@@ -600,7 +603,7 @@ functionalRequirements:
   verification: test
 nonFunctionalRequirements:
 - category: security
-  text: Part 2 consents, emergency uses and disclosure checks are readable only by the roles in the access matrix, and every read is logged.
+  text: Consents covering specially protected records, emergency uses and disclosure checks are readable only by the roles in the access matrix, and every read is logged.
 - category: availability
   text: Disclosure checks are on the path of every disclosure, so they need high availability; deployments set an SLO, and BR-H31 says what callers do when it is missed.
 - category: compatibility
@@ -620,13 +623,13 @@ settings:
   description: Which legal regime applies. Required.
 - name: consent_kinds
   type: catalogue
-  description: The kinds of consent the organization uses, each with its FHIR category, legal basis, required elements, form versions and whether it can expire. Set by the organization from law; the required elements of HIPAA authorizations and Part 2 consents are fixed by this specification's rules.
+  description: The kinds of consent the organization uses, each with its FHIR category, legal basis, required elements, form versions and whether it can expire. Set by the organization from law; this specification's rules fix the required elements of HIPAA authorizations and Part 2 consents in the United States, and what GDPR Article 7 requires of consent in the European Union.
 - name: minor_consent_rules
   type: map
   description: 'By US state or EU member state: which services a minor may consent to alone, such as SUD treatment, and who must also sign. Varies by place and needs legal advice; unset means a parent or guardian signs for every minor.'
 - name: signature_methods
   type: map
-  description: Which signature methods each kind accepts, such as wet ink, a portal signature or, in the EU, an advanced or qualified electronic signature.
+  description: 'Which signature methods each kind accepts, such as wet ink or a portal signature: in the United States, any electronic signature ESIGN gives effect, and in the European Union, a simple, advanced or qualified electronic signature under eIDAS.'
 - name: consent_required_procedures
   type: code[]
   description: The treatments and procedures that need written informed consent. Set by the organization and by law.
@@ -648,10 +651,10 @@ settings:
   jurisdiction: eu
 - name: advance_directive_information_at
   type: code
-  description: 'When advance directive information is given and the answer recorded, by kind of provider: at inpatient admission for hospitals, before care for home health (42 CFR 489.102(b)).'
+  description: 'When advance directive information is given and the answer recorded, by kind of provider: in the United States, at inpatient admission for hospitals and before care for home health (42 CFR 489.102(b)); in the European Union, as member state law sets.'
 - name: contact_opt_out_deadline
   type: duration
-  description: How soon a contact opt-out is honoured. At most ten business days in the United States (47 CFR 64.1200(a)(10)); default one business day.
+  description: How soon a contact opt-out is honoured; default one business day. In the United States, at most ten business days (47 CFR 64.1200(a)(10)); in the European Union, as member state law on electronic communications sets.
 - name: consent_retention
   type: duration
   description: How long consent records are kept. At least six years from creation or last effective date in the United States (45 CFR 164.530(j)(2)); longer where state or member state law requires, which needs legal advice.
@@ -981,6 +984,7 @@ acceptanceCriteria:
   then: it becomes inactive with consent.expired emitted; the second attempt fails with CONSENT_INVALID_STATUS and HTTP 409
   verifies:
   - BR-H12
+  jurisdiction: us
 - id: AC-H45
   given: consents listed for review after a merge, and an emergency use
   when: a privacy officer resolves the review by keeping one consent, and reviews the emergency use as justified
@@ -1287,7 +1291,7 @@ operations:
   - CONSENT_FORBIDDEN
 - name: Get a consent summary
   actor: Clinician
-  description: 'What a clinician needs at the point of care: whether an advance directive is on file and its document, and the informed consents for upcoming procedures. Restrictions a patient made under EHDS Article 8 are never shown.'
+  description: 'What a clinician needs at the point of care: whether an advance directive is on file and its document, and the informed consents for upcoming procedures. Restrictions the law keeps hidden from clinicians are never shown.'
   method: GET
   path: /patients/{patient_id}/consent-summary
   success: 200
@@ -1387,7 +1391,7 @@ events:
   - patient_id
   - used_at
 - name: consent.opt_out_changed
-  description: A patient opted out of, or back into, a contact channel or, in the EU, primary or secondary use.
+  description: A patient opted out of, or back into, a contact channel; in the United States, fundraising; or, in the European Union, primary or secondary use.
   payload:
   - consent_id
   - patient_id
@@ -1453,7 +1457,7 @@ accessMatrix:
     System: none
   permission: consent.self
   note: Staff record a paper signature or revocation on the patient's behalf with consent.record.
-- action: Request a restriction, ask not to share, give or refuse a GDPR consent, or record share_despite_risk, in the portal
+- action: Request a restriction, ask not to share, or record share_despite_risk, in the portal
   roles:
     Registrar: none
     Clinician: none
@@ -1462,6 +1466,17 @@ accessMatrix:
     System: none
   permission: consent.self
   note: Uses Record a consent; staff record the same requests made on paper with consent.record.
+  jurisdiction: us
+- action: Give or refuse a GDPR consent, restrict professionals' access, or opt out, in the portal
+  roles:
+    Registrar: none
+    Clinician: none
+    Privacy officer: none
+    Patient: own
+    System: none
+  permission: consent.self
+  note: Uses Record a consent; staff record the same requests made on paper with consent.record.
+  jurisdiction: eu
 - action: Decide or terminate a restriction; resolve a review; review an emergency use
   roles:
     Registrar: none
@@ -1687,18 +1702,22 @@ references:
   title: 45 CFR 164.508, Uses and disclosures for which an authorization is required
   url: https://www.ecfr.gov/current/title-45/section-164.508
   note: Core elements, defects, compound authorizations, conditioning and revocation.
+  jurisdiction: us
 - id: REF-H2
   title: 45 CFR 164.522, Rights to request privacy protection
   url: https://www.ecfr.gov/current/title-45/section-164.522
   note: Restrictions, the self-pay restriction and termination.
+  jurisdiction: us
 - id: REF-H3
   title: 45 CFR 164.520, Notice of privacy practices
   url: https://www.ecfr.gov/current/title-45/section-164.520
   note: (c)(2), acknowledgment of the notice.
+  jurisdiction: us
 - id: REF-H4
   title: 42 CFR part 2, Confidentiality of substance use disorder patient records
   url: https://www.ecfr.gov/current/title-42/part-2
   note: 2.14 minors, 2.22 notice, 2.31 consent, 2.32 notice with disclosures, 2.33 redisclosure, 2.51 emergencies.
+  jurisdiction: us
 - id: REF-H5
   title: Confidentiality of Substance Use Disorder Patient Records, final rule (89 FR 12472)
   url: https://www.federalregister.gov/documents/2024/02/16/2024-02544/confidentiality-of-substance-use-disorder-sud-patient-records
@@ -1707,6 +1726,7 @@ references:
   title: 45 CFR 171.202 and 171.206, Privacy and Protecting Care Access exceptions
   url: https://www.ecfr.gov/current/title-45/part-171
   note: A patient's request not to share, and withholding to reduce exposure to legal action.
+  jurisdiction: us
 - id: REF-H7
   title: Fifth Circuit dismisses the appeal in Purl v. HHS (American Bar Association)
   url: https://www.americanbar.org/groups/health_law/news/2025/signaling-end-purl-case/
@@ -1715,30 +1735,37 @@ references:
   title: 42 CFR 482.13 and 489.102, Patient rights and advance directives
   url: https://www.ecfr.gov/current/title-42/section-489.102
   note: Informed decisions, advance directive information and documentation.
+  jurisdiction: us
 - id: REF-H9
   title: 47 CFR 64.1200, Delivery restrictions (TCPA)
   url: https://www.ecfr.gov/current/title-47/section-64.1200
   note: (a)(10), revoking consent by any reasonable means within ten business days.
+  jurisdiction: us
 - id: REF-H10
   title: 45 CFR 164.530, Administrative requirements
   url: https://www.ecfr.gov/current/title-45/section-164.530
   note: (j)(2), six-year retention of documentation.
+  jurisdiction: us
 - id: REF-H11
   title: Regulation (EU) 2016/679 (GDPR)
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Articles 7, 9(2), 13, 14 and 17(3).
+  jurisdiction: eu
 - id: REF-H12
   title: Regulation (EU) 2025/327, European Health Data Space
   url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
   note: Articles 8, 10, 11(5), 71 and 105.
+  jurisdiction: eu
 - id: REF-H13
   title: Regulation (EU) No 910/2014 (eIDAS)
   url: https://eur-lex.europa.eu/eli/reg/2014/910/oj/eng
   note: Article 25, legal effect of electronic signatures.
+  jurisdiction: eu
 - id: REF-H14
   title: 15 U.S.C. 7001, Electronic Signatures in Global and National Commerce Act
   url: https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section7001&num=0&edition=prelim
   note: Legal effect of electronic signatures and records.
+  jurisdiction: us
 - id: REF-H15
   title: HL7 FHIR R5 Consent
   url: https://hl7.org/fhir/R5/consent.html
@@ -1751,11 +1778,18 @@ references:
   title: 45 CFR 92.201, Meaningful access for individuals with limited English proficiency
   url: https://www.ecfr.gov/current/title-45/section-92.201
   note: Language assistance for informed consent.
+  jurisdiction: us
 - id: REF-H18
   title: 45 CFR 164.514, Other requirements relating to uses and disclosures
   url: https://www.ecfr.gov/current/title-45/section-164.514
   note: (f), fundraising communications and the opt-out.
+  jurisdiction: us
 changelog:
+- version: 0.4.4
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.4.3
   date: '2026-10-10'
   breaking: false
@@ -1830,6 +1864,7 @@ acronyms:
   definition: Treatment, payment and health care operations
 - term: TCPA
   definition: Telephone Consumer Protection Act
+  jurisdiction: us
 - term: POLST
   definition: Physician orders for life-sustaining treatment
 tables:
@@ -2019,6 +2054,7 @@ technicalNotes:
 - id: TN-H2
   title: Hide EU restrictions without a trace
   text: For health professionals, filter restricted data before building any response, and never return a count, flag or empty section that reveals something was removed (EHDS Article 8).
+  jurisdiction: eu
 compliance:
 - id: CMP-H1
   regulation: HIPAA Privacy Rule
@@ -2201,7 +2237,12 @@ a log of what every disclosure relied on.
 A restriction must never stop emergency care. Restricted data can be used in an
 emergency, and every such use is recorded and reviewed (BR-H24).
 
+<Only jurisdiction="eu">
+
 ## In the European Union, a restriction leaves no trace
 
 When a patient restricts health professionals' access, the restricted data
 simply isn't there for them, with no hint it was hidden (BR-H20).
+
+</Only>
+

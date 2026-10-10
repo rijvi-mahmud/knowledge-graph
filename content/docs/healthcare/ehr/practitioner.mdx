@@ -2,7 +2,7 @@
 title: Medical staff and privileges
 description: 'Hospital practitioners: medical staff appointment, clinical privileges, National Practitioner Data Bank queries and reappointment, built on the practitioner rules.'
 module: practitioner
-version: 0.1.4
+version: 0.1.5
 status: draft
 industry: healthcare
 domain: ehr
@@ -241,6 +241,7 @@ events:
   - practitioner_id
   - revision
   - due_on
+  jurisdiction: us
 - name: practitioner.reappointment_due
   description: Reappointment is due.
   payload:
@@ -282,6 +283,7 @@ accessMatrix:
     Privacy officer: none
     System: none
   permission: practitioner.manage
+  jurisdiction: us
 personalData:
 - field: medical_staff, privileges
   category: personal data of staff
@@ -302,6 +304,7 @@ errors:
 - code: PRACTITIONER_NPDB_QUERY_REQUIRED
   http: 409
   message: An NPDB query from the last 2 years is needed first.
+  jurisdiction: us
 - code: PRACTITIONER_OUTSIDE_LICENCE
   http: 422
   message: The privilege goes beyond what the practitioner's licence allows.
@@ -354,15 +357,23 @@ references:
   title: '42 CFR 482.22, Condition of participation: Medical staff'
   url: https://www.ecfr.gov/current/title-42/section-482.22
   note: Appointment, appraisals, criteria for privileges, and telemedicine by proxy.
+  jurisdiction: us
 - id: REF-E2
   title: 45 CFR 60.17, Information which hospitals must request from the NPDB
   url: https://www.ecfr.gov/current/title-45/section-60.17
   note: At application and every 2 years.
+  jurisdiction: us
 - id: REF-E3
   title: NPDB Guidebook, Submitting a query
   url: https://www.npdb.hrsa.gov/guidebook/DSubmittingaQuery.jsp
   note: Continuous Query enrollment fulfills the mandatory query requirements; 12-month enrollment.
+  jurisdiction: us
 changelog:
+- version: 0.1.5
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.1.4
   date: '2026-10-09'
   breaking: false
@@ -415,7 +426,7 @@ tables:
   - name: privileges_pkey
     definition: PRIMARY KEY (id)
 - name: medical_staff
-  description: 'medical_staff and npdb_queries: membership and NPDB queries.'
+  description: 'medical_staff and npdb_queries: membership, and NPDB queries, which only US deployments fill; EU deployments leave npdb_queries empty.'
   columns:
   - name: practitioner_id
     type: uuid
@@ -464,6 +475,7 @@ relationships:
 - type: has_many
   target: npdb query
   note: '0..*: NPDB queries and Continuous Query enrollments (United States)'
+  jurisdiction: us
 ---
 
 Hospital practitioners build on the [practitioner rules](/docs/healthcare/practitioner)
@@ -476,8 +488,13 @@ A credentialed surgeon may still not be allowed to do every operation. Each
 procedure is a privilege, granted by the criteria the bylaws set, and Theatre
 and Orders ask before booking or ordering it (BR-E2).
 
+<Only jurisdiction="us">
+
 ## In the United States, the Data Bank is asked every two years
 
 Hospitals must query the National Practitioner Data Bank when a practitioner
 applies and every 2 years after, and are presumed to know what it holds if
 they don't (BR-E3).
+
+</Only>
+

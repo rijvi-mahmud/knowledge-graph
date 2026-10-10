@@ -8,7 +8,7 @@ import {
   toUIMessageStream,
 } from 'ai';
 import { z } from 'zod';
-import { source, specViewOf } from '@/lib/source';
+import { onlyProse, source, specViewOf } from '@/lib/source';
 import { Document, type DocumentData } from 'flexsearch';
 import { ChatUIMessage, SearchTool } from '../../../components/ai/search';
 
@@ -38,7 +38,7 @@ async function createSearchServer() {
         title: page.data.title,
         description: page.data.description,
         url: page.url,
-        content: await page.data.getText('processed'),
+        content: onlyProse(await page.data.getText('processed')),
       } as CustomDocument;
     }),
   );

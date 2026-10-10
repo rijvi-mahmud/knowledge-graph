@@ -9,6 +9,20 @@ export function isJurisdiction(value: unknown): value is Jurisdiction {
   return JURISDICTIONS.includes(value as Jurisdiction);
 }
 
+/**
+ * The jurisdiction a plain line of text applies to, from how it opens:
+ * "In the United States, ..." or "In the European Union, ...". Lines that
+ * can't carry a tag, such as scope entries and contract lines, follow this
+ * convention, so the filter can still leave them out.
+ */
+export function textJurisdiction(text: string): Jurisdiction | undefined {
+  // A contract line may name its kind first: "Asks: in the EU, ...".
+  const lead = text.replace(/^(Asks|Gives|Answers|Receives):\s*/, '');
+  if (/^(In|in) the (United States|US)\b/.test(lead)) return 'us';
+  if (/^(In|in) the (European Union|EU)\b/.test(lead)) return 'eu';
+  return undefined;
+}
+
 /** Cookie holding a reader's jurisdiction choice on the HTML pages. */
 export const JURISDICTION_COOKIE = 'kg-jurisdiction';
 

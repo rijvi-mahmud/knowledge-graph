@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.4.6
+version: 0.4.7
 status: draft
 industry: healthcare
 domain: ehr
@@ -29,7 +29,7 @@ actors:
   description: Register babies born in the hospital.
 glossary:
 - term: Medical record number (MRN)
-  definition: The number a hospital assigns to identify a patient's record. One of the identifiers The Joint Commission lists for patient identification.
+  definition: The number a hospital assigns to identify a patient's record, used with name and birth date to identify the patient.
 - term: Unidentified patient
   definition: A patient whose identity is unknown on arrival, such as an unconscious trauma patient, registered under an alias.
 - term: Alias
@@ -593,10 +593,12 @@ references:
   title: The Joint Commission, National Performance Goals effective January 2026 for the Hospital Program (NPG.01.01.01)
   url: https://digitalassets.jointcommission.org/api/public/content/9ca80055182b4274842a5780a94f2c82
   note: Two identifiers, never the room number, barcodes, and distinct newborn identification.
+  jurisdiction: us
 - id: REF-E2
   title: 42 CFR 489.24, emergency screening and stabilisation (EMTALA)
   url: https://www.ecfr.gov/current/title-42/section-489.24
   note: 'Paragraph (d)(4): no delay to ask about payment or insurance.'
+  jurisdiction: us
 - id: REF-E3
   title: 'Unidentified but Not Unknown: Evaluating the Phonetic Naming System in a UK Trauma Centre (Mahajan et al., Cureus, 2025)'
   url: https://doi.org/10.7759/cureus.99127
@@ -607,13 +609,20 @@ references:
   title: 'ONC SAFER Guide: Patient Identification (2025)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
   note: MRN check digits, temporary and downtime ids, newborn naming and pseudonyms.
+  jurisdiction: us
 - id: REF-E6
   title: CDC National Vital Statistics System, fetal deaths
   url: https://www.cdc.gov/nchs/nvss/fetal_death.htm
 - id: REF-E7
   title: 'ONC SAFER Guide: Patient Identification, practices 1.1 and 3.2 (overlaps and the enterprise index)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
+  jurisdiction: us
 changelog:
+- version: 0.4.7
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.4.6
   date: '2026-10-09'
   breaking: false
@@ -704,6 +713,7 @@ acronyms:
   definition: Emergency Medical Treatment and Labor Act
 - term: NPG
   definition: National Performance Goal, The Joint Commission
+  jurisdiction: us
 dependencies:
 - service: emergency-department-service
   direction: downstream

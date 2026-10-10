@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.13.1
+version: 0.13.2
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -70,13 +70,13 @@ glossary:
 - term: Protected health information
   definition: Health information that identifies a person (HIPAA, 45 CFR 160.103). In the EU, data concerning health is a special category of personal data (GDPR Article 9).
 - term: Personal representative
-  definition: Someone the law treats as the patient for privacy purposes, such as a parent or guardian (45 CFR 164.502(g)).
+  definition: 'Someone the law lets act for the patient, such as a parent or guardian: in the United States, a personal representative under HIPAA (45 CFR 164.502(g)); in the European Union, a legal representative under member state law.'
 - term: Check-in
   definition: Recording that the patient has arrived and their identity is verified.
 - term: Entered in error
   definition: An appointment recorded by mistake. It is kept, but never counted as a real appointment.
 - term: Outpatient
-  definition: A patient who receives care without being formally admitted, even if they stay overnight (Medicare). HL7 class AMB.
+  definition: A patient who receives care without being formally admitted, even if they stay overnight; in the United States, as Medicare defines it, and in the European Union, as the member state defines it. HL7 class AMB.
 - term: Virtual appointment
   definition: Care where the patient and practitioner are not in the same place, such as a video visit. HL7 class VR.
 - term: Prior authorization
@@ -269,7 +269,7 @@ businessRules:
   rationale: These are the conditions under which healthcare messages to mobile phones are exempt from prior consent (47 CFR 64.1200(a)(9)(iv)). Breaking any of them turns a reminder into an unlawful call or text.
   jurisdiction: us
 - id: BR-H14
-  text: A virtual appointment records where the patient will be. In the United States, the practitioner must be licensed or legally permitted to practise in the state where the patient is located.
+  text: A virtual appointment records where the patient will be. In the United States, the practitioner must be licensed or legally permitted to practise in the state where the patient is located. In the European Union, telemedicine is provided in the member state where the provider is established, whose rules apply.
   rationale: 'HHS: providers "must ... be licensed or legally permitted to practice in the state where the patient is located". In the EU, telemedicine is considered provided in the member state where the provider is established (Directive 2011/24/EU, Article 3(d)), so the patient''s location is recorded but not checked against a licence.'
 - id: BR-H15
   text: reason and service_type are coded with the configured code systems, and a code must be valid in the release in effect on the appointment date.
@@ -1985,21 +1985,27 @@ references:
 - id: REF-H1
   title: 45 CFR 160.103, HIPAA definitions
   url: https://www.law.cornell.edu/cfr/text/45/160.103
+  jurisdiction: us
 - id: REF-H2
   title: 45 CFR 164.502, uses and disclosures (minimum necessary, personal representatives)
   url: https://www.law.cornell.edu/cfr/text/45/164.502
+  jurisdiction: us
 - id: REF-H3
   title: 45 CFR 164.522, confidential communications
   url: https://www.law.cornell.edu/cfr/text/45/164.522
+  jurisdiction: us
 - id: REF-H4
   title: 45 CFR 164.312, technical safeguards (audit controls)
   url: https://www.law.cornell.edu/cfr/text/45/164.312
+  jurisdiction: us
 - id: REF-H5
   title: 42 CFR 482.24, hospital medical record services (retention)
   url: https://www.law.cornell.edu/cfr/text/42/482.24
+  jurisdiction: us
 - id: REF-H6
   title: 45 CFR 92.201, language assistance services
   url: https://www.law.cornell.edu/cfr/text/45/92.201
+  jurisdiction: us
 - id: REF-H7
   title: HHS FAQ 198, leaving messages and appointment reminders
   url: https://web.archive.org/web/2025/https://www.hhs.gov/hipaa/for-professionals/faq/198/may-health-care-providers-leave-messages/index.html
@@ -2007,16 +2013,20 @@ references:
 - id: REF-H8
   title: GDPR Article 9, special categories of personal data
   url: https://gdpr-info.eu/art-9-gdpr/
+  jurisdiction: eu
 - id: REF-H9
   title: GDPR Article 17, right to erasure
   url: https://gdpr-info.eu/art-17-gdpr/
+  jurisdiction: eu
 - id: REF-H10
   title: GDPR Article 32, security of processing
   url: https://gdpr-info.eu/art-32-gdpr/
+  jurisdiction: eu
 - id: REF-H11
   title: The Joint Commission, National Performance Goals effective January 2026 for the Hospital Program (NPG.01.01.01)
   url: https://digitalassets.jointcommission.org/api/public/content/9ca80055182b4274842a5780a94f2c82
   note: Other accreditation programs keep the same requirement as NPSG.01.01.01.
+  jurisdiction: us
 - id: REF-H12
   title: HL7 FHIR R5, Appointment
   url: https://hl7.org/fhir/R5/appointment.html
@@ -2029,30 +2039,38 @@ references:
 - id: REF-H15
   title: 45 CFR 92.202, effective communication for individuals with disabilities
   url: https://www.law.cornell.edu/cfr/text/45/92.202
+  jurisdiction: us
 - id: REF-H16
   title: 45 CFR 164.524, access of individuals to protected health information
   url: https://www.law.cornell.edu/cfr/text/45/164.524
+  jurisdiction: us
 - id: REF-H17
   title: GDPR Article 15, right of access
   url: https://gdpr-info.eu/art-15-gdpr/
+  jurisdiction: eu
 - id: REF-H18
   title: GDPR Article 12, transparent information and response deadlines
   url: https://gdpr-info.eu/art-12-gdpr/
+  jurisdiction: eu
 - id: REF-H19
   title: GDPR Article 5, principles (minimisation, confidentiality)
   url: https://gdpr-info.eu/art-5-gdpr/
+  jurisdiction: eu
 - id: REF-H20
   title: 47 CFR 64.1200, delivery restrictions (healthcare message exemption)
   url: https://www.law.cornell.edu/cfr/text/47/64.1200
+  jurisdiction: us
 - id: REF-H21
   title: HHS telehealth, getting started with licensure
   url: https://telehealth.hhs.gov/licensure/getting-started-licensure
 - id: REF-H22
   title: Directive 2011/24/EU, patients' rights in cross-border healthcare
   url: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32011L0024
+  jurisdiction: eu
 - id: REF-H23
   title: 45 CFR 162.1002, medical data code sets
   url: https://www.law.cornell.edu/cfr/text/45/162.1002
+  jurisdiction: us
 - id: REF-H24
   title: WHO, International Classification of Diseases (ICD-11)
   url: https://www.who.int/standards/classifications/classification-of-diseases
@@ -2060,22 +2078,27 @@ references:
   title: CMS MLN Matters MM5613, charges for missed appointments (Medicare)
   url: https://www.cms.gov/Outreach-and-Education/Medicare-Learning-Network-MLN/MLNMattersArticles/Downloads/MM5613.pdf
   note: 'For the Billing module: Medicare allows the charge only if non-Medicare patients are charged too.'
+  jurisdiction: us
 - id: REF-H26
   title: NC Medicaid, provider billing of Medicaid beneficiaries
   url: https://medicaid.ncdhhs.gov/providers-billing-beneficiaries/open
   note: 'For the Billing module: quotes the CMS policy that Medicaid beneficiaries may not be billed for missed appointments.'
+  jurisdiction: us
 - id: REF-H27
   title: 45 CFR 149.610, good faith estimates for uninsured or self-pay individuals
   url: https://www.ecfr.gov/current/title-45/section-149.610
+  jurisdiction: us
 - id: REF-H28
   title: 45 CFR 164.524, access of individuals to protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.524
+  jurisdiction: us
 - id: REF-H29
   title: HL7 appointment-cancellation-reason code system
   url: https://terminology.hl7.org/CodeSystem-appointment-cancellation-reason.html
 - id: REF-H30
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
+  jurisdiction: us
 - id: REF-H31
   title: HL7 FHIR R5, Appointment (basedOn, serviceType)
   url: https://hl7.org/fhir/R5/appointment.html
@@ -2100,11 +2123,12 @@ references:
 - id: REF-H38
   title: CMS Interoperability and Prior Authorization Final Rule (CMS-0057-F), fact sheet
   url: https://www.cms.gov/newsroom/fact-sheets/cms-interoperability-and-prior-authorization-final-rule-cms-0057-f
+  jurisdiction: us
 - id: REF-H39
   title: HFMA, best practices for communications in advance of service
   url: https://www.hfma.org/revenue-cycle/patient-financial-communications/19957/
 - id: REF-H40
-  title: ONC, SAFER Guides (2025), Contingency Planning
+  title: SAFER Guides, Office of the National Coordinator for Health IT (2025), Contingency Planning
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
 - id: REF-H41
@@ -2115,23 +2139,33 @@ references:
   title: 45 CFR 84.84, Requirements for web and mobile accessibility
   url: https://www.ecfr.gov/current/title-45/section-84.84
   note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+  jurisdiction: us
 - id: REF-H43
   title: 45 CFR 92.204, Accessibility of information and communication technology
   url: https://www.ecfr.gov/current/title-45/section-92.204
   note: Health programs provided through ICT must be accessible.
+  jurisdiction: us
 - id: REF-H44
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+  jurisdiction: eu
 - id: REF-H45
   title: 45 CFR 92.201, Meaningful access for individuals with limited English proficiency
   url: https://www.ecfr.gov/current/title-45/section-92.201
   note: Language assistance services.
+  jurisdiction: us
 - id: REF-H46
   title: 45 CFR 171.206, Protecting care access
   url: https://www.ecfr.gov/current/title-45/section-171.206
   note: Information blocking exception for reproductive health care information.
+  jurisdiction: us
 changelog:
+- version: 0.13.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.13.1
   date: '2026-10-10'
   breaking: false

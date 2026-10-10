@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.3.1
+version: 0.3.2
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -93,7 +93,7 @@ dataModel:
 - name: code_system.edition
   type: string
   required: false
-  description: The edition used, where a code system has several, such as SNOMED CT US Edition or a national edition, or ICD-10-GM.
+  description: The edition used, where a code system has several, such as SNOMED CT US Edition in the United States, or a national edition or ICD-10-GM in an EU member state.
   constraints: one per code system in use
 - name: code_system.case_sensitive
   type: boolean
@@ -270,7 +270,7 @@ businessRules:
   text: A code is checked against the release of its code system in effect on the date the caller gives. At most one release of a code system and edition is in effect on any date.
   rationale: HIPAA code sets are valid only within the dates their maintainers set (45 CFR 162.1011), and CDC states the range of dates of care each ICD-10-CM release applies to.
 - id: BR-H3
-  text: 'Callers choose the date by code_date_rule: by default the date of service. For ICD-10-CM and ICD-10-PCS on US inpatient claims, the discharge date.'
+  text: 'Callers choose the date by code_date_rule: by default the date of service. In the United States, ICD-10-CM and ICD-10-PCS on inpatient claims use the discharge date; in the European Union, the date of service unless member state rules differ.'
   rationale: CDC states its releases by date of service, while CMS has institutional claims use the code set in effect on the discharge or through date (MLN Matters SE1408). The sources differ by use, so it is a setting.
 - id: BR-H4
   text: 'A new release is staged, then verified: its checksum or record counts match what the publisher states, its files parse, and the changes from the previous release are listed. Only a verified release can be activated.'
@@ -314,6 +314,7 @@ businessRules:
 - id: BR-H17
   text: Year-to-year ICD-10-CM changes are followed with the CDC conversion table. CMS GEMs, last updated for fiscal year 2018, are used only for ICD-9 history.
   rationale: CDC publishes a conversion table with each ICD-10-CM release, and CMS stopped updating GEMs after fiscal year 2018.
+  jurisdiction: us
 - id: BR-H18
   text: ICD-10 to ICD-11 translation uses the transition tables WHO publishes with each ICD-11 version, and ICD-11 releases are loaded with their version identifiers.
   rationale: WHO releases ICD-11 in versions with identifiers used when reporting, and provides transition tables with every version.
@@ -675,7 +676,7 @@ settings:
   description: The code systems and editions loaded, such as ICD-10-CM, ICD-10-PCS, SNOMED CT US Edition, LOINC, UCUM, RxNorm and CPT in the United States, or WHO ICD-10, a national version such as ICD-10-GM, ICD-11 MMS and a national SNOMED CT edition in the EU.
 - name: code_date_rule
   type: map
-  description: Which date picks the release, per code system and use. Default date of service; for ICD-10-CM and ICD-10-PCS on US inpatient claims, the discharge date.
+  description: Which date picks the release, per code system and use. Default date of service; in the United States, the discharge date for ICD-10-CM and ICD-10-PCS on inpatient claims; in the European Union, as member state rules set.
 - name: dual_coding
   type: list
   description: Pairs of classifications coded side by side, such as ICD-10 and ICD-11, with the period. Empty by default.
@@ -882,6 +883,7 @@ acceptanceCriteria:
   then: the target from the CDC conversion table is returned; GEMs aren't used
   verifies:
   - BR-H17
+  jurisdiction: us
 - id: AC-H26
   given: WHO transition tables for an ICD-11 version
   when: an ICD-10 code is translated to ICD-11
@@ -1428,7 +1430,7 @@ dependencies:
   - 'Asks: who is the caller, and do they hold this permission?'
 - service: release-sources
   direction: upstream
-  reason: publishers' download services, such as NLM UMLS, CDC, CMS, WHO and SNOMED International
+  reason: publishers' download services, such as WHO and SNOMED International everywhere, NLM UMLS, CDC and CMS in the United States, and national publishers in EU member states
   criticality: soft
   contract:
   - 'Receives: release files, with their checksums or counts and dates of effect'
@@ -1493,14 +1495,17 @@ references:
   title: 45 CFR 162.1002, Medical data code sets
   url: https://www.ecfr.gov/current/title-45/section-162.1002
   note: HIPAA code sets for transactions.
+  jurisdiction: us
 - id: REF-H2
   title: 45 CFR 162.1011, Valid code sets
   url: https://www.ecfr.gov/current/title-45/section-162.1011
   note: Valid within the dates their maintainers set.
+  jurisdiction: us
 - id: REF-H3
   title: 45 CFR 170.207, Vocabulary standards for representing electronic health information
   url: https://www.ecfr.gov/current/title-45/section-170.207
   note: SNOMED CT US Edition and LOINC for certified health IT.
+  jurisdiction: us
 - id: REF-H4
   title: CDC, ICD-10-CM files
   url: https://www.cdc.gov/nchs/icd/icd-10-cm/files.html
@@ -1509,14 +1514,17 @@ references:
   title: CDC, ICD-10-CM and ICD-10-PCS order files (FY2021 description)
   url: https://ftp.cdc.gov/pub/Health_Statistics/NCHS/publications/ICD10CM/2021/icd10OrderFiles-p-2021.pdf
   note: Header codes flagged as not valid for HIPAA-covered transactions.
+  jurisdiction: us
 - id: REF-H6
   title: CMS, MLN Matters SE1408 (archived)
   url: https://web.archive.org/web/2016/https://www.cms.gov/Outreach-and-Education/Medicare-Learning-Network-MLN/MLNMattersArticles/downloads/SE1408.pdf
   note: Institutional claims use the code set by discharge or through date.
+  jurisdiction: us
 - id: REF-H7
   title: CMS, ICD-10 files and GEMs archive
   url: https://www.cms.gov/medicare/coding/icd10/archive-icd-10-cm-icd-10-pcs-gems
   note: GEMs last updated for fiscal year 2018.
+  jurisdiction: us
 - id: REF-H8
   title: WHO, ICD-11 Reference Guide
   url: https://icdcdn.who.int/icd11referenceguide/en/refguide.pdf
@@ -1557,6 +1565,7 @@ references:
   title: NLM, SNOMED CT United States Edition
   url: https://www.nlm.nih.gov/healthit/snomedct/us_edition.html
   note: Distribution through UMLS; free in member countries.
+  jurisdiction: us
 - id: REF-H18
   title: AMA, CPT licensing
   url: https://www.ama-assn.org/practice-management/cpt-licensing
@@ -1569,15 +1578,22 @@ references:
   title: Regulation (EU) 2025/327, European Health Data Space
   url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
   note: Article 15, the European exchange format and its coding systems.
+  jurisdiction: eu
 - id: REF-H21
   title: Regulation (EU) 2016/679, GDPR
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Article 5(1)(c), data minimisation.
+  jurisdiction: eu
 - id: REF-H22
   title: LOINC, Classification of LOINC term status
   url: https://loinc.org/kb/users-guide/editorial-policies-and-procedures/classification-of-loinc-term-status
   note: ACTIVE, TRIAL, DISCOURAGED and DEPRECATED.
 changelog:
+- version: 0.3.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.3.1
   date: '2026-10-10'
   breaking: false
@@ -1625,12 +1641,15 @@ acronyms:
   definition: Current Procedural Terminology, maintained by the American Medical Association
 - term: GEMs
   definition: General Equivalence Mappings between ICD-9 and ICD-10, last updated by CMS for fiscal year 2018
+  jurisdiction: us
 - term: HCPCS
   definition: Healthcare Common Procedure Coding System
 - term: ICD-10-CM
   definition: ICD-10 Clinical Modification, the US diagnosis classification
+  jurisdiction: us
 - term: ICD-10-PCS
   definition: ICD-10 Procedure Coding System, for US inpatient procedures
+  jurisdiction: us
 - term: ICD-11 MMS
   definition: ICD-11 for Mortality and Morbidity Statistics
 - term: LOINC

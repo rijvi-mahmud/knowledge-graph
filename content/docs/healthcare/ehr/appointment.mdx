@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments: appointments for patients in an inpatient or observation stay, which belong to the stay, built on the clinical appointment rules.'
 module: appointment
-version: 0.11.8
+version: 0.11.9
 status: draft
 industry: healthcare
 domain: ehr
@@ -266,7 +266,13 @@ references:
 - id: REF-E6
   title: Medicare, inpatient or outpatient hospital status
   url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
+  jurisdiction: us
 changelog:
+- version: 0.11.9
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.11.8
   date: '2026-10-09'
   breaking: false
@@ -410,7 +416,7 @@ glossary:
 - term: Inpatient
   definition: A patient formally admitted to the organization with a doctor's order, with a stay (HL7 class IMP).
 - term: Observation
-  definition: Hospital outpatient services while a doctor decides whether to admit or discharge the patient, even in a hospital bed overnight (Medicare). HL7 class OBSENC.
+  definition: Hospital outpatient services while a doctor decides whether to admit or discharge the patient, even in a hospital bed overnight; in the United States, as Medicare defines it, and in the European Union, as the member state defines it. HL7 class OBSENC.
 - term: Stay
   definition: A patient's time in hospital as an inpatient or under observation, recorded as one encounter until it ends.
 ---

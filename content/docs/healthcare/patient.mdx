@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.13.9
+version: 0.13.10
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -98,6 +98,7 @@ glossary:
   definition: A record that needs extra protection, such as a staff member's or a public figure's (HL7 confidentiality R or V).
 - term: Statement of disagreement
   definition: A patient's written statement disagreeing with a denied correction. In the United States it is kept with the record (45 CFR 164.526(d)).
+  jurisdiction: us
 concepts:
 - name: One record per person
   description: Every other module refers to a patient only by id. When two records turn out to be the same person, the merge tells every module to point at the one that remains.
@@ -145,7 +146,7 @@ dataModel:
 - name: addresses
   type: address[]
   required: false
-  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing (Project US@). Unknown parts are left blank. In the United States, an address can be marked as an address confidentiality program substitute, with the program and participant number.
+  description: Each with use (home, work, temp, old or billing), lines, city, district, state, postal code, country and period, and flags for homeless and multi-unit housing. Unknown parts are left blank. In the United States, addresses follow Project US@, and one can be marked as an address confidentiality program substitute, with the program and participant number; in the European Union, they follow the member state's format.
   constraints: 'codes: use and type from FHIR AddressUse and AddressType; country ISO 3166-1 alpha-2; US state USPS two-letter code'
 - name: telecoms
   type: contact point[]
@@ -160,8 +161,8 @@ dataModel:
 - name: interpreter_needed
   type: boolean
   required: false
-  description: Whether the patient needs an interpreter (USCDI v5 and later, Interpreter Needed).
-  constraints: 'codes: yes, no or unknown, as the US Core Interpreter Needed extension'
+  description: Whether the patient needs an interpreter.
+  constraints: 'codes: yes, no or unknown, as the US Core Interpreter Needed extension; maps to USCDI v5 and later Interpreter Needed (United States)'
 - name: multiple_birth
   type: boolean or integer
   required: false
@@ -221,7 +222,7 @@ dataModel:
 - name: occupation
   type: text
   required: false
-  description: Current job and industry (USCDI). Collected only when listed in collected_fields.
+  description: Current job and industry. Collected only when listed in collected_fields.
   constraints: 'codes: CDC Occupational Data for Health (ODH), version 20201030 in USCDI v3; LOINC 11341-5 History of Occupation'
 - name: tribal_affiliation
   type: code[]
@@ -483,10 +484,10 @@ businessRules:
   text: A record is not inactivated automatically while the patient has an appointment that has not started or an encounter that is open.
   rationale: inactive_after looks back at care. A patient booked for next month, or in care now, is in active use whatever their history.
 - id: BR-H51
-  text: Each correction request is kept and linked to the record it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the record, and in the United States for at least 6 years from its decision. It moves with the record in a merge.
+  text: Each correction request is kept and linked to the record it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the record, in the United States for at least 6 years from its decision, and in the European Union for as long as member state law requires. It moves with the record in a merge.
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)). A merge must not lose a disagreement that has to go with later disclosures (BR-H44).
 - id: BR-H52
-  text: The record notes who gave the registration details. In the European Union, when they came from someone other than the patient, such as a relative, emergency staff or the mother of a newborn, the Consent module is told, so the patient gets the privacy information at their first contact and in any case within one month.
+  text: The record notes who gave the registration details, and when they came from someone other than the patient, such as a relative, emergency staff or the mother of a newborn, the Consent module is told. In the European Union, the patient then gets the privacy information at their first contact and in any case within one month; in the United States, the Notice of Privacy Practices is given at the first service instead.
   rationale: 'GDPR Article 14 applies when personal data is not obtained from the person, and Article 14(3) sets the deadline: within a reasonable period and at the latest one month, or at the first communication. Unidentified, unconscious and newborn patients are always registered by someone else.'
 - id: BR-H53
   text: A contact can be marked as involved in the patient's care, and the patient can object to sharing with any contact. Staff may share with an involved contact only what is relevant to that involvement, and may tell family the patient's location, general condition or death, unless the patient objected. When the patient can't agree or object, because they are incapacitated or it is an emergency, staff decide in the patient's best interest and the decision is recorded.
@@ -545,7 +546,7 @@ validations:
   rule: an email address with one @, a local part of at most 64 octets, and at most 254 octets in total
   error: PATIENT_INVALID_TELECOM
 - field: addresses
-  rule: country is an ISO 3166-1 alpha-2 code; in the US, state is a USPS two-letter code and the postal code is a 5-digit ZIP or ZIP+4
+  rule: country is an ISO 3166-1 alpha-2 code; in the United States, state is a USPS two-letter code and the postal code is a 5-digit ZIP or ZIP+4; in the European Union, the postal code follows the member state's format
   error: PATIENT_INVALID_ADDRESS
 - field: addresses
   rule: unknown parts are blank, not UNKNOWN; a general delivery address uses the words GENERAL DELIVERY (Project US@)
@@ -824,6 +825,7 @@ edgeCases:
   covers:
   - BR-H15
   - AC-H13
+  jurisdiction: us
 - id: EC-H15
   situation: A proxy's authorisation ended last month.
   behaviour: They can no longer act for the patient. The answer to "may this person act?" is no.
@@ -1260,7 +1262,7 @@ settings:
   description: 'Which optional demographics are collected: race_ethnicity, tribal_affiliation, gender_identity, pronouns, marital_status, occupation. Set with legal advice (BR-H6).'
 - name: race_ethnicity_categories
   type: code list
-  description: Categories offered when race_ethnicity is collected. In the United States, the OMB SPD 15 minimum categories, required for federal reporting by March 28, 2029.
+  description: Categories offered when race_ethnicity is collected. In the United States, the OMB SPD 15 minimum categories, required for federal reporting by March 28, 2029. In the European Union, collected only where member state law allows, because GDPR Article 9 treats racial or ethnic origin as special category data.
 - name: correction_deadline
   type: duration
   description: 'Time to decide a correction request. Defaults by jurisdiction: 60 days in the US (45 CFR 164.526(b)(2)), one month in the EU (GDPR Article 12(3)).'
@@ -1299,7 +1301,7 @@ settings:
   description: The most records one import accepts. Set by each deployment.
 - name: sex_codes
   type: code list
-  description: Values allowed for recorded sex. In the United States, ONC accepted SNOMED CT 248152002 Female and 248153007 Male for certification in 2025; check current ONC rules. Required.
+  description: Values allowed for recorded sex. In the United States, ONC accepted SNOMED CT 248152002 Female and 248153007 Male for certification in 2025; check current ONC rules. In the European Union, the codes the member state's exchange format uses. Required.
 - name: search_result_limit
   type: integer
   description: The most records one search returns. Set by each deployment. Required.
@@ -1574,7 +1576,7 @@ acceptanceCriteria:
   - BR-H26
   - FR-H17
 - id: AC-H33
-  given: a phone 555-1234, an email with a 65-character local part, a US address with state "Calif", and an SSN starting 666
+  given: a phone 555-1234, an email with a 65-character local part, a US address with state "Calif", and an SSN starting 666, and an EU address whose postal code doesn't fit its member state's format
   when: they are submitted
   then: they fail with PATIENT_INVALID_TELECOM and HTTP 422, PATIENT_INVALID_TELECOM and HTTP 422, PATIENT_INVALID_ADDRESS and HTTP 422 and PATIENT_INVALID_IDENTIFIER and HTTP 422, reported together
   verifies:
@@ -2768,7 +2770,7 @@ personalData:
   retention: record_retention; in the United States, at least 6 years from the decision (BR-H51)
 - field: informant
   category: personal
-  purpose: Knowing whether the patient was told about the processing (GDPR Article 14)
+  purpose: 'Knowing who gave the registration details: in the United States, for the record''s accuracy; in the European Union, also whether the patient was told about the processing (GDPR Article 14)'
   retention: record_retention
 errors:
 - code: PATIENT_NOT_FOUND
@@ -3109,29 +3111,37 @@ references:
 - id: REF-H6
   title: 45 CFR 164.502, uses and disclosures (minimum necessary, deceased individuals, personal representatives)
   url: https://www.ecfr.gov/current/title-45/section-164.502
+  jurisdiction: us
 - id: REF-H7
   title: 45 CFR 164.522, confidential communications
   url: https://www.ecfr.gov/current/title-45/section-164.522
+  jurisdiction: us
 - id: REF-H8
   title: 45 CFR 164.526, amendment of protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.526
+  jurisdiction: us
 - id: REF-H9
   title: 45 CFR 164.312, technical safeguards (audit controls)
   url: https://www.ecfr.gov/current/title-45/section-164.312
+  jurisdiction: us
 - id: REF-H10
   title: 42 CFR 482.24, hospital medical record services
   url: https://www.ecfr.gov/current/title-42/section-482.24
+  jurisdiction: us
 - id: REF-H11
   title: GDPR (EU) 2016/679, Articles 9, 12, 16, 17, 18 and 87, and Recital 27
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
+  jurisdiction: eu
 - id: REF-H12
   title: European Health Data Space Regulation (EU) 2025/327, Articles 3 to 10
   url: https://eur-lex.europa.eu/eli/reg/2025/327/oj
   note: Patient rights apply to patient summaries from 26 March 2029 (Article 105).
+  jurisdiction: eu
 - id: REF-H13
   title: USCDI, versions 3, 3.1 and 6
   url: https://isp.healthit.gov/united-states-core-data-interoperability-uscdi
   note: Patient demographics data elements, and the 2025 removal of sexual orientation and gender identity in v3.1.
+  jurisdiction: us
 - id: REF-H14
   title: OMB Statistical Policy Directive No. 15, 2024 revisions
   url: https://www.federalregister.gov/documents/2024/03/29/2024-06469/revisions-to-ombs-statistical-policy-directive-no-15-standards-for-maintaining-collecting-and
@@ -3143,6 +3153,7 @@ references:
   title: Project US@ technical specification for patient addresses (ONC)
   url: https://oncprojectracking.healthit.gov/wiki/download/attachments/180486153/Project%20US@%20FINAL%20Technical%20Specification%20Version%201.0.pdf
   note: Uppercase, punctuation, unknown parts left blank and not matched, general delivery, and homeless and multi-unit flags.
+  jurisdiction: us
 - id: REF-H17
   title: CloudEvents specification
   url: https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md
@@ -3153,6 +3164,7 @@ references:
   title: 'ONC SAFER Guide: Patient Identification (2025)'
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
   note: Photo ID, photographs, similar-name warnings, multiple births, temporary ids and duplicate monitoring.
+  jurisdiction: us
 - id: REF-H20
   title: Association of Display of Patient Photographs in the EHR With Wrong-Patient Order Entry Errors (JAMA Network Open, 2020)
   url: https://doi.org/10.1001/jamanetworkopen.2020.19652
@@ -3181,9 +3193,11 @@ references:
 - id: REF-H28
   title: 45 CFR 164.524, access of individuals to protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.524
+  jurisdiction: us
 - id: REF-H29
   title: 45 CFR 164.520, notice of privacy practices
   url: https://www.ecfr.gov/current/title-45/section-164.520
+  jurisdiction: us
 - id: REF-H30
   title: FHIR extensions, Name Representation (iso21090-EN-representation)
   url: https://hl7.org/fhir/extensions/StructureDefinition-iso21090-EN-representation.html
@@ -3193,12 +3207,15 @@ references:
 - id: REF-H32
   title: ONC enforcement discretion notice for USCDI v3 data elements (March 21, 2025)
   url: https://www.healthit.gov/topic/uscdi-v3-data-elements-enforcement-discretion
+  jurisdiction: us
 - id: REF-H33
   title: US Core Implementation Guide 9.0.0, Patient profile
   url: https://hl7.org/fhir/us/core/StructureDefinition-us-core-patient.html
+  jurisdiction: us
 - id: REF-H34
   title: HL7 Europe Base and Core FHIR IG 2.0.1
   url: https://hl7.eu/fhir/base/
+  jurisdiction: eu
 - id: REF-H35
   title: HL7 v2 tables 0203 (identifier type), 0131 (contact role) and 0003 (event type)
   url: https://terminology.hl7.org/CodeSystem-v2-0203.html
@@ -3223,42 +3240,58 @@ references:
 - id: REF-H42
   title: GDPR Article 19, notification of rectification, erasure or restriction
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
+  jurisdiction: eu
 - id: REF-H43
   title: 45 CFR 171.102 and 171.103, electronic health information and information blocking
   url: https://www.ecfr.gov/current/title-45/part-171
+  jurisdiction: us
 - id: REF-H44
   title: 'ONC FAQ: when a delay in fulfilling a request for EHI is an interference'
   url: https://healthit.gov/faq/when-would-delay-fulfilling-request-access-exchange-or-use-ehi-be-considered-interference-under/
+  jurisdiction: us
 - id: REF-H45
   title: 45 CFR 164.530(j), documentation and retention
   url: https://www.ecfr.gov/current/title-45/section-164.530
+  jurisdiction: us
 - id: REF-H46
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
+  jurisdiction: us
 - id: REF-H47
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object
   url: https://www.ecfr.gov/current/title-45/section-164.510
+  jurisdiction: us
 - id: REF-H48
   title: 45 CFR 84.84, Requirements for web and mobile accessibility
   url: https://www.ecfr.gov/current/title-45/section-84.84
   note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+  jurisdiction: us
 - id: REF-H49
   title: 45 CFR 92.204, Accessibility of information and communication technology
   url: https://www.ecfr.gov/current/title-45/section-92.204
   note: Health programs provided through ICT must be accessible.
+  jurisdiction: us
 - id: REF-H50
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+  jurisdiction: eu
 - id: REF-H51
   title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
   url: https://www.ecfr.gov/current/title-45/section-170.315
   note: Single-patient and group data through a standards-based API.
+  jurisdiction: us
 - id: REF-H52
   title: 45 CFR 170.215, Application programming interface standards
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
+  jurisdiction: us
 changelog:
+- version: 0.13.10
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.13.9
   date: '2026-10-10'
   breaking: false
@@ -3467,14 +3500,17 @@ acronyms:
   definition: CDC Race and Ethnicity code set
 - term: EHDS
   definition: European Health Data Space, Regulation (EU) 2025/327
+  jurisdiction: eu
 - term: FHIR
   definition: Fast Healthcare Interoperability Resources, HL7's standard for exchanging health data
 - term: GDPR
   definition: General Data Protection Regulation (EU) 2016/679
+  jurisdiction: eu
 - term: HIM
   definition: Health information management
 - term: HIPAA
   definition: Health Insurance Portability and Accountability Act
+  jurisdiction: us
 - term: IHE
   definition: Integrating the Healthcare Enterprise, which publishes PIXm, PDQm and PMIR
 - term: LOINC
@@ -3485,12 +3521,15 @@ acronyms:
   definition: Occupational Data for Health, CDC
 - term: OMB
   definition: US Office of Management and Budget
+  jurisdiction: us
 - term: SNOMED CT
   definition: Systematized Nomenclature of Medicine Clinical Terms
 - term: SPD 15
   definition: OMB Statistical Policy Directive No. 15, the US race and ethnicity standard
+  jurisdiction: us
 - term: USCDI
   definition: United States Core Data for Interoperability
+  jurisdiction: us
 tables:
 - name: patients
   description: One row per record.
@@ -3766,7 +3805,7 @@ tables:
 technicalNotes:
 - id: TN-H1
   title: Match in two steps
-  text: Find candidates cheaply first (blocking), for example records sharing a birth date or a phonetic code of the family name, then score each candidate on name, birth date, gender, address, phone and identifiers. Normalise addresses to Project US@ in the United States before comparing. Tune thresholds on the deployment's own data and map scores to certain, probable and possible.
+  text: 'Find candidates cheaply first (blocking), for example records sharing a birth date or a phonetic code of the family name, then score each candidate on name, birth date, gender, address, phone and identifiers. Normalise addresses before comparing: to Project US@ in the United States, and to the member state''s format in the European Union. Tune thresholds on the deployment''s own data and map scores to certain, probable and possible.'
 - id: TN-H2
   title: Run large merges in the background
   text: FHIR $merge allows 202 Accepted with a task to track. Mark the source merged and publish patient.merged in the same transaction, then let each module move its own data. Until consumers finish, reads of their data may show either record.

@@ -15,7 +15,7 @@ import {
   ViewOptionsPopover,
 } from 'fumadocs-ui/layouts/docs/page';
 import { notFound } from 'next/navigation';
-import { getMDXComponents } from '@/components/mdx';
+import { getMDXComponents, onlyFor } from '@/components/mdx';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { appName, gitConfig, siteUrl } from '@/lib/shared';
@@ -101,6 +101,8 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
             components={getMDXComponents({
               // this allows you to link to other pages with relative file paths
               a: createRelativeLink(source, page),
+              // prose for one jurisdiction is left out when the reader chose another
+              Only: onlyFor(jurisdiction),
             })}
           />
         )}

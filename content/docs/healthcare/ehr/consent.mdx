@@ -2,7 +2,7 @@
 title: Consent
 description: 'Hospital consent rules: informed consent in the chart before surgery, procedures the medical staff require written consent for, and advance directives at inpatient admission, built on the healthcare consent rules.'
 module: consent
-version: 0.1.3
+version: 0.1.4
 status: draft
 industry: healthcare
 domain: ehr
@@ -38,10 +38,10 @@ edgeCases:
 settings:
 - name: consent_required_procedures
   type: code[]
-  description: The treatments and procedures that need written informed consent, as the medical staff specify in their rules and as law requires; in the United States, 42 CFR 482.24(c)(4)(v) requires the forms in the record.
+  description: 'The treatments and procedures that need written informed consent, as the medical staff specify in their rules and as law requires: in the United States, 42 CFR 482.24(c)(4)(v) requires the forms in the record, and in the European Union, member state law sets which need written consent.'
 - name: advance_directive_information_at
   type: code
-  description: Inpatient admission, which 42 CFR 489.102(b)(1) requires in the United States.
+  description: Inpatient admission, which 42 CFR 489.102(b)(1) requires in the United States; in the European Union, as member state law sets.
 acceptanceCriteria:
 - id: AC-E1
   given: jurisdiction us and a patient booked for a cholecystectomy with no consent on file
@@ -88,11 +88,18 @@ references:
   title: '42 CFR 482.51, Condition of participation: Surgical services'
   url: https://www.ecfr.gov/current/title-42/section-482.51
   note: (b)(2), informed consent in the chart before surgery.
+  jurisdiction: us
 - id: REF-E2
   title: '42 CFR 482.24, Condition of participation: Medical record services'
   url: https://www.ecfr.gov/current/title-42/section-482.24
   note: (c)(4)(v), properly executed informed consent forms.
+  jurisdiction: us
 changelog:
+- version: 0.1.4
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.1.3
   date: '2026-10-10'
   breaking: false
@@ -130,7 +137,12 @@ compliance:
 Hospital consent builds on the [healthcare consent rules](/docs/healthcare/consent).
 This layer adds the rules a hospital's Conditions of Participation set.
 
+<Only jurisdiction="us">
+
 ## No consent on file, no operation
 
 In the United States, an operation waits until a properly executed consent for
 it is in the record, unless it is an emergency (BR-E1).
+
+</Only>
+

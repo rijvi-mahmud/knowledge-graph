@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.12.4
+version: 0.12.5
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -1949,6 +1949,7 @@ acronyms:
   definition: Best Current Practice, an IETF document series (BCP 47 defines language tags)
 - term: GDPR
   definition: General Data Protection Regulation (EU) 2016/679
+  jurisdiction: eu
 - term: IANA
   definition: Internet Assigned Numbers Authority, which publishes the time zone database
 - term: NTP
@@ -2039,6 +2040,7 @@ references:
 - id: REF-16
   title: GDPR Article 17, Right to erasure
   url: https://gdpr-info.eu/art-17-gdpr/
+  jurisdiction: eu
 - id: REF-17
   title: CloudEvents specification
   url: https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md
@@ -2097,7 +2099,13 @@ references:
 - id: REF-35
   title: GDPR (EU) 2016/679 on EUR-Lex (Articles 6 and 44 to 49)
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
+  jurisdiction: eu
 changelog:
+- version: 0.12.5
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.12.4
   date: '2026-10-09'
   breaking: false

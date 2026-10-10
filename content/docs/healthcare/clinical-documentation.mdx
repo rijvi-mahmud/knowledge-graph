@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.4.3
+version: 0.4.4
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.4.4
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.4.3
   date: '2026-10-10'
   breaking: false
@@ -146,7 +151,7 @@ glossary:
 - term: Note
   definition: A clinical document written about a patient for an encounter, such as a progress note or discharge summary (FHIR Composition, HL7 v2 MDM document).
 - term: Authentication
-  definition: The author's signature on an entry, which identifies them and attests that it is accurate (42 CFR 482.24(c)(1)).
+  definition: The author's signature on an entry, which identifies them and attests that it is accurate; required of US hospitals by 42 CFR 482.24(c)(1), and set by member state law in the European Union.
 - term: Cosignature
   definition: A supervising practitioner's authentication of a note written by someone who needs supervision, such as a resident.
 - term: Addendum
@@ -161,6 +166,7 @@ glossary:
   definition: A record with a deficiency past the deadline the medical staff bylaws set.
 - term: Psychotherapy notes
   definition: In the United States, a mental health professional's notes of a counseling session, kept apart from the rest of the record (45 CFR 164.501).
+  jurisdiction: us
 - term: Vital signs
   definition: Heart rate, respiratory rate, blood pressure, temperature, oxygen saturation, height, weight, head circumference and BMI, as in the FHIR vital signs profiles.
 - term: Assessment
@@ -699,7 +705,7 @@ businessRules:
   text: Notes can be written after a patient's death, such as a death note or an autopsy addendum.
   rationale: Care documentation continues after death; refusing it would leave the end of the record incomplete.
 - id: BR-H49
-  text: A representative sees a note only within the authority the Patients module records for them, including its scope and exclusions. A note with withheld_from_representatives set is released to the patient but not to representatives. In the United States, the author sets it for care a minor consented to alone where the law lets them, or under a confidentiality agreement the parent agreed to.
+  text: A representative sees a note only within the authority the Patients module records for them, including its scope and exclusions. A note with withheld_from_representatives set is released to the patient but not to representatives. In the United States, the author sets it for care a minor consented to alone where the law lets them; in the European Union, as member state law on minors' records sets, or under a confidentiality agreement the parent agreed to.
   rationale: HIPAA doesn't treat a parent as the representative for such care (45 CFR 164.502(g)(3)), and rules on minors' confidentiality also vary by EU member state. A note reaching a parent's portal can harm the young person and deter them from care.
 - id: BR-H50
   text: A drafting tool that records the conversation can start a draft only with recording_consent from every party that recording_consent requires where the care takes place, given before recording. This module never keeps the recording; deleting it is the tool's concern, within the period the organization agreed with the vendor.
@@ -2903,7 +2909,7 @@ dependencies:
   - Accounting of disclosures and copies are Release of information's concern
 - service: patient-access-service
   direction: downstream
-  reason: the patient portal, and EU electronic health data access services
+  reason: 'the patient portal, and access services: in the United States, patient apps through the certified API, and in the European Union, electronic health data access services'
   criticality: soft
   contract:
   - 'Gives: note.released and note.release_held, so the patient sees released notes and is told what is held'
@@ -3018,6 +3024,7 @@ references:
   title: HL7 US Core, Clinical notes
   url: https://hl7.org/fhir/us/core/clinical-notes.html
   note: The note types US servers support and the clinical-note category.
+  jurisdiction: us
 - id: REF-H4
   title: 'HL7 Version 2.4, Chapter 9: Medical records and information management'
   url: https://www.hl7.eu/HL7v2x/v24/std24/ch09.htm
@@ -3038,42 +3045,52 @@ references:
   title: '42 CFR 482.24, Condition of participation: Medical record services'
   url: https://www.ecfr.gov/current/title-42/section-482.24
   note: Dated, timed, authenticated entries; history and physical; discharge summary; completion within 30 days; retention.
+  jurisdiction: us
 - id: REF-H11
   title: Medicare Program Integrity Manual, Chapter 3
   url: https://www.cms.gov/Regulations-and-Guidance/Guidance/Manuals/downloads/pim83c03.pdf
   note: Section 3.3.2.4 signatures, scribes and AI transcription; 3.3.2.5 amendments, corrections and delayed entries; 3.3.2.6 psychotherapy notes.
+  jurisdiction: us
 - id: REF-H12
   title: 45 CFR 164.501, Definitions
   url: https://www.ecfr.gov/current/title-45/section-164.501
   note: Psychotherapy notes.
+  jurisdiction: us
 - id: REF-H13
   title: 45 CFR 164.508, Uses and disclosures for which an authorization is required
   url: https://www.ecfr.gov/current/title-45/section-164.508
   note: Authorization for psychotherapy notes.
+  jurisdiction: us
 - id: REF-H14
   title: 45 CFR 164.524, Access of individuals to protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.524
   note: Right of access, exclusions and reviewable denials.
+  jurisdiction: us
 - id: REF-H15
   title: 45 CFR 164.526, Amendment of protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.526
   note: Decisions, denials, disagreement and telling recipients.
+  jurisdiction: us
 - id: REF-H16
   title: 45 CFR 164.312, Technical safeguards
   url: https://www.ecfr.gov/current/title-45/section-164.312
   note: Audit controls, integrity and encryption.
+  jurisdiction: us
 - id: REF-H17
   title: 45 CFR 171.201, Preventing harm exception
   url: https://www.ecfr.gov/current/title-45/section-171.201
   note: When a release may be held to prevent harm.
+  jurisdiction: us
 - id: REF-H18
   title: 45 CFR 171.202, Privacy exception
   url: https://www.ecfr.gov/current/title-45/section-171.202
   note: Respecting an individual's request not to share.
+  jurisdiction: us
 - id: REF-H19
   title: ONC, Information blocking FAQ on non-final clinical information
   url: https://healthit.gov/faq/non-final-clinical-information-such-draft-clinical-notes-or-incomplete-test-results-are-pending/
   note: Draft notes and the designated record set.
+  jurisdiction: us
 - id: REF-H20
   title: AHIMA, Amendments in the Electronic Health Record Toolkit
   url: https://www.ahima.org/media/r2dc4xhg/amendments-in-the-electronic-health-record_axs.pdf
@@ -3082,6 +3099,7 @@ references:
   title: The Joint Commission, Documentation assistance provided by scribes
   url: https://jointcommission.org/standards/standard-faqs/ambulatory/record-of-care-treatment-and-services-rc/000002210
   note: Scribes are identifiable and the practitioner authenticates.
+  jurisdiction: us
 - id: REF-H22
   title: Tsou and others, Safe practices for copy and paste in the EHR, Applied Clinical Informatics 2017
   url: https://doi.org/10.4338/aci-2016-09-r-0150
@@ -3090,10 +3108,12 @@ references:
   title: Regulation (EU) 2025/327, European Health Data Space
   url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
   note: Articles 3, 5, 6, 8, 13, 14 and 105.
+  jurisdiction: eu
 - id: REF-H25
   title: Regulation (EU) 2016/679, GDPR
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Articles 5, 9, 15 to 18, 28, 32 and 35.
+  jurisdiction: eu
 - id: REF-H26
   title: OpenID Connect Core 1.0
   url: https://openid.net/specs/openid-connect-core-1_0.html
@@ -3110,10 +3130,12 @@ references:
   title: '45 CFR 164.502, Uses and disclosures: general rules'
   url: https://www.ecfr.gov/current/title-45/section-164.502
   note: Personal representatives of unemancipated minors, (g)(3).
+  jurisdiction: us
 - id: REF-H30
   title: 18 U.S.C. 2511, Interception of communications
   url: https://www.law.cornell.edu/uscode/text/18/2511
   note: One-party consent under federal law, (2)(d).
+  jurisdiction: us
 - id: REF-H31
   title: California Penal Code 632
   url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=632.
@@ -3130,22 +3152,27 @@ references:
   title: Regulation (EU) 2024/1689, Artificial Intelligence Act
   url: https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng
   note: Article 50 transparency; Article 113 application from 2 August 2026.
+  jurisdiction: eu
 - id: REF-H37
   title: 45 CFR 171.103, Information blocking
   url: https://www.ecfr.gov/current/title-45/section-171.103
   note: Practices required by law aren't information blocking.
+  jurisdiction: us
 - id: REF-H38
   title: Regulation (EU) 2026/1744, Digital Omnibus on AI
   url: https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng
   note: Adds the 2 December 2026 deadline for AI tools on the market before 2 August 2026.
+  jurisdiction: eu
 - id: REF-H39
   title: ONC, Conceptualizing a data infrastructure for patient-generated health data
   url: https://aspe.hhs.gov/sites/default/files/private/pdf/259016/ConceptualizingDataInfrastructure.pdf
   note: Patient-generated health data recorded outside the clinical setting.
+  jurisdiction: us
 - id: REF-H40
   title: ONC, United States Core Data for Interoperability, Version 5
   url: https://isp.healthit.gov/sites/default/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
   note: Vital signs, including inhaled oxygen concentration, average blood pressure and paediatric percentiles.
+  jurisdiction: us
 - id: REF-H41
   title: CDC, Using the WHO growth charts
   url: https://www.cdc.gov/growth-chart-training/hcp/using-growth-charts/who-using.html
@@ -3154,26 +3181,32 @@ references:
   title: 45 CFR 84.84, Requirements for web and mobile accessibility
   url: https://www.ecfr.gov/current/title-45/section-84.84
   note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+  jurisdiction: us
 - id: REF-H43
   title: 45 CFR 92.204, Accessibility of information and communication technology
   url: https://www.ecfr.gov/current/title-45/section-92.204
   note: Health programs provided through ICT must be accessible.
+  jurisdiction: us
 - id: REF-H44
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+  jurisdiction: eu
 - id: REF-H45
   title: 45 CFR 171.206, Protecting care access
   url: https://www.ecfr.gov/current/title-45/section-171.206
   note: Information blocking exception for reproductive health care information.
+  jurisdiction: us
 - id: REF-H46
   title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
   url: https://www.ecfr.gov/current/title-45/section-170.315
   note: Single-patient and group data through a standards-based API.
+  jurisdiction: us
 - id: REF-H47
   title: 45 CFR 170.215, Application programming interface standards
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
+  jurisdiction: us
 acronyms:
 - term: AI
   definition: Artificial intelligence
@@ -3181,10 +3214,12 @@ acronyms:
   definition: Body mass index
 - term: EHDS
   definition: European Health Data Space, Regulation (EU) 2025/327
+  jurisdiction: eu
 - term: H&P
   definition: History and physical examination
 - term: HDR
   definition: HL7 Europe Hospital Discharge Report
+  jurisdiction: eu
 - term: HIM
   definition: Health information management
 - term: LOINC

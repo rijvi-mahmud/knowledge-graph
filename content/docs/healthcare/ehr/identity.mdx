@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Hospital sign-in: shared clinical workstations with badge tap, and read-only access during downtime, built on the healthcare identity rules.'
 module: identity
-version: 0.2.1
+version: 0.2.2
 status: draft
 industry: healthcare
 domain: ehr
@@ -75,7 +75,13 @@ references:
   title: ONC, SAFER Guides (2025)
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: 'Contingency Planning: read-only backup during downtime.'
+  jurisdiction: us
 changelog:
+- version: 0.2.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.2.1
   date: '2026-10-09'
   breaking: false

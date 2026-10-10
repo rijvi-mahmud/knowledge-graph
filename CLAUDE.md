@@ -268,8 +268,26 @@ which imports nothing, so the proxy and client code can use it. `/openapi/<modul
 is served from a static `<module>.us.json` the same way. `pnpm check:specs`
 filters each spec for every jurisdiction and fails when a kept item cites,
 names or uses an item the filter hid, so a filtered page never dead-ends.
-Narrative prose can't be tagged or filtered, so prose about one region names
-it in its heading or first sentence ("In the United States, ...").
+Every list item can carry a tag, including glossary, acronyms, concepts,
+dependencies, references, API conventions, permission matrix rows,
+performance targets, tables, actors, relationships and permissions; the
+"US only:" / "EU only:" label goes on each list's lead field (`LEAD_FIELD`
+in `spec-inherit.ts`). Lines that can't carry a tag (scope, non-goals, open
+questions, dependency contract lines, workflow steps and state machine
+triggers) are filtered by how they open: "In the United States, ..." or
+"In the European Union, ..." (also after "Asks:", "Gives:" and the like),
+using `textJurisdiction` in `src/lib/jurisdictions.ts`. An operation's error
+list drops errors the view hides. Narrative prose about one region goes in
+`<Only jurisdiction="us">...</Only>`, which the HTML page and the markdown
+route both leave out for the other jurisdiction. Tag an item by what it
+says, not by its rationale: a reference by what it cites (an eCFR section is
+`us`; the SAFER Guides, hosted by ONC but used everywhere, are untagged); an
+item that applies everywhere but names one place's value states each
+jurisdiction's value instead ("in the United States, ...; in the European
+Union, ..."). `pnpm check:specs --strict` fails on an untagged item whose
+text names only one jurisdiction's law, on one-region prose outside `<Only>`,
+and on any line of a rendered filtered view (page and section sub-pages) that
+shows the other jurisdiction's labelled item or opens by naming it.
 
 Adding a section to `spec-sections.ts` (plus its schema field, `KEYS` entry and
 both renderers) gives it a page in every module. URLs are
@@ -758,9 +776,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Consent (`healthcare/consent` 0.4.3, healthcare level, and `healthcare/ehr/consent` 0.1.3 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.1, healthcare level, and `healthcare/ehr/identity` 0.2.1 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.4, healthcare level, and `healthcare/ehr/practitioner` 0.1.4 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.1, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.3 and `healthcare/ehr/clinical-documentation` 0.4.8; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.3, EHR-only), Encounters (`healthcare/encounter` 0.3.1 and `healthcare/ehr/encounter` 0.13.14), Patients (`healthcare/patient` 0.13.9, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.4.6) and Appointments
-  (`healthcare/appointment` 0.13.1, `healthcare/ehr/appointment` 0.11.8; `core/appointment` 0.12.4). All
+  drafts: Consent (`healthcare/consent` 0.4.4, healthcare level, and `healthcare/ehr/consent` 0.1.4 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.2, healthcare level, and `healthcare/ehr/identity` 0.2.2 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.5, healthcare level, and `healthcare/ehr/practitioner` 0.1.5 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.2, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.4 and `healthcare/ehr/clinical-documentation` 0.4.9; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.4, EHR-only), Encounters (`healthcare/encounter` 0.3.2 and `healthcare/ehr/encounter` 0.13.15), Patients (`healthcare/patient` 0.13.10, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.4.7) and Appointments
+  (`healthcare/appointment` 0.13.2, `healthcare/ehr/appointment` 0.11.9; `core/appointment` 0.12.5). All
   support the US and EU through the `jurisdiction` setting. Next: Organization, then Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

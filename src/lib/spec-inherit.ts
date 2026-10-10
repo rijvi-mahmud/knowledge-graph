@@ -128,7 +128,7 @@ function mergeList(layers: { layer: string; items: Item[] }[], key: (i: Item) =>
 }
 
 /** The field each list leads with, which carries the jurisdiction label. */
-const LEAD_FIELD: Record<string, string> = {
+export const LEAD_FIELD: Record<string, string> = {
   dataModel: 'description',
   businessRules: 'text',
   validations: 'rule',
@@ -148,6 +148,18 @@ const LEAD_FIELD: Record<string, string> = {
   errors: 'message',
   decisions: 'decision',
   technicalNotes: 'text',
+  actors: 'description',
+  glossary: 'definition',
+  acronyms: 'definition',
+  concepts: 'description',
+  relationships: 'note',
+  dependencies: 'reason',
+  accessMatrix: 'action',
+  performanceTargets: 'indicator',
+  references: 'title',
+  apiConventions: 'text',
+  permissions: 'description',
+  tables: 'description',
 };
 
 export const JURISDICTION_LABEL: Record<string, string> = { us: 'US only', eu: 'EU only' };

@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.14
+version: 0.13.15
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,11 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.15
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.13.14
   date: '2026-10-09'
   breaking: false
@@ -263,6 +268,7 @@ businessRules:
   text: 'When an encounter enters observation, encounter.observation_started is emitted with observation_notice_due_at: the start plus observation_notice_deadline. Deciding who must receive the notice, and giving it, belongs to Admission, discharge and transfer.'
   rationale: US hospitals must give Medicare patients who receive observation services as outpatients for more than 24 hours a standardized written notice no later than 36 hours after observation starts, or sooner on transfer, discharge or admission (42 CFR 489.20(y)). The encounter knows when observation began.
   variant: inpatient
+  jurisdiction: us
 - id: BR-E24
   text: A pre-admission from Admission, discharge and transfer opens a planned inpatient encounter with planned_start and the pre-admission id. The admission starts that same encounter; a cancelled pre-admission cancels it with the reason admission_cancelled.
   rationale: FHIR uses planned encounters for pre-admission, and HL7 v2 sends pre-admit (A05) and cancel pre-admit (A38). Testing and paperwork before an elective stay need an encounter to attach to.
@@ -535,6 +541,7 @@ settings:
 - name: observation_notice_deadline
   type: duration
   description: 'How long after observation starts the US notice must be given: 36 hours (42 CFR 489.20(y)). Unset outside the United States.'
+  jurisdiction: us
 acceptanceCriteria:
 - id: AC-E2
   given: an emergency arrival
@@ -625,6 +632,7 @@ acceptanceCriteria:
   then: encounter.observation_started is emitted with observation_notice_due_at 36 hours later
   verifies:
   - BR-E23
+  jurisdiction: us
 - id: AC-E35
   given: a pre-admission reported by ADT
   when: the patient is admitted, and another pre-admission is cancelled
@@ -853,7 +861,7 @@ operations:
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 events:
 - name: encounter.observation_started
-  description: The encounter entered observation; carries when the US observation notice is due.
+  description: 'The encounter entered observation; carries the observation notice deadline where the jurisdiction sets one: 36 hours in the United States, and none EU-wide in the European Union.'
   payload:
   - encounter_id
   - observation_started_at
@@ -979,12 +987,15 @@ references:
   title: 42 CFR 482.24, hospital medical record services
   url: https://www.ecfr.gov/current/title-42/section-482.24
   note: Final diagnosis and record completion within 30 days of discharge, and record integrity.
+  jurisdiction: us
 - id: REF-E8
   title: Medicare, inpatient or outpatient hospital status
   url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
+  jurisdiction: us
 - id: REF-E10
   title: 42 CFR 489.20(y), notice of observation status (MOON)
   url: https://www.ecfr.gov/current/title-42/section-489.20
+  jurisdiction: us
 - id: REF-E13
   title: IHE ITI Technical Framework, Patient Administration Management (PAM) profile
   url: https://profiles.ihe.net/ITI/TF/Volume1/ch-14.html
@@ -995,11 +1006,13 @@ references:
 - id: REF-E16
   title: 45 CFR 164.510, uses and disclosures requiring an opportunity to agree or object (facility directories)
   url: https://www.ecfr.gov/current/title-45/section-164.510
+  jurisdiction: us
 acronyms:
 - term: ADT
   definition: Admission, discharge and transfer; also the HL7 v2 message type
 - term: MOON
   definition: Medicare Outpatient Observation Notice
+  jurisdiction: us
 tables:
 - name: encounter_stays
   description: 'admission and directory_status: what only a hospital stay has.'
@@ -1077,7 +1090,12 @@ A patient under observation who is admitted keeps the same encounter, with the
 time of each class recorded (BR-E5). Transfers, leave and discharge come from
 Admission, discharge and transfer and are recorded as they happen (BR-E4).
 
+<Only jurisdiction="us">
+
 ## In the United States, a hospital record is due 30 days after discharge
 
 US hospitals must complete the record, with the final diagnosis, within 30
 days of discharge, so record_completion_deadline is 30 days or less here.
+
+</Only>
+

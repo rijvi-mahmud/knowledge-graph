@@ -37,6 +37,7 @@ const relationSchema = z.object({
   ]),
   target: z.string(), // module/concept id, e.g. "insurance" or "event:appointment.booked"
   note: z.string().optional(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 // Runtime service coupling. Distinct from `relationships`: this is about what
@@ -50,6 +51,7 @@ const dependencySchema = z.object({
   reason: z.string(),
   criticality: z.enum(['hard', 'soft']).default('hard'), // hard = blocks core flow when down
   contract: z.array(z.string()).default([]), // e.g. "Is this slot free for these participants?"
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 // --- domain description ----------------------------------------------------
@@ -57,16 +59,19 @@ const dependencySchema = z.object({
 const actorSchema = z.object({
   name: z.string(), // e.g. "Patient", "Scheduler", "System"
   description: z.string(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 const glossarySchema = z.object({
   term: z.string(),
   definition: z.string(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 const conceptSchema = z.object({
   name: z.string(),
   description: z.string(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 const fieldSchema = z.object({
@@ -167,6 +172,7 @@ const accessSchema = z.object({
   roles: z.record(z.string(), z.string()), // actor name -> any | own | none | condition
   permission: z.string().optional(), // the named permission that grants it, e.g. "appointment.manage"
   note: z.string().optional(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 // A situation that is easy to get wrong, the behaviour the spec requires, and
@@ -204,6 +210,7 @@ const performanceSchema = z.object({
   indicator: z.string(),
   target: z.string(),
   measurement: z.string(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 // Something that could go wrong, what it would cost, and how the spec limits it.
@@ -235,6 +242,7 @@ const referenceSchema = z.object({
   title: z.string(),
   url: z.string(),
   note: z.string().optional(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 const nfrSchema = z.object({
@@ -293,6 +301,7 @@ const apiConventionSchema = z.object({
   topic: z.string(),
   text: z.string(),
   reference: z.string().optional(), // e.g. "RFC 9457"
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 const eventSchema = z.object({
@@ -305,6 +314,7 @@ const eventSchema = z.object({
 const permissionSchema = z.object({
   name: z.string(), // e.g. "appointment.write"
   description: z.string(),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 const errorSchema = z.object({
@@ -354,6 +364,7 @@ const tableSchema = z.object({
   columns: z.array(columnSchema),
   indexes: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
   constraints: z.array(z.object({ name: z.string(), definition: z.string(), note: z.string().optional() })).default([]),
+  jurisdiction, // us or eu; see `jurisdiction` above
 });
 
 // Implementation guidance: how to build something the spec requires.

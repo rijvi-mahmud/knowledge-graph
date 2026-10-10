@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.8.1
+version: 0.8.2
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -707,16 +707,16 @@ settings:
   description: How soon the privacy officer reviews emergency access. Set by the organization.
 - name: refresh_token_lifetime
   type: duration
-  description: How long a patient app's refresh token lasts. At least 3 months in the United States (45 CFR 170.315(g)(10)).
+  description: 'How long a patient app''s refresh token lasts: at least 3 months in the United States (45 CFR 170.315(g)(10)); set by the organization in the European Union.'
 - name: audit_log_retention
   type: duration
-  description: How long the sign-in and access log is kept. Set from law and policy; in the EU, emergency access records at least 3 years (EHDS Article 9(2)). Other periods need legal advice.
+  description: 'How long the sign-in and access log is kept. Set from law and policy: in the European Union, emergency access records at least 3 years (EHDS Article 9(2)); in the United States, by policy and state law. Other periods need legal advice.'
 - name: dormant_account_period
   type: duration
   description: How long a staff or system account can go without a sign-in before it is disabled. Set by the organization, such as 90 days.
 - name: access_token_lifetime
   type: duration
-  description: How long an access token lasts for people and patient apps. Default 1 hour, which keeps revocation within the US 1 hour limit; backend tokens last at most 5 minutes.
+  description: How long an access token lasts for people and patient apps. Default 1 hour, which keeps revocation within the 1 hour certified US health IT must meet; set by the organization in the European Union. Backend tokens last at most 5 minutes.
 - name: minor_own_account_age
   type: integer
   description: The age from which a minor may hold their own patient account. Set from state or member state law and organization policy; it varies by place and needs legal advice. Unset means only from age_of_majority, which the Patients module holds.
@@ -726,6 +726,7 @@ settings:
 - name: professional_access_rules
   type: map
   description: Which categories of health data each category of health professional may read, such as physicians, nurses or physiotherapists, as the EU member state of treatment sets. Empty by default, meaning every professional caring for the patient may read everything their role allows.
+  jurisdiction: eu
 performanceTargets:
 - id: PERF-H1
   indicator: Permission check latency
@@ -1833,6 +1834,7 @@ errors:
 - code: IDENTITY_EPCS_REQUIREMENTS_UNMET
   http: 409
   message: Controlled substance prescribing needs a proofed two-factor credential, a current DEA registration and state authorization, and two designated people, one a registrant.
+  jurisdiction: us
 - code: IDENTITY_INVALID_STATUS
   http: 409
   message: The account isn't in a status that allows this.
@@ -1891,7 +1893,7 @@ dependencies:
   - Departments and job roles are Organization's concern
 - service: identity-providers
   direction: upstream
-  reason: external identity providers, credential service providers and eIDAS nodes
+  reason: external identity providers and credential service providers, including in the United States those that proof prescribers for controlled substances, and in the European Union, eIDAS nodes
   criticality: soft
   contract:
   - 'Asks: is this sign-in or proofing result valid, and at what assurance?'
@@ -1950,10 +1952,12 @@ references:
   title: 45 CFR 164.312, Technical safeguards
   url: https://www.ecfr.gov/current/title-45/section-164.312
   note: Unique user identification, emergency access, automatic logoff, audit controls, authentication.
+  jurisdiction: us
 - id: REF-H2
   title: 45 CFR 164.308, Administrative safeguards
   url: https://www.ecfr.gov/current/title-45/section-164.308
   note: Workforce security, access management, log-in monitoring, password management.
+  jurisdiction: us
 - id: REF-H3
   title: NIST SP 800-63B-4, Authentication and authenticator management
   url: https://pages.nist.gov/800-63-4/sp800-63b.html
@@ -1966,10 +1970,12 @@ references:
   title: 21 CFR part 1311, Electronic prescriptions for controlled substances
   url: https://www.ecfr.gov/current/title-21/part-1311
   note: Identity proofing, two-factor authentication, logical access control.
+  jurisdiction: us
 - id: REF-H6
   title: 45 CFR 170.315(g)(10) and 170.215
   url: https://www.ecfr.gov/current/title-45/section-170.315
   note: App registration, SMART App Launch, refresh tokens of at least three months.
+  jurisdiction: us
 - id: REF-H7
   title: HL7 SMART App Launch 2.0.0, Scopes and launch context
   url: https://hl7.org/fhir/smart-app-launch/STU2/scopes-and-launch-context.html
@@ -1978,18 +1984,22 @@ references:
   title: 45 CFR 171.203, Security exception
   url: https://www.ecfr.gov/current/title-45/section-171.203
   note: Refusing apps only on a tailored security basis.
+  jurisdiction: us
 - id: REF-H9
   title: Regulation (EU) No 910/2014 (eIDAS), as amended by Regulation (EU) 2024/1183
   url: https://eur-lex.europa.eu/eli/reg/2014/910/oj/eng
   note: Electronic identification and the EU Digital Identity Wallet.
+  jurisdiction: eu
 - id: REF-H10
   title: Regulation (EU) 2025/327, European Health Data Space
   url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
   note: Article 12, health professional access services.
+  jurisdiction: eu
 - id: REF-H11
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Article 21(2)(j), multi-factor authentication.
+  jurisdiction: eu
 - id: REF-H12
   title: NIST SP 800-53 Rev. 5, Security and privacy controls
   url: https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final
@@ -2002,14 +2012,17 @@ references:
   title: 45 CFR 164.502, Uses and disclosures of protected health information
   url: https://www.ecfr.gov/current/title-45/section-164.502
   note: (g)(4), executors of a deceased individual as personal representatives.
+  jurisdiction: us
 - id: REF-H15
   title: HIPAA Security Rule To Strengthen the Cybersecurity of Electronic Protected Health Information (proposed rule)
   url: https://www.federalregister.gov/documents/2025/01/06/2024-30983/hipaa-security-rule-to-strengthen-the-cybersecurity-of-electronic-protected-health-information
   note: Proposed mandatory multi-factor authentication; not final.
+  jurisdiction: us
 - id: REF-H16
   title: Regulation (EU) 2016/679 (GDPR)
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Article 17(3), exemptions from erasure; Article 32, security of processing.
+  jurisdiction: eu
 - id: REF-H17
   title: RFC 9700, Best Current Practice for OAuth 2.0 Security
   url: https://www.rfc-editor.org/rfc/rfc9700
@@ -2026,15 +2039,23 @@ references:
   title: 45 CFR 84.84, Requirements for web and mobile accessibility
   url: https://www.ecfr.gov/current/title-45/section-84.84
   note: WCAG 2.1 Level AA from 11 May 2027.
+  jurisdiction: us
 - id: REF-H21
   title: Directive (EU) 2016/2102, accessibility of public sector websites and mobile applications
   url: https://eur-lex.europa.eu/eli/dir/2016/2102/oj/eng
   note: Articles 1, 4 and 6.
+  jurisdiction: eu
 - id: REF-H22
   title: 45 CFR 170.210, Standards for health information technology to protect electronic health information
   url: https://www.ecfr.gov/current/title-45/section-170.210
   note: (a)(2), NIST-approved encryption algorithms.
+  jurisdiction: us
 changelog:
+- version: 0.8.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.8.1
   date: '2026-10-10'
   breaking: false
@@ -2575,8 +2596,13 @@ against breached lists, and never forced to change on a schedule (BR-H6).
 A clinician can break the glass to reach a record in an emergency. It is
 fast, but it is logged and every use is reviewed (BR-H11).
 
+<Only jurisdiction="us">
+
 ## Patients choose their apps
 
 In the United States, patients can connect the apps they choose through SMART
 App Launch, see every app they connected, and revoke any at once (BR-H14,
 BR-H15).
+
+</Only>
+

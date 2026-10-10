@@ -204,6 +204,18 @@ export async function getLLMText(page: (typeof source)['$inferPage'], jurisdicti
   return `${await llmBody(page, jurisdiction, note)}\n\n${licenseLine(page)}\n`;
 }
 
+/**
+ * Prose wrapped in `<Only jurisdiction="us">` stays for that jurisdiction and
+ * for the unfiltered page, without the wrapper, and is left out otherwise:
+ * the same rule the HTML page applies through the Only component.
+ */
+export function onlyProse(markdown: string, jurisdiction?: Jurisdiction) {
+  return markdown.replace(
+    /<Only\s+jurisdiction="(\w+)"\s*>\s*\n?([\s\S]*?)\n?\s*<\/Only>/g,
+    (_, only: string, inner: string) => (!jurisdiction || only === jurisdiction ? inner.trim() : ''),
+  );
+}
+
 async function llmBody(page: (typeof source)['$inferPage'], jurisdiction: Jurisdiction | undefined, note: string) {
   const resolved = () => {
     const spec = getResolvedSpec(page);
@@ -224,7 +236,7 @@ async function llmBody(page: (typeof source)['$inferPage'], jurisdiction: Jurisd
     return `# ${page.data.title} (${page.url})\n\n${note}${spec}`;
   }
 
-  const processed = await page.data.getText('processed');
+  const processed = onlyProse(await page.data.getText('processed'), jurisdiction);
   // The structured spec lives in frontmatter, so it has to be serialised
   // explicitly. The processed body carries only the prose half of the page.
   const spec = specToMarkdown(resolved());

@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.3.4
+version: 0.3.5
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -35,7 +35,7 @@ actors:
   description: Other modules asking whether a practitioner may practise, and screening sources.
 assumptions:
 - id: AS-H1
-  text: Licensing boards, the NPPES registry, DEA, certification boards and exclusion lists can be checked online or through a verification service.
+  text: Licensing boards and registers, such as NPPES, DEA and certification boards in the United States and national competent authorities in EU member states, and exclusion lists can be checked online or through a verification service.
   rationale: Primary-source verification means checking with the issuer or an approved source, not a copy the applicant provides.
 - id: AS-H2
   text: Organization owns which practitioners hold which roles in which departments, and asks this module whether a practitioner may practise.
@@ -56,8 +56,9 @@ glossary:
   definition: Repeating credentialing at a set interval.
 - term: Exclusion
   definition: In the United States, a ban on payment from federal health care programs for anything an excluded person furnishes, orders or prescribes (42 CFR 1001.1901).
+  jurisdiction: us
 - term: Expirable
-  definition: A qualification with an end date, such as a licence or DEA registration.
+  definition: A qualification with an end date, such as a licence or a registration.
 concepts:
 - name: Verified, not declared
   description: An applicant's copy of a licence is a lead, not proof. Each qualification counts only once verified at its source, and only for as long as its verification is current.
@@ -72,7 +73,7 @@ dataModel:
 - name: practitioner.identifiers
   type: identifier[]
   required: true
-  description: Numbers that identify the practitioner, such as the NPI, a national registration number or a staff number, each with its system and period.
+  description: Numbers that identify the practitioner, such as the NPI in the United States, a national registration number in an EU member state, or a staff number, each with its system and period.
   constraints: 'at least one; codes: identifier type from HL7 v2 Table 0203, such as NPI, MD (medical license number), DEA (Drug Enforcement Administration registration number); NPI system http://hl7.org/fhir/sid/us-npi'
 - name: practitioner.names
   type: name[]
@@ -201,20 +202,20 @@ relationships:
   note: '0..*: licences, registrations, certifications and degrees (FHIR Practitioner.qualification 0..*)'
 - type: has_many
   target: identifier
-  note: '0..*: NPI, national registration or staff numbers (FHIR Practitioner.identifier 0..*)'
+  note: '0..*: the NPI in the United States, national registration numbers in EU member states, or staff numbers (FHIR Practitioner.identifier 0..*)'
 - type: exposes_to
   target: identity
   note: the practitioner id an account belongs to
 businessRules:
 - id: BR-H1
-  text: One practitioner has one record. Before a record is created, existing records are searched by identifier, such as the NPI or a registration number, and by name with birth date; a probable match is picked or a new record is created with a reason. Duplicates found later are merged by a credentialing specialist, keeping every identifier and qualification.
+  text: One practitioner has one record. Before a record is created, existing records are searched by identifier, such as the NPI in the United States or a national registration number in an EU member state, and by name with birth date; a probable match is picked or a new record is created with a reason. Duplicates found later are merged by a credentialing specialist, keeping every identifier and qualification.
   rationale: Two records for one person split their qualifications and screening history, so an exclusion found on one is missed on the other.
 - id: BR-H2
   text: 'In the United States, a practitioner who is a covered health care provider has an NPI: ten digits whose check digit passes the Luhn check with the prefix 80840, and which NPPES shows as active.'
   rationale: HIPAA requires covered providers to obtain and use an NPI (45 CFR 162.410). The check digit is computed as if the 80840 prefix were present, and NPPES says whether a number is assigned and active.
   jurisdiction: us
 - id: BR-H3
-  text: A qualification counts only when verified at the primary source primary_sources names for its type, such as the licensing board, NPPES, DEA or the certification board, with the source and verified_at recorded. A copy provided by the applicant is never treated as verification.
+  text: A qualification counts only when verified at the primary source primary_sources names for its type, such as the licensing board, NPPES or DEA in the United States, the competent authority in an EU member state, or the certification board, with the source and verified_at recorded. A copy provided by the applicant is never treated as verification.
   rationale: Accreditors require primary-source verification because copies can be altered and licences can be restricted after they are issued.
 - id: BR-H4
   text: A credentialing review is decided by the credentials committee, never by the system. It can be approved only when every qualification the practitioner's type requires is verified, and each verification is no older than verification_window. A denial gives a reason, and the practitioner is told.
@@ -472,7 +473,7 @@ functionalRequirements:
   priority: must
   verification: test
 - id: FR-H9
-  text: The service must return practitioners as HL7 FHIR R5 Practitioner resources; in the United States, the R4.0.1 API conforms to US Core Practitioner.
+  text: The service must return practitioners as HL7 FHIR R5 Practitioner resources.
   priority: must
   verification: inspection
 - id: FR-H10
@@ -502,10 +503,10 @@ settings:
   description: Which legal regime applies. Required.
 - name: qualification_types
   type: list
-  description: The kinds of qualification in use, such as state licence, national registration, DEA registration, board certification and degree, and which practitioner types must hold which.
+  description: The kinds of qualification in use, such as a state licence or DEA registration in the United States, a registration with the competent authority in an EU member state, board certification and degree, and which practitioner types must hold which.
 - name: primary_sources
   type: map
-  description: For each qualification type, the source that verifies it, such as each state's licensing board, NPPES, DEA or a certification board.
+  description: For each qualification type, the source that verifies it, such as each state's licensing board, NPPES or DEA in the United States, the competent authority in an EU member state, or a certification board.
 - name: verification_window
   type: duration
   description: How old a verification may be when a review is decided. Set by the organization or its accreditor.
@@ -542,7 +543,7 @@ performanceTargets:
   measurement: 99th percentile time to answer a licensure check.
 acceptanceCriteria:
 - id: AC-H1
-  given: a practitioner with NPI 1234567893 and another named Jane Doe born 1980-02-01
+  given: a practitioner with NPI 1234567893 in the United States, or a national registration number in an EU member state, and another named Jane Doe born 1980-02-01
   when: a record is created with the same NPI, then one for Jane Doe born 1980-02-01 without a reason, then with a reason
   then: the first fails with PRACTITIONER_DUPLICATE and HTTP 409; the second fails with PRACTITIONER_POSSIBLE_DUPLICATE and HTTP 409; the third is created and practitioner.created is emitted
   verifies:
@@ -919,7 +920,7 @@ operations:
   - PRACTITIONER_FORBIDDEN
 - name: Check licensure
   actor: System
-  description: Whether the practitioner may practise in a jurisdiction on a date, and, in the United States, may prescribe controlled substances there.
+  description: 'Whether the practitioner may practise in a jurisdiction on a date: in the United States, in a state, including whether they may prescribe controlled substances there; in the European Union, in a member state.'
   method: GET
   path: /practitioners/{id}/licensure
   success: 200
@@ -963,7 +964,7 @@ apiConventions:
   text: Every create accepts an Idempotency-Key header; a retry returns the original result.
   reference: IETF draft-ietf-httpapi-idempotency-key-header
 - topic: FHIR
-  text: Practitioners are returned as HL7 FHIR R5 Practitioner, with the US Core Practitioner R4.0.1 API in the United States, when the request asks for application/fhir+json (FR-H9).
+  text: Practitioners are returned as HL7 FHIR R5 Practitioner when the request asks for application/fhir+json (FR-H9).
 - topic: Dates
   text: Dates are ISO 8601 calendar dates, read as the local date where care is given, never a date converted to UTC.
   reference: ISO 8601
@@ -1155,7 +1156,7 @@ errors:
   message: A name is missing or isn't valid.
 - code: PRACTITIONER_INVALID_IDENTIFIER
   http: 422
-  message: The identifier isn't valid, such as an NPI that fails its check digit.
+  message: The identifier isn't valid, such as one that fails its check digit.
 - code: PRACTITIONER_DUPLICATE
   http: 409
   message: That identifier is already on another practitioner's record.
@@ -1209,7 +1210,7 @@ dependencies:
   - Accounts, sign-in and permissions are Identity's concern
 - service: primary-sources
   direction: upstream
-  reason: licensing boards, NPPES, DEA, certification boards, exclusion lists and national registers
+  reason: 'licensing boards, certification boards, exclusion lists and registers: in the United States, NPPES and DEA; in the European Union, member state competent authorities'
   criticality: soft
   contract:
   - 'Asks: is this qualification valid, and with what restrictions?'
@@ -1293,14 +1294,17 @@ references:
   title: HL7 US Core, Practitioner
   url: https://hl7.org/fhir/us/core/StructureDefinition-us-core-practitioner.html
   note: NPI identifier with its Luhn check.
+  jurisdiction: us
 - id: REF-H4
   title: 45 CFR 162.410, NPI implementation specifications for health care providers
   url: https://www.ecfr.gov/current/title-45/section-162.410
   note: Obtain and use an NPI; report changes within 30 days.
+  jurisdiction: us
 - id: REF-H5
   title: 42 CFR 1001.1901, Scope and effect of exclusion
   url: https://www.ecfr.gov/current/title-42/section-1001.1901
   note: No federal program payment for items or services by excluded individuals.
+  jurisdiction: us
 - id: REF-H6
   title: HHS OIG, Exclusions
   url: https://oig.hhs.gov/exclusions/
@@ -1309,6 +1313,7 @@ references:
   title: 21 CFR 1301.12, Separate registrations for separate locations
   url: https://www.ecfr.gov/current/title-21/section-1301.12
   note: A DEA registration per principal place of practice.
+  jurisdiction: us
 - id: REF-H8
   title: Directive 2005/36/EC on the recognition of professional qualifications
   url: https://eur-lex.europa.eu/eli/dir/2005/36/oj/eng
@@ -1317,19 +1322,28 @@ references:
   title: Regulation (EU) 2016/679, GDPR
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng
   note: Articles 10, 15, 16 and 32.
+  jurisdiction: eu
 - id: REF-H10
   title: NUCC, Health Care Provider Taxonomy code set
   url: https://www.nucc.org/index.php/code-sets-mainmenu-41/provider-taxonomy-mainmenu-40
   note: Specialty codes used with the NPI.
+  jurisdiction: us
 - id: REF-H11
   title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
   url: https://www.ecfr.gov/current/title-45/section-170.315
   note: Single-patient and group data through a standards-based API.
+  jurisdiction: us
 - id: REF-H12
   title: 45 CFR 170.215, Application programming interface standards
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
+  jurisdiction: us
 changelog:
+- version: 0.3.5
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.3.4
   date: '2026-10-10'
   breaking: false
@@ -1389,12 +1403,15 @@ changelog:
 acronyms:
 - term: DEA
   definition: US Drug Enforcement Administration
+  jurisdiction: us
 - term: LEIE
   definition: List of Excluded Individuals/Entities, kept by the HHS Office of Inspector General
 - term: NPI
   definition: National Provider Identifier
+  jurisdiction: us
 - term: NPPES
   definition: National Plan and Provider Enumeration System, which issues NPIs
+  jurisdiction: us
 - term: NUCC
   definition: National Uniform Claim Committee, which maintains the provider taxonomy code set
 - term: OIG
@@ -1571,9 +1588,10 @@ technicalNotes:
 - id: TN-H1
   title: Validate an NPI
   text: Prefix the first nine digits with 80840, compute the Luhn check digit over the fourteen digits, and compare it with the tenth digit.
+  jurisdiction: us
 - id: TN-H2
   title: Screen in bulk
-  text: Download each list when it is published, match on name first, then compare NPI and birth date before recording a possible match, so specialists review only candidates.
+  text: Download each list when it is published, match on name first, then compare identifiers and birth date before recording a possible match, so specialists review only candidates.
 compliance:
 - id: CMP-H1
   regulation: HIPAA Administrative Simplification
@@ -1678,11 +1696,15 @@ Every licence and registration with an end date is listed months ahead, and a
 practitioner whose only licence lapses is suspended that day, so they can't be
 booked or sign until the renewal is verified (BR-H6, BR-H11).
 
+<Only jurisdiction="us">
+
 ## In the United States, exclusion is checked every month
 
 Federal programs pay nothing for care an excluded person gives. Practitioners
 are screened when they apply and monthly after, and a person, not a name
 match, decides whether a hit is really them (BR-H7).
+
+</Only>
 
 ## The person, not the job
 

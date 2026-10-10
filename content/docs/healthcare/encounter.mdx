@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.3.1
+version: 0.3.2
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,11 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.3.2
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.3.1
   date: '2026-10-10'
   breaking: false
@@ -176,6 +181,7 @@ glossary:
   definition: A change to a locked encounter, recorded with who made it, when and why, keeping what it replaced.
 - term: Part 2 program
   definition: A federally assisted substance use disorder program in the United States, whose records have extra protection (42 CFR Part 2).
+  jurisdiction: us
 concepts:
 - name: Appointment, then encounter
   description: The appointment is the plan. When the patient checks in, the appointment is fulfilled and linked to the encounter opened for it (FHIR).
@@ -520,7 +526,7 @@ businessRules:
   text: When a patient who requests a correction asks for the data to be restricted meanwhile, accuracy_contested is set. Everyone reading the encounter sees the contested part marked, and it is cleared when the request is decided.
   rationale: GDPR gives a right to restriction while the accuracy of personal data is checked (Article 18(1)(a)). Marking it, rather than hiding it, keeps the data available for care while warning everyone it is disputed.
 - id: BR-H44
-  text: Each correction request is kept and linked to the encounter it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the encounter, and in the United States for at least 6 years from its decision.
+  text: Each correction request is kept and linked to the encounter it concerns, with the request, any denial, any statement of disagreement and any rebuttal. It is kept for as long as the encounter, in the United States for at least 6 years from its decision, and in the European Union for as long as member state law requires.
   rationale: HIPAA requires the request, denial, disagreement and rebuttal to be appended or linked to the record (45 CFR 164.526(d)(4)) and kept for 6 years from creation or when last in effect (45 CFR 164.530(j)(2)).
 - id: BR-H47
   text: An encounter recorded on the wrong patient is moved to the right patient by an HIM specialist, with a reason. It keeps its id and visit number; on a locked encounter the move is also recorded as an amendment. The move is refused if the right patient is not in use, or the move would break a rule of the module that manages a stay the encounter belongs to; such an encounter moves only with its stay.
@@ -2257,13 +2263,16 @@ references:
   title: CMS ICD-10 code files, FY 2027
   url: https://www.cms.gov/medicare/coding-billing/icd-10-codes
   note: For discharges and encounters from October 1, 2026 to September 30, 2027.
+  jurisdiction: us
 - id: REF-H6
   title: HHS fact sheet, 42 CFR Part 2 final rule
   url: https://www.hhs.gov/hipaa/for-professionals/regulatory-initiatives/fact-sheet-42-cfr-part-2-final-rule/index.html
   note: Compliance date February 16, 2026.
+  jurisdiction: us
 - id: REF-H7
   title: 45 CFR 164.312, technical safeguards (audit controls)
   url: https://www.ecfr.gov/current/title-45/section-164.312
+  jurisdiction: us
 - id: REF-H9
   title: RFC 9457, problem details for HTTP APIs
   url: https://www.rfc-editor.org/rfc/rfc9457
@@ -2279,54 +2288,66 @@ references:
 - id: REF-H17
   title: 45 CFR 164.522, rights to request privacy protection
   url: https://www.ecfr.gov/current/title-45/section-164.522
+  jurisdiction: us
 - id: REF-H18
   title: 45 CFR 164.524 and 164.526, access and amendment
   url: https://www.ecfr.gov/current/title-45/section-164.524
+  jurisdiction: us
 - id: REF-H19
   title: 45 CFR 164.530(j), documentation and retention
   url: https://www.ecfr.gov/current/title-45/section-164.530
+  jurisdiction: us
 - id: REF-H20
   title: 45 CFR 170.315(b)(10), electronic health information export
   url: https://www.ecfr.gov/current/title-45/section-170.315
+  jurisdiction: us
 - id: REF-H21
   title: HL7 v2 Table 0003, event types (A42 merge visit, A45 move visit)
   url: https://terminology.hl7.org/CodeSystem-v2-0003.html
 - id: REF-H22
-  title: ONC, SAFER Guides (2025), Contingency Planning
+  title: SAFER Guides, Office of the National Coordinator for Health IT (2025), Contingency Planning
   url: https://healthit.gov/clinical-quality-and-safety/safer-guides/
   note: Paper forms for at least 8 hours, a read-only backup updated at least hourly, and reconciling paper records after a downtime.
 - id: REF-H23
   title: ONC, United States Core Data for Interoperability, Version 5
   url: https://isp.healthit.gov/sites/default/files/2024-07/USCDI-Version-5-July-2024-Final.pdf
   note: 'Encounter information: type, identifier, diagnosis, time, location and disposition.'
+  jurisdiction: us
 - id: REF-H24
   title: 45 CFR 84.84, Requirements for web and mobile accessibility
   url: https://www.ecfr.gov/current/title-45/section-84.84
   note: WCAG 2.1 Level AA from 11 May 2027 (15 or more employees) or 10 May 2028.
+  jurisdiction: us
 - id: REF-H25
   title: 45 CFR 92.204, Accessibility of information and communication technology
   url: https://www.ecfr.gov/current/title-45/section-92.204
   note: Health programs provided through ICT must be accessible.
+  jurisdiction: us
 - id: REF-H26
   title: Directive (EU) 2022/2555 (NIS2)
   url: https://eur-lex.europa.eu/eli/dir/2022/2555/oj/eng
   note: Cybersecurity risk management (Article 21) and incident reporting within 24 hours (Article 23).
+  jurisdiction: eu
 - id: REF-H27
   title: Regulation (EU) 2025/327, European Health Data Space
   url: https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng
   note: Article 11, access by health professionals.
+  jurisdiction: eu
 - id: REF-H28
   title: 45 CFR 171.206, Protecting care access
   url: https://www.ecfr.gov/current/title-45/section-171.206
   note: Information blocking exception for reproductive health care information.
+  jurisdiction: us
 - id: REF-H29
   title: 45 CFR 170.315(g)(10), Standardized API for patient and population services
   url: https://www.ecfr.gov/current/title-45/section-170.315
   note: Single-patient and group data through a standards-based API.
+  jurisdiction: us
 - id: REF-H30
   title: 45 CFR 170.215, Application programming interface standards
   url: https://www.ecfr.gov/current/title-45/section-170.215
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
+  jurisdiction: us
 acronyms:
 - term: AMB, EMER, IMP, OBSENC, VR
   definition: 'HL7 encounter classes: ambulatory, emergency, inpatient, observation, virtual'
@@ -2336,6 +2357,7 @@ acronyms:
   definition: Health information management
 - term: ICD-10-CM
   definition: International Classification of Diseases, 10th Revision, Clinical Modification (US)
+  jurisdiction: us
 - term: SUD
   definition: Substance use disorder
 tables:

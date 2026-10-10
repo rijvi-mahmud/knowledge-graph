@@ -2,7 +2,7 @@
 title: Clinical documentation
 description: 'Hospital documentation: the history and physical, operative reports, discharge summaries and reports, and nursing care plans, built on the clinical notes and observations rules.'
 module: clinical-documentation
-version: 0.4.8
+version: 0.4.9
 status: draft
 industry: healthcare
 domain: ehr
@@ -17,6 +17,11 @@ nonGoals:
 - Surgical scheduling. Theatre owns it and reports when a procedure ends.
 - Sending information to follow-up providers. Care management owns it.
 changelog:
+- version: 0.4.9
+  date: '2026-10-10'
+  breaking: false
+  changes:
+  - Every item that applies in one jurisdiction is tagged, references are tagged by what they cite, items that apply everywhere state each jurisdiction's value, and one-jurisdiction narrative is marked, so the US and EU views show only their own rules.
 - version: 0.4.8
   date: '2026-10-09'
   breaking: false
@@ -152,7 +157,7 @@ settings:
   jurisdiction: us
 - name: note_types
   type: list
-  description: The note types in use, each with its LOINC code, HL7 v2 Table 0270 code where one exists, required_sections, the encounter classes it is required for, and its deadline from encounter start, discharge or procedure end. Defaults include a history and physical note due 24 hours after admission for inpatient stays (US), a discharge summary for inpatient stays, and a nursing care plan (LOINC 18776-5 plan of care note) for inpatient stays (US).
+  description: The note types in use, each with its LOINC code, HL7 v2 Table 0270 code where one exists, required_sections, the encounter classes it is required for, and its deadline from encounter start, discharge or procedure end. Defaults include a history and physical note due 24 hours after admission for inpatient stays in the United States, a discharge summary for inpatient stays, and a nursing care plan (LOINC 18776-5 plan of care note) for inpatient stays in the United States. In the European Union, deadlines come from member state law.
 performanceTargets:
 - id: PERF-E3
   indicator: History and physical notes on time
@@ -256,22 +261,27 @@ references:
   title: '42 CFR 482.22, Condition of participation: Medical staff'
   url: https://www.ecfr.gov/current/title-42/section-482.22
   note: History and physical timing and who may perform it.
+  jurisdiction: us
 - id: REF-E10
   title: '42 CFR 482.51, Condition of participation: Surgical services'
   url: https://www.ecfr.gov/current/title-42/section-482.51
   note: Operative report immediately after surgery, signed by the surgeon.
+  jurisdiction: us
 - id: REF-E23
   title: HL7 Europe Hospital Discharge Report
   url: https://hl7.eu/fhir/hdr/scope.html
   note: The European discharge report format.
+  jurisdiction: eu
 - id: REF-E33
   title: '42 CFR 482.23, Condition of participation: Nursing services'
   url: https://www.ecfr.gov/current/title-42/section-482.23
   note: Nursing care plan, (b)(4).
+  jurisdiction: us
 - id: REF-E35
   title: '42 CFR 482.43, Condition of participation: Discharge planning'
   url: https://www.ecfr.gov/current/title-42/section-482.43
   note: Information sent at the time of discharge, (b).
+  jurisdiction: us
 compliance:
 - id: CMP-E1
   regulation: Medicare Conditions of Participation
@@ -375,6 +385,8 @@ Hospital documentation builds on the [clinical notes and observations rules](/do
 every health application shares. This layer adds the notes a hospital must
 write, and when.
 
+<Only jurisdiction="us">
+
 ## In the United States, the law sets the clock for key notes
 
 A history and physical is due within 24 hours of admission and before
@@ -382,3 +394,6 @@ surgery, an operative report straight after surgery, and the whole record
 within 30 days of discharge (BR-E16, BR-E18, BR-H20). Each missing or unsigned
 note is a deficiency on someone's list. When an encounter has none left,
 Encounters is told its documentation is complete (BR-H21).
+
+</Only>
+
