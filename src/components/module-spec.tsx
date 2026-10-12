@@ -278,6 +278,7 @@ export interface ModuleSpecData {
   status?: string;
   industry?: string;
   domain?: string;
+  company?: string;
   extends?: string;
   lineage?: Lineage;
 
@@ -393,6 +394,7 @@ export function variantSpec(data: ModuleSpecData, variant: string): ModuleSpecDa
   out.variants = data.variants;
   out.industry = data.industry;
   out.domain = data.domain;
+  out.company = data.company;
   return out as ModuleSpecData;
 }
 

@@ -1,7 +1,8 @@
 import type { LineageLink, ModuleSpecData } from '@/components/module-spec';
 
 /**
- * Resolves a page's inheritance chain (core -> industry -> domain) into one
+ * Resolves a page's inheritance chain (core -> industry -> domain, plus an
+ * optional private company layer on top) into one
  * merged spec.
  *
  * Merge semantics:
@@ -68,9 +69,9 @@ const KEYS = {
 /** Frontmatter list fields that inherit down the chain. */
 export const INHERITED_FIELDS = Object.keys(KEYS) as (keyof typeof KEYS)[];
 
-/** The label a page carries in provenance pills: its domain, industry, or "core". */
+/** The label a page carries in provenance pills: its company, domain, industry, or "core". */
 export function layerOf(data: ModuleSpecData): string {
-  return data.domain ?? data.industry ?? 'core';
+  return data.company ?? data.domain ?? data.industry ?? 'core';
 }
 
 const link = (n: SpecNode): LineageLink => ({

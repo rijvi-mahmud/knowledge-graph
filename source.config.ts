@@ -385,6 +385,10 @@ const graphSchema = pageSchema.extend({
   status: z.enum(['draft', 'review', 'stable', 'deprecated']).default('draft'),
   industry: z.string().optional(), // unset = industry-neutral core
   domain: z.string().optional(), // set = domain layer inside `industry`
+  // A private company layer on top of a public page (`extends`), or a
+  // company-only module. Never used in content/docs; company pages live in the
+  // company's own repository. New company ids carry a C prefix (BR-C1).
+  company: z.string().optional(),
   // Parent page path relative to content/docs, e.g. "core/appointment" or
   // "healthcare/appointment". Unset for core and for modules that exist only
   // at this level (e.g. a domain-only concept with no core counterpart).

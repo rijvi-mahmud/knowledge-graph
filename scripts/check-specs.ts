@@ -22,72 +22,33 @@
  * - an item that opens with "In the United States" or "In the European Union"
  *   but has no jurisdiction tag
  *
- * Usage: pnpm check:specs [--strict]
+ * Usage: pnpm check:specs [--strict] [--root <dir>[=<prefix>] ...]
  */
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
-import { parse } from 'yaml';
-import { docs } from '../source.config';
-import { LEAD_FIELD, resolveSpec, type SpecNode } from '@/lib/spec-inherit';
+import { resolve } from 'node:path';
+import { LEAD_FIELD, resolveSpec } from '@/lib/spec-inherit';
 import type { ModuleSpecData } from '@/components/module-spec';
 import { SPEC_ID } from '@/lib/spec-ids';
 import { specToMarkdown } from '@/lib/spec-markdown';
 import { SPEC_SECTIONS } from '@/lib/spec-sections';
 import { JURISDICTIONS, jurisdictionSpec, textJurisdiction } from '@/lib/spec-jurisdiction';
+import { docsRoot, loadSpecs, type SpecRoot } from '@/lib/spec-load';
 
-const root = join(import.meta.dirname, '..', 'content', 'docs');
 const strict = process.argv.includes('--strict');
 
-const errors: string[] = [];
-const warnings: string[] = [];
+// Extra folders to check on top of content/docs, such as a company layer:
+// --root <dir>[=<prefix>], repeatable.
+const roots: SpecRoot[] = [{ dir: docsRoot }];
+process.argv.forEach((arg, i) => {
+  if (arg !== '--root') return;
+  const [dir, prefix] = (process.argv[i + 1] ?? '').split('=');
+  roots.push({ dir: resolve(dir), prefix });
+});
 
-function mdxFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? mdxFiles(join(dir, e.name)) : e.name.endsWith('.mdx') ? [join(dir, e.name)] : [],
-  );
-}
+const warnings: string[] = [];
 
 // --- parse and validate every page ------------------------------------------
 
-const schema = (docs as unknown as { docs: { schema: { safeParse: (v: unknown) => any } } }).docs
-  .schema;
-const nodes = new Map<string, SpecNode>();
-const own = new Map<string, ModuleSpecData>(); // each page's own data, before inheritance
-const rawText = new Map<string, string>(); // each page's frontmatter (minus changelog) and body
-
-for (const file of mdxFiles(root)) {
-  const path = relative(root, file).replace(/\.mdx$/, '');
-  const raw = readFileSync(file, 'utf8');
-
-  const dashes = raw.split('\n').flatMap((line, i) => (/[—–]/.test(line) ? [i + 1] : []));
-  if (dashes.length > 0) errors.push(`${path}: em or en dash on line ${dashes.join(', ')}`);
-
-  const match = raw.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) continue;
-
-  let frontmatter: unknown;
-  try {
-    frontmatter = parse(match[1]);
-  } catch (e) {
-    errors.push(`${path}: frontmatter is not valid YAML. ${(e as Error).message.split('\n')[0]}`);
-    continue;
-  }
-
-  const result = schema.safeParse(frontmatter);
-  if (!result.success) {
-    for (const issue of result.error.issues)
-      errors.push(`${path}: ${issue.path.join('.') || '(root)'}: ${issue.message}`);
-    continue;
-  }
-
-  const data = result.data as ModuleSpecData & { title: string };
-  if (!data.module) continue;
-  own.set(path, data);
-  // The changelog may mention ids that were removed, so it is not checked.
-  const { changelog: _history, ...rest } = frontmatter as Record<string, unknown>;
-  rawText.set(path, JSON.stringify(rest) + '\n' + raw.slice(match[0].length));
-  nodes.set(path, { path, title: data.title, url: `/docs/${path}`, data });
-}
+const { nodes, own, rawText, errors } = loadSpecs(roots);
 
 // --- per-module checks -------------------------------------------------------
 
@@ -120,6 +81,26 @@ for (const node of all) {
     );
     const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
     if (dupes.length > 0) errors.push(`${where}: duplicate ${list} id ${[...new Set(dupes)].join(', ')}`);
+  }
+
+  // A company layer's new ids carry a C prefix (BR-C1), so they can't collide
+  // with a later public id. Reusing a public id overrides that item.
+  const data = own.get(where)!;
+  if (data.company) {
+    const parent = data.extends ? nodes.get(data.extends) : undefined;
+    const inherited = new Set<string>();
+    if (parent) {
+      try {
+        const base = resolveSpec(parent, (p) => nodes.get(p), all) as Record<string, { id: string }[] | undefined>;
+        for (const list of ID_LISTS) for (const i of base[list] ?? []) inherited.add(i.id);
+      } catch {
+        // A broken chain is reported below.
+      }
+    }
+    for (const list of ID_LISTS)
+      for (const { id } of (data as Record<string, { id: string }[] | undefined>)[list] ?? [])
+        if (!inherited.has(id) && !/-C\d+$/.test(id))
+          errors.push(`${where}: company id ${id} needs a C prefix, such as ${id.replace(/-[A-Z]{0,3}(\d+)$/, '-C$1')}`);
   }
 
   let spec: ModuleSpecData;

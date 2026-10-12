@@ -91,7 +91,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `src/lib/source.ts` | `getLLMText()` joins spec markdown + prose for `llms.txt` routes. |
 | `src/proxy.ts` | Serves markdown for `/docs/<page>.md` and `Accept: text/markdown`. Must stay in `src/`, or Next.js skips it. |
 | `src/lib/shared.ts` | `siteUrl`: this deployment's address, from `NEXT_PUBLIC_SITE_URL`, else Vercel's production domain, else localhost. |
-| `scripts/check-specs.ts` | `pnpm check:specs`: validates every module page (schema, inheritance, ids, error codes, dashes, verification coverage). |
+| `scripts/check-specs.ts`, `src/lib/spec-load.ts` | `pnpm check:specs`: validates every module page (schema, inheritance, ids, error codes, dashes, verification coverage). `spec-load.ts` reads pages from MDX outside Next.js; `--root <dir>=<prefix>` adds a company layer's folder. |
 | `src/lib/remark-site-url.ts` | Replaces `%SITE_URL%` (https URL) and `%SITE_HOST%` (hostname, for allowlists) in MDX at compile time, in the HTML and in the AI markdown. Changing it needs a dev server restart. |
 
 ### How projects use the Knowledge Graph
@@ -209,7 +209,13 @@ Rules:
   replaces an operation or dependency must keep every error and contract line
   of the item it replaces, or they silently disappear.
 - **Cap at three levels.** Needing a fourth usually means a concept deserves its
-  own module.
+  own module. The one exception is a private **company layer** on top, which
+  lives in the company's own repository, never in `content/docs`: a page with
+  `company: <slug>` that `extends` a public page (or stands alone as a
+  company-only module). Its provenance label is the company slug, and its new
+  ids carry a C prefix (BR-C1); reusing a public id overrides that item.
+  `pnpm check:specs --root <dir>=<prefix>` checks company pages with the
+  public ones, using the shared loader in `src/lib/spec-load.ts`.
 - **"Reviewed, nothing to add" gets a page.** Where a domain needs nothing extra
   for a shared module, write the page saying so. It must stay distinguishable
   from "nobody has looked at this yet."
@@ -786,6 +792,6 @@ scaffold's own pages fail validation.
   conventions, delivery guarantees and the rest have no core to inherit from.
 - `pnpm check:specs` validates ids and error codes, but not dependencies that
   name a service with no page.
-- Company-layer overrides are designed for but not implemented. No merge or
-  precedence semantics exist yet for a private 20% layer on top of a public
-  module.
+- The company layer is supported by the engine (`company` field, provenance,
+  C-prefixed ids, `check:specs --root`). The product that serves it to agents
+  (a business-specific MCP server) is built in a separate private repository.
