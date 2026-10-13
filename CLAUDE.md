@@ -96,7 +96,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 
 ### How projects use the Knowledge Graph
 
-There is no CLI, MCP server, skill or download. A user copies one section into
+There is no CLI, skill or download. A user copies one section into
 their project's `AGENTS.md` (the Quickstart on `content/docs/agentic/index.mdx`)
 and the agent does the rest with its own web fetch or search tools: it works
 out the project's industry and domain, starts at `/llms.txt`, and fetches the
@@ -109,6 +109,12 @@ applied: one real path (such as healthcare > ehr) and one from another
 industry marked illustrative, because it may not exist yet. It must also keep agents on their own path
 (core, their industry, their domain) and never on a sibling domain's page. Don't
 document vendoring specs or per-module setup.
+
+The one exception is the hosted MCP server for a company's private
+specification, built in the private `knowledge-graph-cloud` repository. The
+public site has one page on it (`content/docs/agentic/mcp.mdx`), marked as not
+open for sign-up, with no endpoint URL or setup until sign-up exists (user,
+2026-10-13). Keep its tool table in step with the server's tools.
 
 ### Never hardcode the site address in content
 

@@ -1,0 +1,61 @@
+---
+title: MCP server
+description: A coming hosted MCP server that serves your company's own version of the specs to every coding agent on your team.
+---
+
+The Knowledge Graph MCP server serves one company's specification to its
+coding agents: the public specs your system uses, plus your company's own
+rules on top. Every agent your team uses, such as Claude Code, Codex or
+Cursor, connects to the same server and reads the same rules.
+
+> **Note:** The MCP server isn't open for sign-up yet. This page describes
+> what it does. To use the Knowledge Graph today, add the
+> [AGENTS.md section](/docs/agentic#quickstart). It needs no account and
+> works with any agent.
+
+## When to use the MCP server
+
+Use the [AGENTS.md section](/docs/agentic#quickstart) when the public specs
+are enough: your agent fetches pages from this site and cites what it used.
+
+Use the MCP server when your company has its own rules:
+
+- **Your rules differ from the public ones.** You override a rule by its id,
+  and add your own, with a `company` provenance label. Agents get the merged
+  result, so they follow your version, not the public one.
+- **You have modules the public specs don't.** A company-only module, such as
+  patient outreach, sits next to the public modules and depends on them like
+  any other module.
+- **Your rules are private.** The server reads your specification from your
+  own repository, and only a key for your workspace opens it.
+- **Your team mixes agents.** Every agent reads the same source through one
+  connection, so two developers on different tools build against the same
+  rules.
+
+## How agents use it
+
+The server follows the same steps as the AGENTS.md section, as tools. An agent
+first reads the outline, a tree of your modules, their sections and section
+ids, in one call. It then reads only the sections the task needs, instead of
+whole modules.
+
+| Tool | What it returns |
+|---|---|
+| `spec_outline` | The tree of your specification: modules, their layers and versions, and section ids by group. With a module, that module's sections and what each holds. |
+| `spec_read` | One section of a module, merged through every layer including yours. Long answers come in pages. |
+| `spec_item` | One rule or requirement by id, with its rationale, the layer that defines it, what it overrides and the acceptance criteria that verify it. |
+| `spec_contract` | What a module needs from other modules and gives them: dependencies, events, operations and errors, and which of your modules depend on it. |
+| `spec_search` | Sections and ids that match a few words. |
+| `spec_verify` | Checks that every id an agent cited exists, and returns how to cite it: id, module, and the layer and version that define it. |
+
+The server tells every agent the same rules as the AGENTS.md section: read
+the spec for this task instead of working from memory, say "the
+specification doesn't specify this" instead of inventing a rule, and check
+every cited id before finishing. An id that doesn't exist comes back as an
+error with the closest matches, never as a guess.
+
+## Related
+
+- [Agentic development](/docs/agentic): The `AGENTS.md` section to copy, which works today
+- [How agents use the Knowledge Graph](/docs/agentic/agents-md): How agents navigate pages and stay grounded
+- [Model Context Protocol](https://modelcontextprotocol.io/docs/getting-started/intro): The open standard the server uses
