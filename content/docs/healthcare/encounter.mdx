@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.3.2
+version: 0.3.3
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,12 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.3.3
+  date: '2026-10-14'
+  breaking: false
+  changes:
+  - 'BR-H39: the grounds for withholding part of an encounter now match the law. In the United States, they add the two substantial-harm grounds of 45 CFR 164.524(a)(3)(ii) and (iii) and a delay a law requires; in the European Union, the member state delay of EHDS Article 3(3). Clinical documentation''s note holds use the same grounds.'
+  - New error ENCOUNTER_INVALID_ACCESS_DENIAL for grounds that aren't allowed, with a validation and AC-H77.
 - version: 0.3.2
   date: '2026-10-10'
   breaking: false
@@ -376,7 +382,7 @@ dataModel:
 - name: access_denial
   type: access denial
   required: false
-  description: 'Where a licensed professional decided the patient''s access to part of this encounter is reasonably likely to endanger life or physical safety: what is withheld, who decided, why, and the review.'
+  description: 'Why part of this encounter is withheld from the patient or a representative: the grounds BR-H39 allows, the law when a law requires the delay, what is withheld, who decided and when, and the review.'
   constraints: set by the service through its operation
 - name: accuracy_contested
   type: boolean
@@ -514,8 +520,8 @@ businessRules:
   text: An encounter records the orders it carries out, and Orders confirms each one is for the same patient.
   rationale: FHIR links an encounter to the request that initiated it (basedOn). Without the link nobody can tell whether an order was carried out.
 - id: BR-H39
-  text: A patient, or their representative within the authority the Patients module records, can read their own encounters electronically as soon as they are recorded. No policy holds them back for review. A patient can ask for their own access to be delayed. Part of an encounter can be withheld only where a licensed professional decides access is reasonably likely to endanger life or physical safety; the decision is recorded and the patient can have it reviewed.
-  rationale: HIPAA gives a right of access and allows denial on narrow reviewable grounds (45 CFR 164.524(a)(3)); a delay is likely information blocking (45 CFR 171.103); GDPR gives a right of access (Article 15), and the EHDS gives EU patients immediate access (Article 3).
+  text: 'A patient, or their representative within the authority the Patients module records, can read their own encounters electronically as soon as they are recorded. No policy holds them back for review. A patient can ask for their own access to be delayed. Part of an encounter can be withheld only on these grounds: in the United States, a licensed professional decides that access is reasonably likely to endanger the life or physical safety of the patient or another person, that the part refers to another person, not a health care provider, and access is reasonably likely to cause that person substantial harm, or that a representative''s access is reasonably likely to cause the patient or another person substantial harm; in the European Union, the member state''s law delays access until a health professional can explain the information; and in either, another law requires a delay, named in the decision. The decision records its grounds, what is withheld, who decided and when, covers no more than its grounds require, and the patient can have it reviewed.'
+  rationale: 'HIPAA gives a right of access and allows denial only on three reviewable grounds: endangering life or physical safety, substantial harm to another person the information refers to, and substantial harm through a personal representative''s access, each reviewable by another licensed professional (45 CFR 164.524(a)(3) and (4)). A delay is likely information blocking unless a law requires it (45 CFR 171.103(a)) or the preventing harm exception applies, which ties the harm to those same grounds and requires a practice no broader than necessary (45 CFR 171.201). In the European Union, GDPR gives a right of access (Article 15), the EHDS gives immediate access (Article 3(1)), and member states may delay it until a health professional can explain the information (Article 3(3)).'
 - id: BR-H40
   text: A patient, or their representative, can ask for an encounter to be corrected. An HIM specialist decides within the Patients module's correction_deadline, extendable once by correction_extension with a written reason. An accepted correction is made as an amendment linked to the request. A denied one gives the reason in writing, and the patient can add a statement of disagreement, which goes with later disclosures.
   rationale: HIPAA requires a decision within 60 days, with one 30-day extension, a written denial and a right to disagree (45 CFR 164.526). GDPR gives rights to rectification and to restriction while accuracy is checked (Articles 16 and 18).
@@ -608,6 +614,9 @@ validations:
 - field: status_reason
   rule: required to cancel, mark entered in error, move or merge; a code from cancel_reasons, or a service-set code
   error: ENCOUNTER_REASON_REQUIRED
+- field: access_denial
+  rule: Grounds BR-H39 allows in this jurisdiction, the law named when the grounds are a legal delay, and at least one part named as withheld
+  error: ENCOUNTER_INVALID_ACCESS_DENIAL
 stateMachine:
   initial: planned
   states:
@@ -1339,6 +1348,13 @@ acceptanceCriteria:
   verifies:
   - FR-H16
   jurisdiction: us
+- id: AC-H77
+  given: a US encounter, and a clinician who wants a result held until they can call the patient
+  when: they withhold it with grounds that it needs review first, and then with grounds of a legal delay that names no law
+  then: both fail with ENCOUNTER_INVALID_ACCESS_DENIAL (422) and the patient still sees the result
+  verifies:
+  - BR-H39
+  jurisdiction: us
 operations:
 - name: Open an encounter
   actor: System
@@ -1652,14 +1668,15 @@ operations:
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 - name: Withhold part of an encounter
   actor: Clinician
-  description: Record a licensed professional's decision that access to part of the encounter is reasonably likely to endanger life or physical safety.
+  description: Record a decision to withhold part of the encounter from the patient or a representative, on the grounds BR-H39 allows.
   method: POST
   path: /encounters/{id}/access-denial
   success: 200
-  input: encounter id, revision, what is withheld, reason
+  input: encounter id, revision, what is withheld, grounds, the law when a law requires the delay, whether it applies only to representatives, and reason
   output: the encounter
   errors:
   - ENCOUNTER_NOT_FOUND
+  - ENCOUNTER_INVALID_ACCESS_DENIAL
   - ENCOUNTER_REVISION_CONFLICT
   - ENCOUNTER_DEPENDENCY_UNAVAILABLE
 apiConventions:
@@ -2086,6 +2103,9 @@ errors:
 - code: ENCOUNTER_INVALID_MERGE
   http: 409
   message: Only two encounters of the same patient can be merged.
+- code: ENCOUNTER_INVALID_ACCESS_DENIAL
+  http: 422
+  message: The grounds aren't allowed in this jurisdiction, the law isn't named for a legal delay, or nothing is named as withheld.
 dependencies:
 - service: patient-service
   direction: upstream
@@ -2697,7 +2717,7 @@ compliance:
   regulation: HIPAA Privacy Rule
   provision: 45 CFR 164.524
   obligation: Give patients access to their information, denying only on narrow reviewable grounds.
-  how: Immediate electronic access for the patient and representatives; withheld parts recorded and reviewable.
+  how: Immediate electronic access for the patient and representatives; parts withheld only on the three reviewable grounds, recorded and reviewable.
   status: met
   covered_by:
   - BR-H39
@@ -2706,7 +2726,7 @@ compliance:
   regulation: 21st Century Cures Act information blocking
   provision: 45 CFR 171.103
   obligation: Don't interfere with access to electronic health information.
-  how: No review delay; delays only at the patient's request.
+  how: No review delay; delays only at the patient's request, under the preventing harm grounds, or when a named law requires one.
   status: met
   covered_by:
   - BR-H39
@@ -2778,7 +2798,7 @@ compliance:
   regulation: European Health Data Space (EU) 2025/327
   provision: Article 3
   obligation: Immediate access to health data through national access services.
-  how: Immediate access here; delivery to the national service is the Exchange module's.
+  how: Immediate access here, delayed only where member state law provides it; delivery to the national service is the Exchange module's.
   status: partly met
   covered_by:
   - BR-H39

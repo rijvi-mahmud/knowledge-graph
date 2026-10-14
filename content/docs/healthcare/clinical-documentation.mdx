@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.4.4
+version: 0.4.5
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.4.5
+  date: '2026-10-14'
+  breaking: false
+  changes:
+  - 'BR-H25: a professional''s hold now uses the grounds HIPAA allows (45 CFR 164.524(a)(3)): endangering life or physical safety, or substantial harm to another person the note refers to, instead of any harm; and withholding from representatives also covers a decision that their access is reasonably likely to cause substantial harm. Encounters uses the same grounds.'
 - version: 0.4.4
   date: '2026-10-10'
   breaking: false
@@ -630,8 +635,8 @@ businessRules:
   text: Patient merges reach this module through the encounters they move. When Encounters reports encounter.patient_review_needed after the Patients module undoes a merge, the notes and observations on that encounter recorded since the merge are listed for an HIM specialist to check they are on the right patient.
   rationale: After a merge, care for either person was recorded on one record. Undoing it can't tell automatically whose care each new entry described.
 - id: BR-H25
-  text: In the United States, a signed note is released to the patient's electronic access as soon as it is signed. It is held back only when a licensed professional decides the release is reasonably likely to cause harm (BR-H27), when a law requires a delay, named in the hold, when the patient asked for their own access to be delayed (the Patients module's patient_requested_delay), or when it is a psychotherapy note or was prepared for a legal proceeding. Drafts are not released.
-  rationale: A delay for review is likely information blocking unless a law requires it (45 CFR 171.103(a)) or an exception applies, such as preventing harm (171.201) or the patient's own request (171.202(e)). The right of access excludes psychotherapy notes and information compiled for legal proceedings (164.524(a)(1)). Notes not yet finalized need not be released unless used to make decisions (ONC information blocking FAQ).
+  text: In the United States, a signed note is released to the patient's electronic access as soon as it is signed. It is held back only when a licensed professional decides that access is reasonably likely to endanger the life or physical safety of the patient or another person, or that the note refers to another person, not a health care provider, and access is reasonably likely to cause that person substantial harm (BR-H27); when a law requires a delay, named in the hold; when the patient asked for their own access to be delayed (the Patients module's patient_requested_delay); or when it is a psychotherapy note or was compiled for a legal proceeding. It is withheld from representatives only (withheld_from_representatives) when a licensed professional decides a representative's access is reasonably likely to cause the patient or another person substantial harm (BR-H27), or as BR-H49 sets for care a minor consented to alone. Drafts are not released.
+  rationale: 'A delay for review is likely information blocking unless a law requires it (45 CFR 171.103(a)) or an exception applies, such as preventing harm (171.201) or the patient''s own request (171.202(e)). The right of access excludes psychotherapy notes and information compiled for legal proceedings (164.524(a)(1)), and allows denial only on three reviewable grounds: endangering life or physical safety, substantial harm to another person the information refers to, and substantial harm through a personal representative''s access (164.524(a)(3)). Notes not yet finalized need not be released unless used to make decisions (ONC information blocking FAQ).'
   jurisdiction: us
 - id: BR-H26
   text: In the European Union, a signed note is released to the patient's access as soon as it is signed. A delay is allowed only where the member state's law provides one, until a health professional can explain the information (eu_release_delay).
@@ -972,7 +977,7 @@ edgeCases:
   - AC-H9
 - id: EC-H17
   situation: A clinician wants a biopsy note held until they can call the patient.
-  behaviour: In the United States a hold for review alone isn't allowed; only a licensed professional's decision that release is likely to cause harm, recorded with its review date, holds it.
+  behaviour: In the United States a hold for review alone isn't allowed. Only a licensed professional's decision on the grounds BR-H25 lists, such as access being reasonably likely to endanger the patient's life or physical safety, recorded with its review date, holds it.
   covers:
   - BR-H25
   - BR-H27
