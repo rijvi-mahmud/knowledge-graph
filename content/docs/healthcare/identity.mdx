@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.8.3
+version: 0.8.4
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -434,6 +434,18 @@ workflows:
   - FR-H4
   - BR-H2
   - BR-H5
+- jurisdiction: us
+  name: Grant controlled substance prescribing
+  trigger: A practitioner with a DEA registration needs to sign controlled substance prescriptions
+  actor: Account administrator
+  steps:
+  - The practitioner gets a two-factor credential from an approved credential service provider, after identity proofing
+  - One designated person confirms with the Practitioners module that their DEA registration and state authorization are current
+  - Two designated people grant the access, one of them a registrant using their own two-factor credential
+  - Each later signing completes the two-factor protocol at that moment
+  outcome: Only identity-proofed practitioners with a current registration can sign controlled substance prescriptions, each signature two-factor.
+  covers:
+  - BR-H10
 - name: Enrol a patient in the portal
   trigger: A patient asks for portal access
   actor: Patient
@@ -470,6 +482,20 @@ workflows:
   - FR-H14
   - BR-H15
   - BR-H30
+- jurisdiction: us
+  name: Connect an app with SMART App Launch
+  trigger: A patient opens a third-party app that uses SMART App Launch
+  actor: Patient
+  steps:
+  - The app registers, and is refused only on a documented security risk
+  - The app sends the patient to sign in, and the patient approves the SMART App Launch 2.0.0 scopes it asks for
+  - The app receives tokens; when it asks for offline access, a refresh token valid for at least refresh_token_lifetime
+  outcome: The patient's app of choice reads what they allowed, and is never turned away for a reason other than security.
+  covers:
+  - FR-H7
+  - BR-H14
+  - BR-H15
+  - BR-H30
 - name: Remove a leaver's access
   trigger: A person leaves or Practitioners reports them inactive
   actor: System
@@ -481,6 +507,16 @@ workflows:
   covers:
   - FR-H4
   - BR-H4
+- jurisdiction: us
+  name: Revoke controlled substance prescribing
+  trigger: An authenticator is lost, stolen or compromised, a DEA registration lapses or is revoked or suspended, or the practitioner may no longer use the application
+  actor: Account administrator
+  steps:
+  - Revoke the access on the date the reason is found, and at once when the practitioner reports a lost or compromised authenticator
+  - When an administrator enters the revocation, a second designated registrant confirms it with their two-factor credential
+  outcome: Prescribing access ends the day its basis ends.
+  covers:
+  - BR-H22
 - name: Approve a backend app
   trigger: A vendor registers a backend app with system scopes
   actor: Account administrator
@@ -2075,6 +2111,11 @@ references:
   note: (a)(2), NIST-approved encryption algorithms.
   jurisdiction: us
 changelog:
+- version: 0.8.4
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - 'New US workflows: "Connect an app with SMART App Launch" (FR-H7, BR-H14), and granting and revoking controlled substance prescribing (BR-H10, BR-H22).'
 - version: 0.8.3
   date: '2026-10-15'
   breaking: false

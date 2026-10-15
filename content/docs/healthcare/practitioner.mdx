@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.3.6
+version: 0.3.7
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -373,6 +373,19 @@ workflows:
   outcome: Exclusions are found within a month of being listed.
   covers:
   - FR-H5
+- jurisdiction: us
+  name: Screen against federal exclusion lists
+  trigger: A practitioner applies, and every screening_interval after
+  actor: System
+  steps:
+  - Check the practitioner against each list in screening_sources, including the OIG LEIE and SAM
+  - Record each result
+  - Send each possible match to a Credentialing specialist, who resolves it with identifiers such as the NPI and birth date, never automatically
+  - On a confirmed match, suspend the practitioner with reason excluded and tell Billing
+  outcome: An excluded practitioner is suspended and Billing is told, so no federal health care program is billed for their care.
+  covers:
+  - FR-H5
+  - BR-H7
 - name: Recredential
   trigger: recredential_lead_time before credentialed_until
   actor: Credentialing specialist
@@ -1356,6 +1369,11 @@ references:
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
   jurisdiction: us
 changelog:
+- version: 0.3.7
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - 'New US workflow "Screen against federal exclusion lists" (BR-H7): the OIG LEIE and SAM at application and every screening_interval.'
 - version: 0.3.6
   date: '2026-10-15'
   breaking: false

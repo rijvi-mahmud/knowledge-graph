@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.9.5
+version: 0.9.6
 status: draft
 industry: healthcare
 domain: ehr
@@ -564,7 +564,7 @@ workflows:
   trigger: A discharge order is given
   actor: Registrar
   steps:
-  - Record the expected discharge time when known, and the Medicare follow-up notice due date
+  - Record the expected discharge time when known
   - Discharge with disposition and destination
   - Free the bed for housekeeping
   - Announce the discharge to Encounters, Appointments, Exchange and Care management
@@ -574,6 +574,21 @@ workflows:
   - BR-E6
   - BR-E9
   - BR-E14
+- jurisdiction: us
+  name: Give Medicare discharge notices
+  trigger: A Medicare beneficiary is admitted as an inpatient
+  actor: Registrar
+  steps:
+  - Within 2 calendar days of admission, give the Important Message from Medicare and record it
+  - Once discharge is expected, give the follow-up copy no more than 2 calendar days before discharge, unless the first was given within 2 days of discharge
+  - Due notices stay listed until recorded as given
+  - If the Quality Improvement Organization reports an appeal, record it on the stay; stay.notice_due is emitted for the Detailed Notice of Discharge, due by noon the next day
+  - Don't complete the discharge against the patient's wish while the review is pending, and record the decision when it arrives
+  outcome: Medicare inpatients get their rights notices on time, and an appeal stops an unwanted discharge until it is decided.
+  covers:
+  - FR-E7
+  - BR-E12
+  - BR-E47
 - name: Clean a bed
   trigger: A bed becomes housekeeping
   actor: Environmental services
@@ -2707,6 +2722,12 @@ compliance:
   - BR-E47
   jurisdiction: us
 changelog:
+- version: 0.9.6
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - New US workflow "Give Medicare discharge notices" (FR-E7, BR-E12, BR-E47).
+  - The general "Discharge a patient" workflow no longer names the Medicare notice, which applies in the United States only; the US workflow covers it.
 - version: 0.9.5
   date: '2026-10-15'
   breaking: false

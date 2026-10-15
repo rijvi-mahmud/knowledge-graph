@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.4.6
+version: 0.4.7
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -431,6 +431,20 @@ workflows:
   covers:
   - FR-H1
   - BR-H10
+- jurisdiction: us
+  name: Sign a HIPAA authorization or Part 2 consent
+  trigger: A patient asks for records to be sent to someone, or the organization or a Part 2 program asks for an authorization or consent
+  actor: Registrar
+  steps:
+  - 'Start a draft of the kind the disclosure needs: a HIPAA authorization, or a Part 2 consent for substance use disorder records'
+  - The service checks every core element and required statement, and refuses to activate the draft while any is missing, listing every missing one
+  - The patient, or a representative whose authority is described, signs and dates it on paper or in the portal
+  - When the organization asked for the authorization, the patient gets a copy
+  outcome: An authorization or Part 2 consent that holds every element the law requires, so disclosure checks can rely on it.
+  covers:
+  - FR-H1
+  - BR-H3
+  - BR-H6
 - name: Revoke a consent
   trigger: The patient asks to revoke
   actor: Patient
@@ -475,11 +489,24 @@ workflows:
   steps:
   - Send the patient, data labels, purpose, requester and recipient
   - Get permit or deny with basis and obligations
-  - Apply the obligations, such as attaching the Part 2 statement
+  - Apply the obligations the answer names, such as a statement to attach
   outcome: Every use and disclosure is backed by a logged answer.
   covers:
   - FR-H3
   - BR-H23
+- jurisdiction: us
+  name: Disclose Part 2 records
+  trigger: A module is about to disclose substance use disorder records from a Part 2 program
+  actor: System
+  steps:
+  - The disclosure check finds an active Part 2 consent that covers the recipient and the purpose
+  - The permit carries the obligation to attach the statement 42 CFR 2.32 requires, and says how the recipient may redisclose
+  - The disclosing module attaches the statement and sends only the information the consent describes
+  outcome: Every disclosure of Part 2 records carries its notice, and the recipient knows what it may redisclose.
+  covers:
+  - FR-H3
+  - BR-H6
+  - BR-H8
 - name: Give the privacy notice
   trigger: A patient's first service, or patient.registered with an informant in the EU
   actor: Registrar
@@ -489,6 +516,18 @@ workflows:
   outcome: Every patient has been given the notice, provably.
   covers:
   - FR-H5
+- jurisdiction: us
+  name: Give the Notice of Privacy Practices
+  trigger: Encounters reports a patient's first encounter started, or emergency treatment ends
+  actor: Registrar
+  steps:
+  - Give the current Notice of Privacy Practices by the first service, or as soon as practicable after emergency treatment
+  - Ask for a written acknowledgment; if it isn't obtained, record the good-faith attempt and the reason
+  - When the encounter is in a Part 2 program, also tell the patient at admission, or when they regain capacity, that federal law protects their substance use disorder records
+  outcome: Every patient has been given the notice, and Part 2 patients the federal notice, provably.
+  covers:
+  - FR-H5
+  - BR-H17
 - name: Use restricted data in an emergency
   trigger: A patient needs emergency treatment and restricted data is needed
   actor: Clinician
@@ -1818,6 +1857,12 @@ references:
   note: (f), fundraising communications and the opt-out.
   jurisdiction: us
 changelog:
+- version: 0.4.7
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - 'New US workflows: "Sign a HIPAA authorization or Part 2 consent" (BR-H3, BR-H6), "Disclose Part 2 records" (BR-H6, BR-H8) and "Give the Notice of Privacy Practices" (BR-H17), so the US rules these steps follow are traced to a workflow.'
+  - The general "Check a disclosure" workflow no longer names the Part 2 statement, which applies in the United States only; the US workflow covers it.
 - version: 0.4.6
   date: '2026-10-15'
   breaking: false
