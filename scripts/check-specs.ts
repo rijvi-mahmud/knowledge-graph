@@ -29,6 +29,7 @@
  */
 import { resolve } from 'node:path';
 import { LEAD_FIELD, resolveSpec } from '@/lib/spec-inherit';
+import { roundTrip } from '@/lib/spec-roundtrip';
 import type { ModuleSpecData } from '@/components/module-spec';
 import { SPEC_ID } from '@/lib/spec-ids';
 import { specToMarkdown } from '@/lib/spec-markdown';
@@ -69,6 +70,8 @@ const ID_LISTS = [
   'performanceTargets',
   'risks',
   'references',
+  'limitations',
+  'usabilityRequirements',
 ] as const;
 
 const all = [...nodes.values()];
@@ -114,6 +117,9 @@ for (const node of all) {
     errors.push(`${where}: ${(e as Error).message}`);
     continue;
   }
+
+  // The Markdown form must carry the whole spec: written out and read back, nothing changes.
+  for (const d of roundTrip(spec).slice(0, 10)) errors.push(`${where}: Markdown round trip: ${d}`);
 
   // Every id a criterion verifies or an edge case covers must exist.
   const known = new Set(

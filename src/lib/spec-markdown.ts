@@ -29,7 +29,7 @@ function table(head: string[], rows: (string | number | undefined)[][]): string 
 const bullets = (items: string[]) => items.map((i) => `- ${i}`).join('\n');
 
 type Cell = string | number | undefined;
-type Provenance = { layer?: string; overrides?: string };
+type Provenance = { layer?: string; overrides?: string; variant?: string };
 
 /**
  * `sectionId` limits the output to one section (a sub-page). Without
@@ -62,9 +62,16 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
   // cards, only once the page inherits from another layer.
   const lineage = data.lineage;
   const layered = has(lineage?.basedOn);
+  // The tag also names an item's variant ("variant inpatient"), so a reader
+  // of this Markdown, person or parser, knows the item applies to that kind only.
   const tag = (i: Provenance) =>
-    i.layer ? `${i.layer}${i.overrides ? ` (overrides ${i.overrides})` : ''}` : '';
-  const mark = (i: Provenance) => (layered && i.layer ? ` _[${tag(i)}]_` : '');
+    [
+      layered && i.layer ? `${i.layer}${i.overrides ? ` (overrides ${i.overrides})` : ''}` : '',
+      i.variant ? `variant ${i.variant}` : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+  const mark = (i: Provenance) => (tag(i) ? ` _[${tag(i)}]_` : '');
   const head = (cols: string[]) => (layered ? [...cols, 'Layer'] : cols);
   const rows = <T extends Provenance>(items: T[], fn: (i: T) => Cell[]) =>
     items.map((i) => (layered ? [...fn(i), tag(i)] : fn(i)));
@@ -94,7 +101,7 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
       'Ids such as BR-1, FR-2 and AC-3 are stable. Cite them in code, tests and commit messages.',
       'Items that start with "US only:" or "EU only:" apply only in that jurisdiction. Skip the ones for a jurisdiction your project doesn\'t operate in, or add ?jurisdiction=us or ?jurisdiction=eu to this URL to leave them out. Unmarked items apply everywhere.',
       layered
-        ? 'Tags such as [core] or [healthcare] show which layer an item comes from. "overrides X" means it replaces the item with the same id from layer X.'
+        ? 'Tags such as [core] or [healthcare] show which layer an item comes from. "overrides X" means it replaces the item with the same id from layer X. "variant inpatient" means the item applies only to that kind of the module.'
         : `This is the core ${data.module} specification: nothing is inherited, and industry and domain pages build on it.`,
     ]),
   );
@@ -106,6 +113,55 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
     if (has(data.nonGoals)) parts.push(`**Out of scope**\n\n${bullets(data.nonGoals!)}`);
     section('Purpose & scope', parts.join('\n\n'));
   }
+
+  // The kinds of this module a business can run, such as outpatient and inpatient.
+  if (!sectionId && has(data.variants))
+    out.push(
+      `## Variants\n\n${data
+        .variants!.map((v) =>
+          [`**${v.id}** ${v.title}${mark(v as Provenance)}`, `  - Description: ${v.description}`, `  - Summary: ${v.summary}`].join('\n'),
+        )
+        .join('\n')}`,
+    );
+
+  if (has(data.productFunctions))
+    section(
+      'product-functions',
+      table(
+        head(['Function', 'Description']),
+        rows(data.productFunctions!, (f) => [f.name, f.description]),
+      ),
+    );
+
+  if (has(data.userCharacteristics))
+    section(
+      'user-characteristics',
+      table(
+        head(['User', 'Characteristics']),
+        rows(data.userCharacteristics!, (u) => [u.user, u.characteristics]),
+      ),
+    );
+
+  if (has(data.limitations))
+    section(
+      'limitations',
+      data
+        .limitations!.map((l) =>
+          [`**${l.id}** ${l.text}${mark(l)}`, l.rationale ? `  - Why: ${l.rationale}` : null]
+            .filter(Boolean)
+            .join('\n'),
+        )
+        .join('\n'),
+    );
+
+  if (has(data.usabilityRequirements))
+    section(
+      'usability',
+      table(
+        head(['Id', 'Requirement', 'Context of use', 'Measured as', 'Target']),
+        rows(data.usabilityRequirements!, (u) => [u.id, u.text, u.context, u.measure, u.target]),
+      ),
+    );
 
   if (has(data.actors))
     section(
@@ -316,7 +372,7 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
         'Each dependency lists its contract: only what this module needs from it (upstream) or gives it (downstream). How the other module works is out of scope.',
         table(
           head(['Service', 'Direction', 'Criticality', 'Reason', 'Contract']),
-          rows(data.dependencies!, (d) => [d.service, d.direction, d.criticality, d.reason, (d.contract ?? []).join('; ')]),
+          rows(data.dependencies!, (d) => [d.service, d.direction, d.criticality, d.reason, (d.contract ?? []).join('<br>')]),
         ),
       ].join('\n\n'),
     );
@@ -400,7 +456,9 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
       data
         .compliance!.map((c) =>
           [
-            `**${c.id}** ${c.regulation}, ${c.provision}: ${c.obligation}${mark(c)}`,
+            `**${c.id}** ${c.obligation}${mark(c)}`,
+            `  - Law: ${c.regulation}`,
+            `  - Provision: ${c.provision}`,
             `  - How it's met: ${c.how}`,
             `  - Status: ${c.status}`,
             has(c.covered_by) ? `  - Covered by: ${c.covered_by.join(', ')}` : null,
@@ -487,10 +545,10 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
               t.columns.map((c) => [c.name, c.type, c.nullable ? 'yes' : 'no', c.default, c.note]),
             ),
             has(t.indexes)
-              ? `Indexes:\n${bullets(t.indexes.map((i) => `\`${i.definition}\`${i.note ? ` ${i.note}` : ''}`))}`
+              ? `Indexes:\n${bullets(t.indexes.map((i) => `${i.name}: \`${i.definition}\`${i.note ? ` ${i.note}` : ''}`))}`
               : null,
             has(t.constraints)
-              ? `Constraints:\n${bullets(t.constraints.map((c) => `\`${c.definition}\`${c.note ? ` ${c.note}` : ''}`))}`
+              ? `Constraints:\n${bullets(t.constraints.map((c) => `${c.name}: \`${c.definition}\`${c.note ? ` ${c.note}` : ''}`))}`
               : null,
           ]
             .filter(Boolean)

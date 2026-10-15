@@ -167,6 +167,20 @@ interface PersonalData extends Provenance {
   retention: string;
 }
 
+interface UserCharacteristic extends Provenance {
+  user: string;
+  characteristics: string;
+}
+
+interface Usability extends Provenance {
+  id: string;
+  text: string;
+  context?: string;
+  measure: string;
+  target?: string;
+  variant?: string;
+}
+
 interface PerformanceTarget extends Provenance {
   id: string;
   indicator: string;
@@ -287,7 +301,10 @@ export interface ModuleSpecData {
   purpose?: string;
   scope?: string[];
   nonGoals?: string[];
+  productFunctions?: Named[];
   actors?: Named[];
+  userCharacteristics?: UserCharacteristic[];
+  limitations?: Statement[];
   assumptions?: Statement[];
   glossary?: GlossaryEntry[];
 
@@ -306,6 +323,7 @@ export interface ModuleSpecData {
   constraints?: Statement[];
   settings?: Setting[];
   performanceTargets?: PerformanceTarget[];
+  usabilityRequirements?: Usability[];
   acceptanceCriteria?: Acceptance[];
 
   operations?: Operation[];
@@ -360,6 +378,10 @@ function presentSections(data: ModuleSpecData): Set<SpecSectionId> {
     privacy: has(data.personalData),
     compliance: has(data.compliance),
     performance: has(data.performanceTargets),
+    usability: has(data.usabilityRequirements),
+    'product-functions': has(data.productFunctions),
+    'user-characteristics': has(data.userCharacteristics),
+    limitations: has(data.limitations),
     acronyms: has(data.acronyms),
     risks: has(data.risks),
     traceability: (data.acceptanceCriteria ?? []).some((a) => has(a.verifies)),
@@ -384,6 +406,7 @@ const VARIANT_LISTS = [
   'acceptanceCriteria',
   'operations',
   'compliance',
+  'usabilityRequirements',
 ] as const;
 
 /**
@@ -1345,6 +1368,22 @@ export function ModuleSpec({
       />
     ),
 
+    usability: (
+      <Grid
+        head={['Id', 'Requirement', 'Context of use', 'Measured as', 'Target']}
+        rowIds={(data.usabilityRequirements ?? []).map((u) => u.id)}
+        rows={(data.usabilityRequirements ?? []).map((u) => [
+          <code key="i">{u.id}</code>,
+          u.text,
+          u.context ?? '-',
+          u.measure,
+          <span key="t">
+            <span className="font-medium">{u.target ?? '-'}</span> {origin(u)}
+          </span>,
+        ])}
+      />
+    ),
+
     performance: (
       <Grid
         head={['Id', 'Indicator', 'Target', 'Measured as']}
@@ -1647,6 +1686,30 @@ export function ModuleSpec({
         from: r,
       })),
       (items) => <ItemList origin={origin} items={items} />,
+    ),
+
+    'product-functions': grouped(
+      (data.productFunctions ?? []).map((f) => ({ term: f.name, def: f.description, from: f })),
+      (items) => <DefinitionList origin={origin} items={items} />,
+    ),
+    'user-characteristics': grouped(
+      (data.userCharacteristics ?? []).map((u) => ({ term: u.user, def: u.characteristics, from: u })),
+      (items) => <DefinitionList origin={origin} items={items} />,
+    ),
+    limitations: grouped(
+      (data.limitations ?? []).map((l) => ({
+        key: l.id,
+        ref: l.id,
+        text: l.text,
+        detail: l.rationale && (
+          <>
+            <Label>Why:</Label>
+            {l.rationale}
+          </>
+        ),
+        from: l,
+      })),
+      (items) => <AccordionList origin={origin} items={items} />,
     ),
 
     actors: grouped(

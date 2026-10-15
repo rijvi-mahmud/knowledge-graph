@@ -31,7 +31,11 @@ type Item = Record<string, unknown> & { layer?: string; overrides?: string };
 const str = (v: unknown) => String(v ?? '');
 
 const KEYS = {
+  productFunctions: (i: Item) => str(i.name),
   actors: (i: Item) => str(i.name),
+  userCharacteristics: (i: Item) => str(i.user),
+  limitations: (i: Item) => str(i.id),
+  usabilityRequirements: (i: Item) => str(i.id),
   glossary: (i: Item) => str(i.term),
   concepts: (i: Item) => str(i.name),
   dataModel: (i: Item) => str(i.name),
@@ -157,6 +161,10 @@ export const LEAD_FIELD: Record<string, string> = {
   dependencies: 'reason',
   accessMatrix: 'action',
   performanceTargets: 'indicator',
+  productFunctions: 'description',
+  userCharacteristics: 'characteristics',
+  limitations: 'text',
+  usabilityRequirements: 'text',
   references: 'title',
   apiConventions: 'text',
   permissions: 'description',

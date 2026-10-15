@@ -170,6 +170,43 @@ const constraintSchema = z.object({
 // One row of the permission matrix: an action, and what each actor may do.
 // Cells are usually "any", "own" (appointments they take part in) or "none";
 // anything else is a condition, explained in the note.
+// ISO/IEC/IEEE 29148 product overview: a major function of the module, in
+// one line, so a first-time reader sees what it does before the details.
+const productFunctionSchema = z.object({
+  name: z.string(), // e.g. "Book an appointment"
+  description: z.string(),
+  jurisdiction, // us or eu; see `jurisdiction` above
+});
+
+// ISO/IEC/IEEE 29148 user characteristics: a group of users and what about
+// them (knowledge, experience, abilities, setting) shapes the requirements.
+const userCharacteristicSchema = z.object({
+  user: z.string(), // e.g. "Front desk staff"
+  characteristics: z.string(),
+  jurisdiction, // us or eu; see `jurisdiction` above
+});
+
+// ISO/IEC/IEEE 29148 limitations: what restricts the supplier's options, such
+// as regulation, hardware, other systems, safety or audit needs.
+const limitationSchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
+  id: z.string(), // e.g. "LIM-1"
+  text: z.string(),
+  rationale: z.string().optional(),
+});
+
+// ISO/IEC/IEEE 29148 usability requirements, measured as ISO 9241-11 does:
+// effectiveness, efficiency or satisfaction for one kind of user and task.
+const usabilitySchema = z.object({
+  jurisdiction, // us or eu; see `jurisdiction` above
+  id: z.string(), // e.g. "USE-1"
+  text: z.string(),
+  context: z.string().optional(), // the users, tasks and setting it holds for
+  measure: z.string(), // how it's measured, e.g. "task completion rate in a moderated test"
+  target: z.string().optional(), // e.g. "95%", or "set by each deployment"
+  variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
+});
+
 const accessSchema = z.object({
   action: z.string(), // e.g. "Reschedule"
   roles: z.record(z.string(), z.string()), // actor name -> any | own | none | condition
@@ -409,7 +446,10 @@ const graphSchema = pageSchema.extend({
   purpose: z.string().optional(),
   scope: z.array(z.string()).default([]),
   nonGoals: z.array(z.string()).default([]),
+  productFunctions: z.array(productFunctionSchema).default([]),
   actors: z.array(actorSchema).default([]),
+  userCharacteristics: z.array(userCharacteristicSchema).default([]),
+  limitations: z.array(limitationSchema).default([]),
   assumptions: z.array(assumptionSchema).default([]),
   glossary: z.array(glossarySchema).default([]),
 
@@ -431,6 +471,7 @@ const graphSchema = pageSchema.extend({
   constraints: z.array(constraintSchema).default([]),
   settings: z.array(settingSchema).default([]),
   performanceTargets: z.array(performanceSchema).default([]),
+  usabilityRequirements: z.array(usabilitySchema).default([]),
   acceptanceCriteria: z.array(acceptanceSchema).default([]),
 
   // 5. interface

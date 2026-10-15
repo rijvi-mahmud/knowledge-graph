@@ -88,6 +88,7 @@ Fumadocs (Next.js 16, Turbopack, Tailwind v4, MDX) in `src/`, content in
 | `src/app/sitemap.ts`, `src/app/robots.ts` | Every page (module, section and variant pages included) in `/sitemap.xml`, and `/robots.txt` allowing all crawlers and pointing to it, so agents' web searches can find pages. Both generated, so new modules need no change. |
 | `src/components/module-spec.tsx` | Renders frontmatter to HTML for humans. |
 | `src/lib/spec-markdown.ts` | Renders the same frontmatter to Markdown for AI. |
+| `src/lib/spec-read.ts`, `src/lib/spec-roundtrip.ts` | Reads that Markdown back into spec data (the reverse of `spec-markdown.ts`), by section title at any heading level, so it also reads a document laid out on the ISO/IEC/IEEE 29148 outline. `check:specs` writes every module to Markdown, reads it back and fails on any difference, so the Markdown form carries the whole spec. The company dashboard uses the reader for its module documents. |
 | `src/lib/source.ts` | `getLLMText()` joins spec markdown + prose for `llms.txt` routes. |
 | `src/proxy.ts` | Serves markdown for `/docs/<page>.md` and `Accept: text/markdown`. Must stay in `src/`, or Next.js skips it. |
 | `src/lib/shared.ts` | `siteUrl`: this deployment's address, from `NEXT_PUBLIC_SITE_URL`, else Vercel's production domain, else localhost. |
@@ -131,8 +132,9 @@ repeat it. Structure is what makes company overrides, version diffing and
 machine queries possible. Prose cannot be addressed programmatically. A rule
 with id `BR-2` can be overridden by a company layer; paragraph four cannot.
 
-**Both renderers must stay in sync.** Adding a section to `source.config.ts`
-means updating `module-spec.tsx` *and* `spec-markdown.ts`. If only the React one
+**Both renderers and the reader must stay in sync.** Adding a section to `source.config.ts`
+means updating `module-spec.tsx`, `spec-markdown.ts` *and* `spec-read.ts`; the
+Markdown round trip in `check:specs` fails until the reader handles it. If only the React one
 is updated, the section becomes invisible to AI, which defeats the entire
 premise. This bug already happened once: `llms.mdx` was serving prose only until
 `spec-markdown.ts` was written.
@@ -241,12 +243,12 @@ are defined only in `spec-sections.ts`:
 
 | Folder | Pages |
 |---|---|
-| (module page) | Narrative, the Specification callout, purpose and scope, product perspective (diagram from dependencies), actors, assumptions and dependencies, and an "In this specification" list |
+| (module page) | Narrative, the Specification callout, purpose and scope, product perspective (diagram from dependencies), product functions, actors, user characteristics, limitations (`LIM-`), assumptions and dependencies, and an "In this specification" list |
 | Functions | Business rules, state machine, workflows, validations, edge cases |
 | Data | Data model (logical), relationships |
 | External interfaces | API (each operation with its HTTP method, path and success status), API conventions, events, event delivery guarantees, errors (with HTTP status), dependencies |
 | Security | Permission matrix (actions × actors: any, own, none or a condition), permissions, privacy and retention, compliance (each HIPAA, GDPR or other legal obligation, how it's met, status and covering ids, `CMP-`) |
-| Requirements | Functional requirements (with verification method), performance requirements (SLIs and targets), quality attributes (ISO/IEC 25010), design constraints, configuration |
+| Requirements | Functional requirements (with verification method), performance requirements (SLIs and targets), usability requirements (`USE-`, measured as ISO 9241-11 does: effectiveness, efficiency or satisfaction in a context of use), quality attributes (ISO/IEC 25010), design constraints, configuration |
 | Reference implementation | Non-normative. Storage design (reference PostgreSQL tables, indexes, constraints) and implementation notes |
 | Verification | Acceptance criteria, traceability matrix (derived from each criterion's `verifies`) |
 | Supporting information | Concepts, glossary, acronyms, decisions, risks, open questions, references, version history |
@@ -491,10 +493,13 @@ every module and layer, and for every "is there any gap?" request.
    member state (age of majority, retention, minors' records) is a setting,
    never one place's answer. Say in the setting which places you verified
    from the statute, and that the rest need legal advice.
-8. **Add a new kind of section in all five places**, or it disappears
-   somewhere: the field in `source.config.ts`, its key in `KEYS` in
-   `spec-inherit.ts`, the section and group in `spec-sections.ts`, and a
-   renderer in both `module-spec.tsx` and `spec-markdown.ts`.
+8. **Add a new kind of section in all six places**, or it disappears
+   somewhere: the field in `source.config.ts`, its key in `KEYS` (and its
+   lead field in `LEAD_FIELD`) in `spec-inherit.ts`, the section and group
+   in `spec-sections.ts`, a renderer in both `module-spec.tsx` and
+   `spec-markdown.ts`, and its reading in `spec-read.ts`. A new id prefix
+   also goes in `spec-ids.ts` and, if it has ids, `ID_LISTS` in
+   `check-specs.ts`.
 9. **Write the content.**
    - Edit frontmatter with a PyYAML script in the scratchpad (load, change
      the dict, dump with `sort_keys=False`, `width=100000`), keeping the MDX

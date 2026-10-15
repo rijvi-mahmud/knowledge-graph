@@ -11,7 +11,22 @@
  */
 
 export const SPEC_SECTIONS = [
+  {
+    id: 'product-functions',
+    title: 'Product functions',
+    summary: 'The main things the module does, in one line each',
+  },
   { id: 'actors', title: 'Actors', summary: 'Who interacts with the module' },
+  {
+    id: 'user-characteristics',
+    title: 'User characteristics',
+    summary: 'Who the users are and what shapes the requirements for them',
+  },
+  {
+    id: 'limitations',
+    title: 'Limitations',
+    summary: 'What restricts how the module can be built',
+  },
   {
     id: 'context',
     title: 'Product perspective',
@@ -90,6 +105,11 @@ export const SPEC_SECTIONS = [
     summary: 'Measurable indicators, their targets and how they are measured',
   },
   {
+    id: 'usability',
+    title: 'Usability requirements',
+    summary: 'How well each kind of user must be able to do their tasks, measured',
+  },
+  {
     id: 'nfrs',
     title: 'Quality attributes',
     summary: 'Availability, security, scalability and other qualities',
@@ -150,7 +170,7 @@ export const SPEC_GROUPS: SpecGroup[] = [
     id: 'overview',
     title: 'Overview',
     slug: null,
-    sections: ['context', 'actors', 'assumptions'],
+    sections: ['context', 'product-functions', 'actors', 'user-characteristics', 'limitations', 'assumptions'],
   },
   {
     id: 'functions',
@@ -175,7 +195,7 @@ export const SPEC_GROUPS: SpecGroup[] = [
     id: 'requirements',
     title: 'Requirements',
     slug: 'requirements',
-    sections: ['requirements', 'performance', 'nfrs', 'constraints', 'settings'],
+    sections: ['requirements', 'performance', 'usability', 'nfrs', 'constraints', 'settings'],
   },
   {
     id: 'verification',
