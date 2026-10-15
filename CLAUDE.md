@@ -257,6 +257,16 @@ outpatient and inpatient appointments, don't split the module. Declare
 only one with `variant:`. Each variant gets its own sidebar page right after
 the Introduction, listing its summary and its tagged items; untagged items
 apply to every variant. `pnpm check:specs` fails on a tag that isn't declared.
+A business can run only some variants (the company dashboard lets it keep
+outpatient appointments and drop inpatient ones), so each variant's view
+(untagged items plus its own, `keepVariants` in `src/lib/spec-variant.ts`)
+must stand on its own: `pnpm check:specs` fails when a kept item cites or
+names another variant's item, the same way as the jurisdiction views. Tag an
+acceptance criterion, edge case or compliance item with the variant of the
+rule it covers; a setting, validation or table can't be tagged, so state the
+rule in words there instead of citing its id. A parent page's item gets its
+tag through an override in the layer that declares the variants (AC-H41 in
+EHR Appointments).
 
 **Jurisdiction tags.** An item that applies in only one jurisdiction carries
 `jurisdiction: us` or `jurisdiction: eu`; untagged items apply everywhere.
@@ -788,9 +798,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Consent (`healthcare/consent` 0.4.4, healthcare level, and `healthcare/ehr/consent` 0.1.4 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.2, healthcare level, and `healthcare/ehr/identity` 0.2.2 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.5, healthcare level, and `healthcare/ehr/practitioner` 0.1.5 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.2, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.5 and `healthcare/ehr/clinical-documentation` 0.4.9; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.4, EHR-only), Encounters (`healthcare/encounter` 0.3.3 and `healthcare/ehr/encounter` 0.13.15), Patients (`healthcare/patient` 0.13.10, which has no core page by the
+  drafts: Consent (`healthcare/consent` 0.4.4, healthcare level, and `healthcare/ehr/consent` 0.1.4 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.2, healthcare level, and `healthcare/ehr/identity` 0.2.2 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.5, healthcare level, and `healthcare/ehr/practitioner` 0.1.5 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.2, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.5 and `healthcare/ehr/clinical-documentation` 0.4.9; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.4, EHR-only), Encounters (`healthcare/encounter` 0.3.4 and `healthcare/ehr/encounter` 0.13.16), Patients (`healthcare/patient` 0.13.10, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.4.7) and Appointments
-  (`healthcare/appointment` 0.13.2, `healthcare/ehr/appointment` 0.11.9; `core/appointment` 0.12.5). All
+  (`healthcare/appointment` 0.13.2, `healthcare/ehr/appointment` 0.11.10; `core/appointment` 0.12.5). All
   support the US and EU through the `jurisdiction` setting. Next: Organization, then Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

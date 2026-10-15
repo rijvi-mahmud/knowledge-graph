@@ -226,6 +226,7 @@ const complianceSchema = z.object({
   how: z.string(),
   status: z.enum(['met', 'partly met', 'deployment', 'other module']).default('met'),
   covered_by: z.array(z.string()).default([]),
+  variant: z.string().optional(), // a duty only this variant of the module has, e.g. "inpatient"
 });
 
 const riskSchema = z.object({

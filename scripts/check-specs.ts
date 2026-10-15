@@ -14,6 +14,8 @@
  * - in a jurisdiction's filtered view, an item that cites or names an item
  *   hidden from that view (a verifies, covers or covered_by id, an id in its
  *   text, an error code, or a setting)
+ * - in the view for one variant (outpatient appointments only), an item that
+ *   cites or names an item of another variant, the same way
  * - an em or en dash anywhere in the page
  *
  * Warnings (exit code 0, or 1 with --strict):
@@ -32,6 +34,7 @@ import { specToMarkdown } from '@/lib/spec-markdown';
 import { SPEC_SECTIONS } from '@/lib/spec-sections';
 import { JURISDICTIONS, jurisdictionSpec, textJurisdiction } from '@/lib/spec-jurisdiction';
 import { docsRoot, loadSpecs, type SpecRoot } from '@/lib/spec-load';
+import { keepVariants } from '@/lib/spec-variant';
 
 const strict = process.argv.includes('--strict');
 
@@ -154,7 +157,7 @@ for (const node of all) {
 
   // A variant tag must name a variant the module declares.
   const variantIds = new Set((spec.variants ?? []).map((v) => v.id));
-  for (const list of ['dataModel', 'businessRules', 'workflows', 'edgeCases', 'functionalRequirements', 'acceptanceCriteria', 'operations'] as const)
+  for (const list of ['dataModel', 'businessRules', 'workflows', 'edgeCases', 'functionalRequirements', 'acceptanceCriteria', 'operations', 'compliance'] as const)
     for (const item of ((spec as Record<string, unknown>)[list] ?? []) as { variant?: string; id?: string; name?: string }[])
       if (item.variant && !variantIds.has(item.variant))
         errors.push(`${where}: ${item.id ?? item.name} is tagged with variant "${item.variant}", which isn't declared`);
@@ -172,41 +175,16 @@ for (const node of all) {
 
   // A filtered view (?jurisdiction=us) must stand on its own: nothing kept may
   // point at an item the filter hid, or the agent reading it hits a dead end.
-  for (const j of JURISDICTIONS) {
-    const view = jurisdictionSpec(spec, j) as Record<string, unknown>;
-    const full = spec as Record<string, unknown>;
-    const keptIds = new Set<string>();
-    const hidden = new Set<string>();
-    const hiddenSettings: string[] = [];
-    for (const [list, items] of Object.entries(full)) {
-      if (!Array.isArray(items)) continue;
-      const kept = new Set((view[list] as unknown[]) ?? []);
-      for (const item of items as { id?: string; name?: string }[]) {
-        if (kept.has(item)) { if (item.id) keptIds.add(item.id); continue; }
-        if (item.id) hidden.add(item.id);
-        if (list === 'settings' && item.name) hiddenSettings.push(item.name);
-      }
-    }
-    for (const id of keptIds) hidden.delete(id);
-    const problems = new Set<string>();
-    for (const list of ['acceptanceCriteria', 'edgeCases', 'compliance'] as const)
-      for (const item of (view[list] ?? []) as { id: string; verifies?: string[]; covers?: string[]; covered_by?: string[] }[])
-        for (const ref of [...(item.verifies ?? []), ...(item.covers ?? []), ...(item.covered_by ?? [])])
-          if (hidden.has(ref)) problems.add(`${item.id} cites ${ref}`);
-    const viewErrors = new Set(((view.errors ?? []) as { code: string }[]).map((e) => e.code));
-    for (const op of (view.operations ?? []) as { name: string; errors?: string[] }[])
-      for (const code of op.errors ?? []) if (!viewErrors.has(code)) problems.add(`operation "${op.name}" raises ${code}`);
-    for (const [list, items] of Object.entries(view)) {
-      if (!Array.isArray(items) || list === 'changelog') continue;
-      for (const item of items as Record<string, unknown>[]) {
-        const text = JSON.stringify(item);
-        const name = String(item.id ?? item.name ?? item.field ?? item.code ?? list);
-        for (const id of hidden) if (new RegExp(`\\b${id}\\b`).test(text)) problems.add(`${name} mentions ${id}`);
-        if (list !== 'settings') for (const s of hiddenSettings) if (new RegExp(`\\b${s}\\b`).test(text)) problems.add(`${name} uses setting ${s}`);
-      }
-    }
-    for (const p of problems) errors.push(`${where}: in the ${j} view, ${p}, which only applies elsewhere; tag it or remove the reference`);
-  }
+  for (const j of JURISDICTIONS)
+    for (const p of deadEnds(spec, jurisdictionSpec(spec, j)))
+      errors.push(`${where}: in the ${j} view, ${p}, which only applies elsewhere; tag it or remove the reference`);
+
+  // The same holds for a business that runs one variant only: each variant's
+  // view keeps untagged items and its own, so none may lean on another's.
+  if ((spec.variants ?? []).length > 1)
+    for (const v of spec.variants ?? [])
+      for (const p of deadEnds(spec, keepVariants(spec, [v.id])))
+        errors.push(`${where}: in the ${v.id} only view, ${p}, which belongs to another variant; tag it with that variant or remove the reference`);
 
   // An item that opens by naming one jurisdiction almost always applies only there.
   for (const [list, items] of Object.entries(spec as Record<string, unknown>)) {
@@ -305,3 +283,45 @@ console.log(
 );
 
 if (errors.length > 0 || (strict && warnings.length > 0)) process.exit(1);
+
+/**
+ * What a filtered view of a spec (one jurisdiction, one variant) cites or
+ * names that the filter left out: a verifies, covers or covered_by id, an id
+ * in an item's text, an error code an operation raises, or a setting.
+ */
+function deadEnds(spec: ModuleSpecData, filtered: ModuleSpecData): Set<string> {
+  const view = filtered as Record<string, unknown>;
+  const full = spec as Record<string, unknown>;
+  const keptIds = new Set<string>();
+  const hidden = new Set<string>();
+  const hiddenSettings: string[] = [];
+  for (const [list, items] of Object.entries(full)) {
+    // Variant declarations are names, not items a view can lean on.
+    if (!Array.isArray(items) || list === 'variants') continue;
+    const kept = new Set((view[list] as unknown[]) ?? []);
+    for (const item of items as { id?: string; name?: string }[]) {
+      if (kept.has(item)) { if (item.id) keptIds.add(item.id); continue; }
+      if (item.id) hidden.add(item.id);
+      if (list === 'settings' && item.name) hiddenSettings.push(item.name);
+    }
+  }
+  for (const id of keptIds) hidden.delete(id);
+  const problems = new Set<string>();
+  for (const list of ['acceptanceCriteria', 'edgeCases', 'compliance'] as const)
+    for (const item of (view[list] ?? []) as { id: string; verifies?: string[]; covers?: string[]; covered_by?: string[] }[])
+      for (const ref of [...(item.verifies ?? []), ...(item.covers ?? []), ...(item.covered_by ?? [])])
+        if (hidden.has(ref)) problems.add(`${item.id} cites ${ref}`);
+  const viewErrors = new Set(((view.errors ?? []) as { code: string }[]).map((e) => e.code));
+  for (const op of (view.operations ?? []) as { name: string; errors?: string[] }[])
+    for (const code of op.errors ?? []) if (!viewErrors.has(code)) problems.add(`operation "${op.name}" raises ${code}`);
+  for (const [list, items] of Object.entries(view)) {
+    if (!Array.isArray(items) || list === 'changelog') continue;
+    for (const item of items as Record<string, unknown>[]) {
+      const text = JSON.stringify(item);
+      const name = String(item.id ?? item.name ?? item.field ?? item.code ?? list);
+      for (const id of hidden) if (new RegExp(`\\b${id}\\b`).test(text)) problems.add(`${name} mentions ${id}`);
+      if (list !== 'settings') for (const s of hiddenSettings) if (new RegExp(`\\b${s}\\b`).test(text)) problems.add(`${name} uses setting ${s}`);
+    }
+  }
+  return problems;
+}

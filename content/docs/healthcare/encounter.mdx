@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.3.3
+version: 0.3.4
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,13 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.3.4
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - EC-H27, AC-H45 and AC-H51 are tagged ambulatory, like the visit grouping and opening rules they cover (BR-H33, BR-H2).
+  - EC-H44 (downtime) applies to every kind of encounter, so it no longer cites the ambulatory-only AC-H72.
+  - The encounter_opens_at setting no longer names BR-H2, which applies to ambulatory encounters only; BR-H2 still names the setting.
 - version: 0.3.3
   date: '2026-10-14'
   breaking: false
@@ -796,6 +803,7 @@ edgeCases:
   covers:
   - BR-H33
   - AC-H45
+  variant: ambulatory
 - id: EC-H28
   situation: An MRI order is carried out in an outpatient encounter.
   behaviour: The encounter records the order, and Orders learns it was done from encounter.completed.
@@ -855,7 +863,6 @@ edgeCases:
   behaviour: Each encounter is entered with the real times of care and downtime_entry set; Appointments replays its check-ins with their original times.
   covers:
   - BR-H49
-  - AC-H72
 functionalRequirements:
 - id: FR-H1
   text: The service must open encounters from check-ins, walk-ins, emergency arrivals and admissions, and report the encounter id back.
@@ -967,7 +974,7 @@ settings:
 - name: encounter_opens_at
   type: check_in | care_start
   default: check_in
-  description: When an ambulatory or virtual encounter is opened (BR-H2). FHIR sources differ, so each hospital chooses.
+  description: When an ambulatory or virtual encounter is opened. FHIR sources differ, so each hospital chooses.
 - name: visit_grouping
   type: per_appointment | per_department_day | per_facility_day
   default: per_department_day
@@ -1189,6 +1196,7 @@ acceptanceCriteria:
   then: no new encounter opens; the appointment is added and encounter.appointment_added is emitted
   verifies:
   - BR-H33
+  variant: ambulatory
 - id: AC-H46
   given: any new encounter
   when: it is opened
@@ -1207,6 +1215,7 @@ acceptanceCriteria:
   then: no encounter exists at check-in; it opens in progress when care starts
   verifies:
   - BR-H2
+  variant: ambulatory
 - id: AC-H53
   given: a patient, their representative, and another patient
   when: each reads the patient's discharged encounter

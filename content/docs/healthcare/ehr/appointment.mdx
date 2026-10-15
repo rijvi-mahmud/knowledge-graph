@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments: appointments for patients in an inpatient or observation stay, which belong to the stay, built on the clinical appointment rules.'
 module: appointment
-version: 0.11.9
+version: 0.11.10
 status: draft
 industry: healthcare
 domain: ehr
@@ -117,6 +117,7 @@ edgeCases:
   covers:
   - BR-E25
   - AC-E34
+  variant: inpatient
 functionalRequirements:
 - id: FR-E6
   text: The service must book appointments for patients in a hospital stay, inpatient or observation, linked to that stay.
@@ -204,6 +205,14 @@ accessMatrix:
     Clinic manager: any
   permission: appointment.manage
 acceptanceCriteria:
+- id: AC-H41
+  given: a patient who arrives without an appointment
+  when: the front desk registers them as a walk-in
+  then: an appointment starting now is created, marked walk_in, and checked in
+  verifies:
+  - BR-H29
+  - FR-H17
+  variant: outpatient
 - id: AC-E8
   given: an admitted patient with an active stay
   when: an MRI is booked for them as inpatient and they are checked in at radiology
@@ -242,12 +251,14 @@ acceptanceCriteria:
   then: the request fails with APPOINTMENT_NOT_INPATIENT and HTTP 409
   verifies:
   - FR-E7
+  variant: inpatient
 - id: AC-E34
   given: an inpatient with physiotherapy on Saturday and a scan on Tuesday, going on leave Friday until Monday
   when: ADT reports the leave, and later a second leave is cancelled
   then: the physiotherapy is flagged needs_review with patient_on_leave and the scan is not; for the cancelled leave the flag is removed
   verifies:
   - BR-E25
+  variant: inpatient
 decisions:
 - id: ADR-E3
   decision: Planned admissions are booked in the Admission, discharge and transfer module, not here.
@@ -268,6 +279,11 @@ references:
   url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
   jurisdiction: us
 changelog:
+- version: 0.11.10
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - AC-H41 is overridden to tag it outpatient, like the walk-in rule BR-H29 it verifies, and EC-E25, AC-E20 and AC-E34 are tagged inpatient, like the leave and stay-end rules they cover (BR-E25, FR-E7). Each variant's view now stands on its own.
 - version: 0.11.9
   date: '2026-10-10'
   breaking: false

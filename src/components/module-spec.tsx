@@ -181,6 +181,7 @@ interface Compliance extends Provenance {
   how: string;
   status: 'met' | 'partly met' | 'deployment' | 'other module';
   covered_by: string[];
+  variant?: string;
 }
 
 interface Risk extends Provenance {
@@ -381,6 +382,7 @@ const VARIANT_LISTS = [
   'functionalRequirements',
   'acceptanceCriteria',
   'operations',
+  'compliance',
 ] as const;
 
 /**

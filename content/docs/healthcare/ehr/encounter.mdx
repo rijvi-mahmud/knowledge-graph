@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.15
+version: 0.13.16
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,14 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.16
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - BR-E29, the edge cases EC-E16, EC-E18, EC-E19, EC-E23, EC-E30 to EC-E32 and EC-E36 to EC-E38, and the acceptance criteria AC-E32, AC-E34, AC-E35, AC-E38, AC-E41, AC-E48, AC-E49, AC-E52, AC-E58, AC-E60 and AC-E61 are tagged inpatient, like the stay rules they cover.
+  - 'CMP-E1 (facility directory) and CMP-E7 (observation notice) are tagged inpatient: both duties come from a stay.'
+  - 'AC-E20 is split: it keeps the period and location checks, and the new AC-E73 (ambulatory) checks the virtual URL that BR-H15 requires.'
+  - BR-H47, the patient_id validation and the encounter_stays storage note state the one-stay limit in words instead of citing the inpatient-only BR-E21 and BR-E11.
 - version: 0.13.15
   date: '2026-10-10'
   breaking: false
@@ -280,6 +288,7 @@ businessRules:
 - id: BR-E29
   text: After a patient merge, if the remaining patient has two inpatient or observation encounters in progress or on hold, both are kept and encounter.patient_review_needed is emitted for each, so an HIM specialist resolves them. Merging them (BR-H48) resolves it.
   rationale: Duplicate records can each hold an open stay for the same admission. Refusing the merge keeps the duplicate; keeping both silently breaks the one-stay rule (BR-E21).
+  variant: inpatient
 - id: BR-E36
   text: 'Pending events from Admission, discharge and transfer are recorded as plans: a pending transfer adds a planned location, a pending discharge sets planned_end, and each is removed when cancelled or replaced by the real event.'
   rationale: IHE Patient Administration Management defines pending admit, transfer and discharge (A14, A15, A16, cancelled by A27, A26, A25). Bed management and discharge planning work from who is expected to move.
@@ -305,7 +314,7 @@ businessRules:
   rationale: FHIR uses cancelled only for encounters that never started, so a started encounter opened by mistake is entered in error. ADT cancels an admission only when no clinical data is recorded, which Encounters also requires. IHE PAM cancels a pending discharge with A25.
   variant: inpatient
 - id: BR-H47
-  text: An encounter recorded on the wrong patient is moved to the right patient by an HIM specialist, with a reason. It keeps its id and visit number; on a locked encounter the move is also recorded as an amendment. The move is refused if the right patient is not in use or would then have two inpatient or observation encounters open (BR-E21). An encounter that belongs to a stay moves only with its stay, through Admission, discharge and transfer.
+  text: An encounter recorded on the wrong patient is moved to the right patient by an HIM specialist, with a reason. It keeps its id and visit number; on a locked encounter the move is also recorded as an amendment. The move is refused if the right patient is not in use or would then have two inpatient or observation encounters open. An encounter that belongs to a stay moves only with its stay, through Admission, discharge and transfer.
   rationale: A visit with notes on the wrong person is a record overlay, which ONC SAFER Guide 6 counts among the most dangerous identification errors. Entered in error is refused once clinical data exists, so a move is the only fix. HL7 moves a visit between patients (A45). Clinical modules keep their entries on the encounter id, so they follow it.
 - id: BR-H16
   text: length is the time from actual_start to actual_end less time on leave.
@@ -315,7 +324,7 @@ validations:
   rule: admit source and discharge disposition from their code lists; only for inpatient and observation
   error: ENCOUNTER_INVALID_CODE
 - field: patient_id
-  rule: no other inpatient or observation encounter in progress or on hold for the patient, when opening or starting one (BR-E21)
+  rule: no other inpatient or observation encounter in progress or on hold for the patient, when opening or starting one
   error: ENCOUNTER_CONCURRENT_STAY
 - field: directory_status
   rule: not_asked, listed or opted_out; listed only for inpatient and observation encounters
@@ -471,6 +480,7 @@ edgeCases:
   covers:
   - BR-E21
   - AC-E32
+  variant: inpatient
 - id: EC-E18
   situation: A Medicare patient is placed in observation at 20:00.
   behaviour: encounter.observation_started carries a notice due by 08:00 two days later; ADT gives the notice.
@@ -478,18 +488,21 @@ edgeCases:
   - BR-E23
   - AC-E34
   jurisdiction: us
+  variant: inpatient
 - id: EC-E19
   situation: An elective hip replacement is pre-admitted a week ahead.
   behaviour: A planned encounter holds the pre-admission tests, and admission starts it.
   covers:
   - BR-E24
   - AC-E35
+  variant: inpatient
 - id: EC-E23
   situation: Two duplicate records each have a stay in progress, and they are merged.
   behaviour: Both stays move and encounter.patient_review_needed is emitted for each; BR-E21 is not applied to the move.
   covers:
   - BR-E29
   - AC-E41
+  variant: inpatient
 - id: EC-E29
   situation: A patient is taken to the scanner for an hour.
   behaviour: The ward bed becomes reserved and the scanner active; on return the bed is active again.
@@ -502,36 +515,42 @@ edgeCases:
   covers:
   - BR-E37
   - AC-E49
+  variant: inpatient
 - id: EC-E31
   situation: Discharge is expected tomorrow at 11:00.
   behaviour: planned_end is 11:00 tomorrow; a cancelled pending discharge clears it.
   covers:
   - BR-E36
   - AC-E48
+  variant: inpatient
 - id: EC-E32
   situation: An unconscious patient is admitted after an accident and their family calls.
   behaviour: They can be listed if it fits their known wishes and best interest, and are asked as soon as they wake.
   covers:
   - BR-E38
   - AC-E52
+  variant: inpatient
 - id: EC-E36
   situation: A planned admission is cancelled because the surgery was postponed.
   behaviour: status_reason records admission_cancelled from ADT; the reason for the encounter, the planned surgery, is kept unchanged.
   covers:
   - BR-E24
   - AC-H57
+  variant: inpatient
 - id: EC-E37
   situation: ADT changes the attending at 07:00, then cancels the change because it was the wrong doctor.
   behaviour: The wrong doctor's participation ends and the previous attending is restored, so there is never no attending or two.
   covers:
   - BR-E43
   - AC-E58
+  variant: inpatient
 - id: EC-E38
   situation: A patient on weekend leave dies at home.
   behaviour: ADT discharges the stay as expired and the encounter goes straight from on hold to discharged at that time.
   covers:
   - BR-E45
   - AC-E60
+  variant: inpatient
 nonFunctionalRequirements:
 - category: compatibility
   text: 'Events map to HL7 v2 ADT messages for systems that use them: an ambulatory or emergency encounter.created to A04, a pre-admission to A05 and its cancellation to A38, admission to A01, a location change to A02, discharge to A03, class changes to A06 and A07, leave to A21 and A22, a cancelled discharge to A13. Pending admit, transfer and discharge map to A14, A15 and A16, and their cancels to A27, A26 and A25.'
@@ -615,17 +634,17 @@ acceptanceCriteria:
   variant: inpatient
 - id: AC-E20
   given: an encounter
-  when: actual_end before actual_start is sent, a location that does not exist is added, and a virtual encounter has no https URL
-  then: they fail with ENCOUNTER_INVALID_PERIOD and HTTP 422, ENCOUNTER_INVALID_LOCATION and HTTP 422 and ENCOUNTER_INVALID_VIRTUAL, all HTTP 422
+  when: actual_end before actual_start is sent and a location that does not exist is added
+  then: they fail with ENCOUNTER_INVALID_PERIOD and ENCOUNTER_INVALID_LOCATION, both HTTP 422
   verifies:
   - BR-E12
-  - BR-H15
 - id: AC-E32
   given: a patient with a stay in progress
   when: another inpatient encounter is opened for them
   then: it fails with ENCOUNTER_CONCURRENT_STAY and HTTP 409
   verifies:
   - BR-E21
+  variant: inpatient
 - id: AC-E34
   given: observation_notice_deadline 36 hours
   when: an encounter enters observation at 20:00
@@ -633,36 +652,42 @@ acceptanceCriteria:
   verifies:
   - BR-E23
   jurisdiction: us
+  variant: inpatient
 - id: AC-E35
   given: a pre-admission reported by ADT
   when: the patient is admitted, and another pre-admission is cancelled
   then: the planned encounter starts with the same id; the cancelled one becomes cancelled
   verifies:
   - BR-E24
+  variant: inpatient
 - id: AC-E38
   given: an admission ADT reports as a re-admission
   when: it is recorded
   then: admission holds re-admission R
   verifies:
   - BR-E27
+  variant: inpatient
 - id: AC-E41
   given: duplicate records each with a stay in progress
   when: they are merged
   then: both stays are on the remaining patient and encounter.patient_review_needed is emitted for each
   verifies:
   - BR-E29
+  variant: inpatient
 - id: AC-E48
   given: a pending transfer to ward 6 and a pending discharge
   when: both are recorded, then the transfer is cancelled
   then: ward 6 is planned then removed; planned_end is set
   verifies:
   - BR-E36
+  variant: inpatient
 - id: AC-E49
   given: the latest transfer recorded in error, and a correction for an unknown entry id
   when: the transfer is cancelled, and the correction is sent
   then: the previous location is active again; the correction fails with ENCOUNTER_LOCATION_NOT_FOUND (404)
   verifies:
   - BR-E37
+  variant: inpatient
 - id: AC-E50
   given: a patient on ward 4
   when: they go to the scanner and come back
@@ -675,6 +700,7 @@ acceptanceCriteria:
   then: only the listed patient's location is returned, encounter.directory_changed is emitted on each change, and listing the restricted patient fails with ENCOUNTER_INVALID_CODE and HTTP 422
   verifies:
   - BR-E38
+  variant: inpatient
 - id: AC-E58
   given: an inpatient encounter with attending A
   when: ADT reports an attending change to B at 07:00 and then cancels it, a leave recorded by mistake is cancelled, and the patient swaps beds with another
@@ -682,6 +708,7 @@ acceptanceCriteria:
   verifies:
   - BR-E43
   - BR-E11
+  variant: inpatient
 - id: AC-E60
   given: an inpatient encounter on hold for leave from 18:00
   when: ADT discharges the patient at 21:00 with disposition expired
@@ -689,6 +716,7 @@ acceptanceCriteria:
   verifies:
   - BR-E45
   - BR-H16
+  variant: inpatient
 - id: AC-E61
   given: an inpatient encounter in progress with no clinical data, and another with a planned_end
   when: ADT cancels the first admission in error and clears the second expected discharge
@@ -696,6 +724,7 @@ acceptanceCriteria:
   verifies:
   - BR-E46
   - BR-E36
+  variant: inpatient
 - id: AC-E72
   given: an inpatient encounter
   when: ADT reports stay.moved and, for another pair, stay.merged
@@ -704,6 +733,13 @@ acceptanceCriteria:
   - BR-H47
   - BR-H48
   variant: inpatient
+- id: AC-E73
+  given: a virtual encounter
+  when: it is sent without an https URL for virtual_service
+  then: it fails with ENCOUNTER_INVALID_VIRTUAL and HTTP 422
+  verifies:
+  - BR-H15
+  variant: ambulatory
 operations:
 - name: Change class
   actor: System
@@ -1028,7 +1064,7 @@ tables:
   indexes:
   - name: one_attending
     definition: EXCLUDE USING gist (encounter_id WITH =, period WITH &&) WHERE (role = 'ATND')
-    note: 'On encounter_participants: one attending at a time (BR-E11); needs btree_gist'
+    note: 'On encounter_participants: one attending at a time; needs btree_gist'
   constraints:
   - name: encounter_stays_pkey
     definition: PRIMARY KEY (encounter_id)
@@ -1042,6 +1078,7 @@ compliance:
   covered_by:
   - BR-E38
   jurisdiction: us
+  variant: inpatient
 - id: CMP-E6
   regulation: Medicare Conditions of Participation
   provision: 42 CFR 482.24(b) and (c)
@@ -1061,6 +1098,7 @@ compliance:
   covered_by:
   - BR-E23
   jurisdiction: us
+  variant: inpatient
 errors:
 - code: ENCOUNTER_LOCATION_NOT_FOUND
   http: 404
