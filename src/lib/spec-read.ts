@@ -200,7 +200,8 @@ export function readSpecMarkdown(md: string): ReadResult {
       } else if (key === 'purpose & scope' || key === 'purpose and scope' || key === 'purpose' || key === 'scope') {
         readPurpose(lines, data);
       } else if (key === 'variants') {
-        data.variants = blocks(lines).map((b) => ({ id: b.head, title: b.rest, description: b.subs.description ?? '', summary: b.subs.summary ?? '', ...provenance(b.tag) }));
+        const variants = blocks(lines).map((b) => ({ id: b.head, title: b.rest, description: b.subs.description ?? '', summary: b.subs.summary ?? '', ...provenance(b.tag) }));
+        if (variants.length) data.variants = variants;
       } else if (id) readSection(id, lines, data);
     } catch (e) {
       problems.push({ line: at, message: `Couldn't read ${key}: ${(e as Error).message}` });
@@ -479,6 +480,8 @@ function readTable(s: { n: number; title: string; lines: Line[] }) {
     if (at < 0) return [];
     const out: Item[] = [];
     for (const l of s.lines.slice(at + 1)) {
+      // A blank line may sit between the label and its list.
+      if (!l.text.trim() && !out.length) continue;
       const m = l.text.trim().match(/^-\s+(.+?):\s*`([^`]*)`\s*(.*)$/);
       if (!m) break;
       out.push(clean({ name: m[1], definition: m[2], note: m[3] }));
