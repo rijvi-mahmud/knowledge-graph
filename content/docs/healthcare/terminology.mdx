@@ -2,7 +2,7 @@
 title: Terminology
 description: 'The code systems the organization uses, such as ICD-10-CM, ICD-11, SNOMED CT, LOINC and UCUM: their releases and effective dates, value sets, maps between them, and checking a code on a date.'
 module: terminology
-version: 0.3.2
+version: 0.3.3
 status: draft
 industry: healthcare
 purpose: Give every module one place to ask whether a code is valid on a date, what it means, which codes a field allows, and what it maps to. Load each release of each code system with its effective dates, check it before use, and keep every release ever used, so records coded years ago stay readable. Works in the United States and the European Union.
@@ -439,6 +439,11 @@ workflows:
   - Activate it, effective on the publisher's date
   - terminology.release_activated is emitted with the changes
   outcome: Validation uses the new release from its effective date, and modules know what changed.
+  covers:
+  - FR-H2
+  - BR-H4
+  - BR-H5
+  - BR-H25
 - name: Validate a code
   trigger: A module records a coded value
   actor: System
@@ -447,6 +452,11 @@ workflows:
   - The service finds the release in effect on the date, and the value set expansion
   - It answers valid, invalid, inactive or unknown, with valid_for_reporting, the display and any replacements
   outcome: The module accepts or refuses the code with a reason, and records the release used.
+  covers:
+  - FR-H1
+  - BR-H7
+  - BR-H8
+  - BR-H33
 - name: Change a value set
   trigger: A module's setting needs other codes
   actor: Terminology manager
@@ -455,6 +465,10 @@ workflows:
   - Expand it on today's date and review it
   - Activate it; terminology.value_set_activated is emitted
   outcome: The setting uses the new version; records validated against the old one keep its version.
+  covers:
+  - FR-H4
+  - BR-H13
+  - BR-H25
 - name: Move to ICD-11
   trigger: A country adopts ICD-11 for a use
   actor: Terminology manager
@@ -463,6 +477,10 @@ workflows:
   - Set dual_coding for the period
   - Bind the value sets to ICD-11 from the adoption date
   outcome: Both classifications are coded during the transition, and ICD-11 alone after it.
+  covers:
+  - FR-H6
+  - BR-H18
+  - BR-H19
 edgeCases:
 - id: EC-H1
   situation: A diagnosis dated 30 September is validated on 2 October, after the new ICD-10-CM release took effect on 1 October.
@@ -1589,6 +1607,11 @@ references:
   url: https://loinc.org/kb/users-guide/editorial-policies-and-procedures/classification-of-loinc-term-status
   note: ACTIVE, TRIAL, DISCOURAGED and DEPRECATED.
 changelog:
+- version: 0.3.3
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.3.2
   date: '2026-10-10'
   breaking: false

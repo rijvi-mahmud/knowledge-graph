@@ -2,7 +2,7 @@
 title: Patients
 description: 'Hospital patient registration: medical record numbers, unidentified emergency patients, newborns, identification bands, quick registration and privacy aliases.'
 module: patient
-version: 0.4.7
+version: 0.4.8
 status: draft
 industry: healthcare
 domain: ehr
@@ -130,6 +130,10 @@ workflows:
   - Assign an MRN and print the band
   - Emit patient.registered
   outcome: Care starts at once, under a name nobody else has.
+  covers:
+  - FR-E2
+  - BR-E2
+  - BR-H4
 - name: Identify a patient
   trigger: Staff learn who an unidentified patient is
   actor: Registrar
@@ -139,6 +143,11 @@ workflows:
   - Otherwise add the real details, keep the alias as an old name, and clear unidentified
   - Emit patient.identified, and reprint the band
   outcome: The patient's care since arrival is on their one record.
+  covers:
+  - FR-E2
+  - FR-E8
+  - BR-E3
+  - BR-E12
 - name: Register a newborn
   trigger: A baby is born in the hospital
   actor: Maternity staff
@@ -148,6 +157,10 @@ workflows:
   - Assign an MRN and print the band
   - Emit patient.registered
   outcome: Each baby has a distinct name and band from birth.
+  covers:
+  - FR-E3
+  - BR-E4
+  - BR-E11
 - name: Complete a quick registration
   trigger: A patient registered as incomplete can now give their details
   actor: Registrar
@@ -156,6 +169,10 @@ workflows:
   - If one exists, merge the quick record into it
   - Otherwise add the missing details and set registration_status complete
   outcome: No quick registration is left as a duplicate.
+  covers:
+  - FR-E5
+  - BR-E6
+  - BR-H1
 - name: Reconcile downtime registrations
   trigger: Registration comes back after an outage
   actor: Registrar
@@ -165,6 +182,11 @@ workflows:
   - Merge into it if found, otherwise keep the new record
   - Tell every system that used the downtime id, and reprint bands
   outcome: No downtime id is left unresolved.
+  covers:
+  - FR-E7
+  - FR-E8
+  - BR-E8
+  - BR-E12
 edgeCases:
 - id: EC-E1
   situation: Two unconscious trauma patients arrive within minutes.
@@ -618,6 +640,11 @@ references:
   url: https://healthit.gov/wp-content/uploads/2025/01/Safer-Guide-6.-Patient-Identification-Final.pdf
   jurisdiction: us
 changelog:
+- version: 0.4.8
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.4.7
   date: '2026-10-10'
   breaking: false

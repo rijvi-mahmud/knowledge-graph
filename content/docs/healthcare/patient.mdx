@@ -2,7 +2,7 @@
 title: Patient records
 description: 'Who the patient is, kept as one trustworthy record: registration, demographics, identifiers, duplicates and merges, death, personal representatives and the patient''s privacy rights.'
 module: patient
-version: 0.13.10
+version: 0.13.11
 status: draft
 industry: healthcare
 purpose: 'Keep one accurate record of who each patient is, so every clinical and administrative module attaches its data to the right person: register patients without creating duplicates, keep demographics and identifiers with their history, find and resolve duplicate records, record death, record who may act for the patient, and honour the patient''s rights over their data. Works in the United States and the European Union.'
@@ -664,6 +664,19 @@ workflows:
   - Emit patient.registered
   - Propose duplicates for review if matching finds any after saving
   outcome: The patient has exactly one record, or a possible duplicate is waiting for review.
+  covers:
+  - FR-H1
+  - FR-H2
+  - FR-H3
+  - FR-H17
+  - FR-H21
+  - FR-H28
+  - BR-H1
+  - BR-H26
+  - BR-H27
+  - BR-H28
+  - BR-H29
+  - BR-H54
 - name: Review a possible duplicate
   trigger: Matching proposes two records that may be the same person
   actor: Health information management (HIM) specialist
@@ -673,6 +686,10 @@ workflows:
   - If the same, preview the merge, then merge the newer or less complete record into the other
   - If not, mark the pair not a duplicate so it is not proposed again
   outcome: The pair is resolved, and the decision is recorded.
+  covers:
+  - FR-H4
+  - BR-H8
+  - BR-H22
 - name: Merge two records
   trigger: An HIM specialist confirms a duplicate
   actor: Health information management (HIM) specialist
@@ -684,6 +701,13 @@ workflows:
   - Record who merged, why and how the records differed
   - Emit patient.merged; each module moves its data to the target
   outcome: One record remains, and anyone holding the old id is pointed to it.
+  covers:
+  - FR-H5
+  - FR-H22
+  - BR-H7
+  - BR-H8
+  - BR-H31
+  - BR-H38
 - name: Undo a wrong merge
   trigger: An HIM specialist finds a merge joined two different people
   actor: Health information management (HIM) specialist
@@ -692,6 +716,9 @@ workflows:
   - Emit patient.unmerged
   - Each module reviews data recorded on the target since the merge and moves what belongs to the source
   outcome: Two records again, with care recorded since the merge checked by the people who recorded it.
+  covers:
+  - FR-H5
+  - BR-H10
 - name: Record a death
   trigger: A patient dies in hospital, or a death is reported
   actor: Registrar
@@ -701,6 +728,10 @@ workflows:
   - Emit patient.deceased
   - Other modules stop reminders and review future plans
   outcome: Nobody is contacted or booked as if the patient were alive.
+  covers:
+  - FR-H6
+  - BR-H12
+  - BR-H45
 - name: Decide a correction request
   trigger: A patient asks for their data to be corrected
   actor: Health information management (HIM) specialist
@@ -711,6 +742,13 @@ workflows:
   - 'Deny: give the reason in writing, and record any statement of disagreement, which goes with later disclosures'
   - Clear accuracy_contested
   outcome: Every request is answered in time, and a disagreement stays with the record.
+  covers:
+  - FR-H9
+  - FR-H25
+  - BR-H17
+  - BR-H43
+  - BR-H44
+  - BR-H51
 - name: End a representative at majority
   trigger: A minor patient reaches age_of_majority, or emancipation is recorded
   actor: System
@@ -719,6 +757,9 @@ workflows:
   - End each one's period today
   - Emit patient.representative_changed for each
   outcome: The new adult controls their own record.
+  covers:
+  - FR-H18
+  - BR-H25
 - name: Import patients
   trigger: A legacy system or acquired hospital sends its patient records
   actor: Health information management (HIM) specialist
@@ -729,6 +770,10 @@ workflows:
   - Hold the rest for duplicate review
   - 'Report the batch: created, held and rejected'
   outcome: An import adds no unreviewed duplicates.
+  covers:
+  - FR-H19
+  - FR-H3
+  - BR-H34
 - name: End retention
   trigger: record_retention ends for a record
   actor: System
@@ -737,6 +782,10 @@ workflows:
   - Remove identifying fields and keep the id
   - Emit patient.updated
   outcome: Data is kept as long as the law requires and no longer.
+  covers:
+  - FR-H16
+  - BR-H18
+  - BR-H24
 edgeCases:
 - id: EC-H1
   situation: Twins born the same day share a family name and birth date, and their mother registers both.
@@ -3287,6 +3336,11 @@ references:
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
   jurisdiction: us
 changelog:
+- version: 0.13.11
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.13.10
   date: '2026-10-10'
   breaking: false

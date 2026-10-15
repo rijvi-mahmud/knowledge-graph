@@ -128,6 +128,9 @@ const workflowSchema = z.object({
   actor: z.string().optional(),
   steps: z.array(z.string()),
   outcome: z.string().optional(),
+  // The rules and requirements this workflow carries out, so its stories,
+  // tasks and acceptance criteria trace back to them.
+  covers: z.array(z.string()).default([]),
   variant: z.string().optional(), // applies only to this variant of the module, e.g. "inpatient"
 });
 

@@ -2,7 +2,7 @@
 title: Clinical encounters
 description: 'The record of each interaction between a patient and a care provider: when it happened, who cared for the patient and where, why, what was found, and when its record is complete.'
 module: encounter
-version: 0.3.4
+version: 0.3.5
 status: draft
 industry: healthcare
 variants:
@@ -34,6 +34,12 @@ nonGoals:
 - Consent to disclose sensitive records. The Consent module decides; this module flags the encounter.
 - Episodes of care, such as a course of chemotherapy or a pregnancy. An Episodes module owns them; an encounter only links to them.
 changelog:
+- version: 0.3.5
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
+  - The "Open at check-in" workflow is tagged ambulatory, like the rules it carries out.
 - version: 0.3.4
   date: '2026-10-15'
   breaking: false
@@ -675,12 +681,16 @@ workflows:
 - name: Open at check-in
   trigger: Appointments reports appointment.checked_in
   actor: System
-  variant: ambulatory
   steps:
   - Create the encounter as planned, subject status arrived, with the appointment id, class and department
   - Report the encounter id to Appointments
   - Emit encounter.created
   outcome: The visit has a record before care starts, and the appointment points to it.
+  covers:
+  - FR-H1
+  - BR-H2
+  - BR-H33
+  variant: ambulatory
 - name: Start care
   trigger: A practitioner begins seeing the patient
   actor: Clinician
@@ -690,6 +700,10 @@ workflows:
   - Report care to the Patients module
   - Emit encounter.started
   outcome: Waiting and care time are recorded separately.
+  covers:
+  - FR-H2
+  - FR-H3
+  - BR-H50
 - name: Complete the record
   trigger: Clinical documentation reports the documentation complete
   actor: Health information management (HIM) specialist
@@ -698,6 +712,9 @@ workflows:
   - Set completed and locked_at
   - Emit encounter.completed with the diagnoses and class history for Billing
   outcome: The record is complete and locked within the deadline.
+  covers:
+  - FR-H5
+  - BR-H7
 - name: Amend a locked encounter
   trigger: A locked encounter needs a correction
   actor: Health information management (HIM) specialist
@@ -705,6 +722,9 @@ workflows:
   - Record the new value, the previous value, who, when and why
   - Emit encounter.amended
   outcome: The record is corrected and its history kept.
+  covers:
+  - FR-H6
+  - BR-H8
 edgeCases:
 - id: EC-H1
   situation: A patient checks in at 09:00 and is seen at 10:10.

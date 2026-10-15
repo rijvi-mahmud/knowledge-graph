@@ -2,7 +2,7 @@
 title: Clinical notes and observations
 description: 'Notes, vital signs and assessments recorded during an encounter: who wrote them, when, who signed them, how they are corrected, and when patients can read them.'
 module: clinical-documentation
-version: 0.4.5
+version: 0.4.6
 status: draft
 industry: healthcare
 purpose: 'Keep the clinical record of each encounter: the notes practitioners write and sign, and the vital signs and assessments they measure. Make every entry attributable, dated, timed and authenticated, keep every version once others can rely on it, track the notes each encounter still needs, tell Encounters when its documentation is complete, and give patients their notes as soon as the law expects. Works in the United States and the European Union.'
@@ -31,6 +31,11 @@ nonGoals:
 - Coding notes for claims. Billing owns coding.
 - Speech recognition and AI drafting themselves. This module records what such a tool drafted and who reviewed it.
 changelog:
+- version: 0.4.6
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.4.5
   date: '2026-10-14'
   breaking: false
@@ -825,6 +830,13 @@ workflows:
   - The note becomes final, or preliminary when a cosignature is needed, and note.signed is emitted
   - The note is released to the patient unless it is held
   outcome: The note is available for care and to the patient, and any deficiency for it resolves.
+  covers:
+  - FR-H1
+  - FR-H8
+  - BR-H2
+  - BR-H3
+  - BR-H4
+  - BR-H55
 - name: Cosign a trainee's note
   trigger: A trainee signs a note whose type and role need a cosignature
   actor: Clinician
@@ -833,6 +845,11 @@ workflows:
   - The cosigner reads it and cosigns, optionally adding an attestation statement
   - The note becomes final and note.cosigned is emitted
   outcome: The supervising practitioner has taken responsibility for the note.
+  covers:
+  - FR-H1
+  - BR-H5
+  - BR-H20
+  - BR-H55
 - name: Document with a scribe or drafting tool
   trigger: A practitioner works with a scribe, dictation, speech recognition or an AI scribe
   actor: Clinician
@@ -841,6 +858,11 @@ workflows:
   - The practitioner reviews and edits the draft
   - The practitioner signs, confirming review, which sets review_attested
   outcome: The note carries the practitioner's signature and shows how it was produced.
+  covers:
+  - FR-H4
+  - BR-H2
+  - BR-H6
+  - BR-H7
 - name: Fix a signed note
   trigger: An error or missing information is found in a signed note
   actor: Clinician
@@ -850,6 +872,13 @@ workflows:
   - For a note on the wrong patient or a duplicate, the author or an HIM specialist marks it entered in error, and the author signs a copy on the right encounter
   - note.corrected or note.entered_in_error is emitted so Release of information can tell recipients
   outcome: The record shows what was wrong, what replaced it, who changed it and when.
+  covers:
+  - FR-H2
+  - FR-H3
+  - BR-H9
+  - BR-H10
+  - BR-H12
+  - BR-H35
 - name: Complete an encounter's documentation
   trigger: Encounters reports encounter.discharged
   actor: System
@@ -858,6 +887,12 @@ workflows:
   - If any remain, keep the deficiencies on the practitioners' lists and mark them delinquent when overdue
   - When none remain, report documentation.completed to Encounters
   outcome: Encounters can complete the encounter within its record completion deadline.
+  covers:
+  - FR-H6
+  - FR-H7
+  - BR-H15
+  - BR-H20
+  - BR-H21
 - name: Record and validate vital signs
   trigger: A nurse measures vital signs, or a monitor sends readings
   actor: Nurse
@@ -867,6 +902,12 @@ workflows:
   - The nurse accepts the representative readings and rejects artifacts
   - Accepted values become final and observation.recorded is emitted
   outcome: The chart holds validated vital signs with who measured them and when.
+  covers:
+  - FR-H13
+  - FR-H14
+  - BR-H36
+  - BR-H37
+  - BR-H38
 - name: Handle a patient's correction request
   trigger: A patient asks for a note to be corrected
   actor: Health information management (HIM) specialist
@@ -876,6 +917,10 @@ workflows:
   - Accept it, and have the author correct the note or add an addendum, or deny it in writing
   - Emit note.correction_decided; on denial, record any statement of disagreement and rebuttal
   outcome: The decision is made within the deadline and travels with later disclosures.
+  covers:
+  - FR-H10
+  - BR-H31
+  - BR-H32
 edgeCases:
 - id: EC-H1
   situation: An author saves the same draft from two devices.

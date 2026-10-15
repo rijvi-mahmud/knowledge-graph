@@ -91,6 +91,7 @@ interface Workflow extends Provenance {
   actor?: string;
   steps: string[];
   outcome?: string;
+  covers?: string[];
 }
 
 interface Requirement extends Provenance {
@@ -971,6 +972,12 @@ export function ModuleSpec({
               <span>
                 <Label>Outcome:</Label>
                 {w.outcome}
+              </span>
+            )}
+            {has(w.covers) && (
+              <span>
+                <Label>Carries out:</Label>
+                <span className="font-code text-sm">{w.covers!.join(', ')}</span>
               </span>
             )}
           </div>

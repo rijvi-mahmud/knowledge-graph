@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.4.4
+version: 0.4.5
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -428,6 +428,9 @@ workflows:
   - The patient, or their representative, signs on paper or in the portal
   - The patient gets a copy
   outcome: An active authorization disclosure checks can rely on.
+  covers:
+  - FR-H1
+  - BR-H10
 - name: Revoke a consent
   trigger: The patient asks to revoke
   actor: Patient
@@ -436,7 +439,11 @@ workflows:
   - The consent becomes inactive from that moment
   - consent.revoked is emitted
   outcome: No new use or disclosure relies on it; earlier ones stand.
-- name: Decide a restriction request
+  covers:
+  - FR-H2
+  - BR-H11
+- jurisdiction: us
+  name: Decide a restriction request
   trigger: A patient asks to restrict a use or disclosure
   actor: Privacy officer
   steps:
@@ -444,6 +451,9 @@ workflows:
   - Agree or decline; a self-pay request to a health plan is always agreed
   - Tell the patient, and Billing for a self-pay restriction
   outcome: Disclosure checks honour every agreed restriction.
+  covers:
+  - FR-H4
+  - BR-H13
 - name: Check a disclosure
   trigger: A module is about to use or disclose data
   actor: System
@@ -452,6 +462,9 @@ workflows:
   - Get permit or deny with basis and obligations
   - Apply the obligations, such as attaching the Part 2 statement
   outcome: Every use and disclosure is backed by a logged answer.
+  covers:
+  - FR-H3
+  - BR-H23
 - name: Give the privacy notice
   trigger: A patient's first service, or patient.registered with an informant in the EU
   actor: Registrar
@@ -459,6 +472,8 @@ workflows:
   - Give the current notice or privacy information
   - Ask for a written acknowledgment, or record the attempt and the reason
   outcome: Every patient has been given the notice, provably.
+  covers:
+  - FR-H5
 - name: Use restricted data in an emergency
   trigger: A patient needs emergency treatment and restricted data is needed
   actor: Clinician
@@ -467,6 +482,9 @@ workflows:
   - Record the emergency use with the personnel, time and nature of the emergency
   - A privacy officer reviews it
   outcome: Care isn't blocked, and the exception is documented.
+  covers:
+  - FR-H7
+  - BR-H24
 edgeCases:
 - id: EC-H1
   situation: A patient revokes an authorization an hour after records were sent.
@@ -1785,6 +1803,12 @@ references:
   note: (f), fundraising communications and the opt-out.
   jurisdiction: us
 changelog:
+- version: 0.4.5
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
+  - 'The "Decide a restriction request" workflow is tagged us: its steps follow the HIPAA right to request restrictions, including the self-pay rule (BR-H13).'
 - version: 0.4.4
   date: '2026-10-10'
   breaking: false

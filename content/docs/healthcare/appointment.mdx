@@ -2,7 +2,7 @@
 title: Clinical appointments
 description: 'What every healthcare application adds to appointments: patients and practitioners, check-in, protected health data and the record it belongs to.'
 module: appointment
-version: 0.13.2
+version: 0.13.3
 status: draft
 industry: healthcare
 extends: core/appointment
@@ -536,6 +536,12 @@ workflows:
   - Emit appointment.checked_in
   - Report care to the Patients module
   outcome: The patient is recorded as present and verified, ready to be seen.
+  covers:
+  - FR-H1
+  - BR-H2
+  - BR-H10
+  - BR-H27
+  - BR-H45
 - name: Mark entered in error
   trigger: An appointment was created by mistake, for example for the wrong patient
   actor: Scheduler
@@ -544,6 +550,9 @@ workflows:
   - Withdraw pending reminders and release the slot
   - Emit appointment.entered_in_error
   outcome: The mistake is kept for the record but no longer affects schedules or statistics.
+  covers:
+  - FR-H2
+  - BR-H8
 - name: Follow a patient merge
   trigger: Patients emits patient.merged
   actor: System
@@ -552,6 +561,10 @@ workflows:
   - Change the participant to the remaining record, record it in history, and increase revision
   - Emit appointment.updated for each
   outcome: Every appointment shows on the one record in use.
+  covers:
+  - FR-H13
+  - BR-H16
+  - BR-H40
 - name: Follow a death
   trigger: Patients emits patient.deceased
   actor: System
@@ -560,6 +573,9 @@ workflows:
   - Cancel each with the reason patient_deceased, without messaging the patient
   - Emit appointment.cancelled for each
   outcome: No one is booked or reminded after their death.
+  covers:
+  - FR-H13
+  - BR-H17
 - name: Follow a patient entered in error
   trigger: Patients emits patient.entered_in_error
   actor: System
@@ -568,6 +584,9 @@ workflows:
   - Cancel each with the reason patient_entered_in_error, without messaging anyone
   - Emit appointment.cancelled for each
   outcome: No slot is held for a record that never existed.
+  covers:
+  - FR-H13
+  - BR-H19
 - name: Register a walk-in
   trigger: A patient arrives without an appointment
   actor: Front desk
@@ -577,6 +596,11 @@ workflows:
   - Check the patient in, which opens an encounter
   - Emit appointment.booked and appointment.checked_in
   outcome: The patient is in the queue like any other, with an encounter to document the visit.
+  covers:
+  - FR-H17
+  - BR-H29
+  - BR-H2
+  - BR-H27
 - name: Link the encounter
   trigger: The Encounter module reports the encounter it opened
   actor: System
@@ -584,6 +608,8 @@ workflows:
   - Record encounter_id and increase revision
   - Emit appointment.encounter_linked
   outcome: The appointment and its encounter point to each other.
+  covers:
+  - BR-H27
 - name: Review a linked appointment
   trigger: An appointment is cancelled or marked no_show
   actor: System
@@ -592,6 +618,9 @@ workflows:
   - Flag each one needs_review with review_reason previous_cancelled, and increase its revision
   - Emit appointment.review_needed for each
   outcome: The next step in the sequence is looked at by a person, not left waiting on care that will not happen.
+  covers:
+  - FR-H20
+  - BR-H33
 - name: Record prior authorization
   trigger: Authorization reports a status for an appointment
   actor: System
@@ -600,6 +629,9 @@ workflows:
   - If the status is denied, flag needs_review with review_reason authorization_denied and emit appointment.review_needed
   - Emit appointment.authorization_updated
   outcome: The worklist shows which appointments still need authorization before the day.
+  covers:
+  - FR-H21
+  - BR-H34
 edgeCases:
 - id: EC-H1
   situation: Two patients with the same name arrive for appointments at the same time.
@@ -2161,6 +2193,11 @@ references:
   note: Information blocking exception for reproductive health care information.
   jurisdiction: us
 changelog:
+- version: 0.13.3
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.13.2
   date: '2026-10-10'
   breaking: false

@@ -2,7 +2,7 @@
 title: Identity and access
 description: 'Who is signing in and what they may do: accounts for staff, patients, representatives and systems, how strongly each is proven and authenticated, roles and permissions, sessions, emergency access, and apps.'
 module: identity
-version: 0.8.2
+version: 0.8.3
 status: draft
 industry: healthcare
 purpose: Give every person and system that uses a health application one account of its own, proven and authenticated as strongly as what it can reach requires, and answer every module whether the caller holds a permission. Record every sign-in, role change and emergency access, and let patients connect the apps they choose. Works in the United States and the European Union.
@@ -429,6 +429,11 @@ workflows:
   - Register at least two authenticators, offering a phishing-resistant one
   - Assign the roles their job needs, for their departments
   outcome: They can sign in at the assurance their roles need.
+  covers:
+  - FR-H1
+  - FR-H4
+  - BR-H2
+  - BR-H5
 - name: Enrol a patient in the portal
   trigger: A patient asks for portal access
   actor: Patient
@@ -437,6 +442,11 @@ workflows:
   - The Patients module confirms the matching record; otherwise the person is told to contact the organization, without saying why
   - Register authenticators
   outcome: The patient reaches their own record, and only theirs.
+  covers:
+  - FR-H6
+  - FR-H11
+  - BR-H12
+  - BR-H26
 - name: Break the glass
   trigger: A clinician needs a record outside their usual access in an emergency
   actor: Staff member
@@ -445,6 +455,9 @@ workflows:
   - Access lasts break_glass_duration and is logged
   - The privacy officer reviews it within break_glass_review_deadline
   outcome: Care isn't blocked, and the access is accounted for.
+  covers:
+  - FR-H5
+  - BR-H11
 - name: Connect an app
   trigger: A patient opens a third-party app
   actor: Patient
@@ -453,6 +466,10 @@ workflows:
   - The patient approves the scopes it asks for
   - The app receives tokens, and a refresh token if it asked for offline_access
   outcome: The app reads what the patient allowed until the patient revokes it.
+  covers:
+  - FR-H14
+  - BR-H15
+  - BR-H30
 - name: Remove a leaver's access
   trigger: A person leaves or Practitioners reports them inactive
   actor: System
@@ -461,6 +478,9 @@ workflows:
   - End its sessions and revoke its tokens
   - Emit identity.account_disabled
   outcome: Nobody keeps access after leaving.
+  covers:
+  - FR-H4
+  - BR-H4
 - name: Approve a backend app
   trigger: A vendor registers a backend app with system scopes
   actor: Account administrator
@@ -469,6 +489,10 @@ workflows:
   - The administrator checks the agreement and the security review, then approves the scopes it needs
   - The app requests 5 minute tokens with signed assertions
   outcome: Only approved systems reach many patients' data at once, each with its own keys.
+  covers:
+  - FR-H13
+  - BR-H16
+  - BR-H31
 edgeCases:
 - id: EC-H1
   situation: Two nurses share one login on a busy ward.
@@ -2051,6 +2075,11 @@ references:
   note: (a)(2), NIST-approved encryption algorithms.
   jurisdiction: us
 changelog:
+- version: 0.8.3
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.8.2
   date: '2026-10-10'
   breaking: false

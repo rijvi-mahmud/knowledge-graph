@@ -2,7 +2,7 @@
 title: Encounters
 description: 'Hospital encounters: emergency visits and inpatient stays, with admission, transfers, leave, observation and discharge, built on the clinical encounter rules.'
 module: encounter
-version: 0.13.16
+version: 0.13.17
 status: draft
 industry: healthcare
 domain: ehr
@@ -27,6 +27,11 @@ nonGoals:
 - Admission orders, beds, transfers and discharge orders. The Admission, discharge and transfer module owns them and reports them here.
 - Triage and emergency department flow. The Emergency department module owns them and reports arrivals and triage here.
 changelog:
+- version: 0.13.17
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.13.16
   date: '2026-10-15'
   breaking: false
@@ -396,26 +401,31 @@ workflows:
 - name: Follow an emergency visit
   trigger: The Emergency department module reports arrival, triage and departure
   actor: System
-  variant: emergency
   steps:
   - Open the encounter in progress with subject status arrived
   - Set subject status triaged, then receiving care, as reported
   - On departure, discharge it, or discontinue it with the departure reason if care was not complete
   - If the patient is admitted, ADT opens an inpatient encounter; the emergency encounter is discharged
   outcome: Every emergency visit is one encounter, including patients who leave.
+  covers:
+  - FR-H1
+  - BR-E3
+  variant: emergency
 - name: Pre-admit a stay
   trigger: Admission, discharge and transfer reports a pre-admission
   actor: System
-  variant: inpatient
   steps:
   - Open a planned inpatient encounter with planned_start and the pre-admission id
   - On admission, start this encounter instead of opening another
   - On a cancelled pre-admission, cancel it
   outcome: Pre-admission testing and paperwork attach to the stay before it begins.
+  covers:
+  - BR-E24
+  - BR-E36
+  variant: inpatient
 - name: Follow a stay
   trigger: Admission, discharge and transfer reports an admission, transfer, leave or discharge
   actor: System
-  variant: inpatient
   steps:
   - On admission, open the encounter in progress with the admission details and first location
   - On transfer, complete the previous location and add the new one
@@ -423,6 +433,12 @@ workflows:
   - On a class change, add it to class_history
   - On discharge, set discharged with disposition and destination, and record_due_at
   outcome: The stay is one record from admission to discharge.
+  covers:
+  - FR-H3
+  - BR-E4
+  - BR-E43
+  - BR-E45
+  variant: inpatient
 edgeCases:
 - id: EC-E2
   situation: A patient leaves the emergency department after triage without being seen.

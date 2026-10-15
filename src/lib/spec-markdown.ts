@@ -200,6 +200,7 @@ export function specToMarkdown(data: ModuleSpecData, sectionId?: SpecSectionId):
             '',
             w.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
             w.outcome ? `\nOutcome: ${w.outcome}` : null,
+            has(w.covers) ? `Carries out: ${w.covers.join(', ')}` : null,
           ]
             .filter((l) => l !== null)
             .join('\n'),

@@ -505,8 +505,10 @@ every module and layer, and for every "is there any gap?" request.
      parent item by reusing its id.
    - Every rule has a rationale citing its source, every functional
      requirement a verification method, every acceptance criterion a
-     `verifies` list, every edge case a `covers` list, and every reference an
-     official URL you checked returns 200.
+     `verifies` list, every edge case a `covers` list, every workflow a
+     `covers` list (the rules and requirements it carries out, so stories
+     and tasks made from it trace to them; `check:specs` warns without one),
+     and every reference an official URL you checked returns 200.
    - Keep the storage design and Privacy and retention in step with the data
      model, and add implementation notes (`TN-`) for anything hard to build.
    - Core stays industry-neutral. No em or en dashes, and no spaced hyphens
@@ -798,9 +800,9 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Consent (`healthcare/consent` 0.4.4, healthcare level, and `healthcare/ehr/consent` 0.1.4 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.2, healthcare level, and `healthcare/ehr/identity` 0.2.2 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.5, healthcare level, and `healthcare/ehr/practitioner` 0.1.5 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.2, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.5 and `healthcare/ehr/clinical-documentation` 0.4.9; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.4, EHR-only), Encounters (`healthcare/encounter` 0.3.4 and `healthcare/ehr/encounter` 0.13.16), Patients (`healthcare/patient` 0.13.10, which has no core page by the
-  user's choice, and `healthcare/ehr/patient` 0.4.7) and Appointments
-  (`healthcare/appointment` 0.13.2, `healthcare/ehr/appointment` 0.11.10; `core/appointment` 0.12.5). All
+  drafts: Consent (`healthcare/consent` 0.4.5, healthcare level, and `healthcare/ehr/consent` 0.1.4 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.3, healthcare level, and `healthcare/ehr/identity` 0.2.2 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.6, healthcare level, and `healthcare/ehr/practitioner` 0.1.5 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.3, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.6 and `healthcare/ehr/clinical-documentation` 0.4.9; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.5, EHR-only), Encounters (`healthcare/encounter` 0.3.5 and `healthcare/ehr/encounter` 0.13.17), Patients (`healthcare/patient` 0.13.11, which has no core page by the
+  user's choice, and `healthcare/ehr/patient` 0.4.8) and Appointments
+  (`healthcare/appointment` 0.13.3, `healthcare/ehr/appointment` 0.11.11; `core/appointment` 0.12.6). All
   support the US and EU through the `jurisdiction` setting. Next: Organization, then Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
 - Modules that start at the industry level (no `extends`, like

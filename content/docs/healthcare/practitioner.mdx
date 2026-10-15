@@ -2,7 +2,7 @@
 title: Practitioners
 description: 'The people who provide care: their identifiers, licences and other qualifications, how they are verified and credentialed, and whether they may practise where and when care happens.'
 module: practitioner
-version: 0.3.5
+version: 0.3.6
 status: draft
 industry: healthcare
 purpose: 'Keep one trustworthy record of each practitioner: who they are, the identifiers and qualifications they hold, and whether each has been verified at its source. Decide, through a person, whether they are credentialed; watch what expires and who is excluded; and answer every other module whether a practitioner may practise, where and on what date. Works in the United States and the European Union.'
@@ -343,6 +343,14 @@ workflows:
   - Open an initial review and send it to the credentials committee
   - The committee approves or denies with a reason
   outcome: An approved practitioner is active and can be given roles in Organization.
+  covers:
+  - FR-H1
+  - FR-H2
+  - FR-H3
+  - FR-H5
+  - BR-H1
+  - BR-H4
+  - BR-H5
 - name: Watch expiring credentials
   trigger: A qualification nears its end date
   actor: System
@@ -351,6 +359,9 @@ workflows:
   - The specialist verifies the renewal at its source
   - If it ends unrenewed, emit practitioner.credential_expired and suspend when it was the only valid licence
   outcome: No one practises on an expired licence.
+  covers:
+  - FR-H4
+  - BR-H6
 - name: Screen monthly
   trigger: screening_interval passes
   actor: System
@@ -360,6 +371,8 @@ workflows:
   - Send possible matches to a specialist, who confirms or rejects them using identifiers
   - Suspend on a confirmed exclusion and tell Billing
   outcome: Exclusions are found within a month of being listed.
+  covers:
+  - FR-H5
 - name: Recredential
   trigger: recredential_lead_time before credentialed_until
   actor: Credentialing specialist
@@ -368,6 +381,10 @@ workflows:
   - Re-verify the required qualifications and screen again
   - The committee decides; approval moves credentialed_until on
   outcome: Credentials never lapse unnoticed.
+  covers:
+  - FR-H3
+  - BR-H4
+  - BR-H5
 edgeCases:
 - id: EC-H1
   situation: A practitioner applies with a photocopy of a licence that the board shows as restricted.
@@ -1339,6 +1356,11 @@ references:
   note: FHIR R4.0.1, US Core STU 6.1.0, SMART App Launch 2.0.0, Bulk Data 1.0.0.
   jurisdiction: us
 changelog:
+- version: 0.3.6
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.3.5
   date: '2026-10-10'
   breaking: false

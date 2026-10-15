@@ -2,7 +2,7 @@
 title: Appointment
 description: The scheduling lifecycle (booking, rescheduling, cancellation, reminders and attendance) in industry-neutral terms.
 module: appointment
-version: 0.12.5
+version: 0.12.6
 status: stable
 purpose: Own the lifecycle of a reserved time slot between participants, independent of what the appointment is for.
 scope:
@@ -455,6 +455,19 @@ workflows:
   - If booked, schedule one reminder per offset whose dispatch time is still in the future
   - Emit appointment.booked
   outcome: The appointment holds its slot, as pending or booked.
+  covers:
+  - FR-1
+  - FR-2
+  - FR-13
+  - BR-1
+  - BR-4
+  - BR-10
+  - BR-13
+  - BR-17
+  - BR-7
+  - FR-4
+  - BR-26
+  - CON-2
 - name: Reschedule an appointment
   trigger: Requester or Scheduler proposes a new time
   actor: Scheduler
@@ -465,6 +478,16 @@ workflows:
   - Withdraw pending reminders and schedule new ones from the new start
   - Emit appointment.rescheduled
   outcome: The same appointment id now holds the new slot, with a higher revision.
+  covers:
+  - FR-2
+  - FR-13
+  - FR-9
+  - BR-3
+  - BR-4
+  - BR-16
+  - BR-14
+  - BR-20
+  - FR-4
 - name: Cancel an appointment
   trigger: Requester, Scheduler or an upstream policy cancels
   actor: Requester
@@ -474,6 +497,14 @@ workflows:
   - Withdraw pending reminders
   - Emit appointment.cancelled
   outcome: The appointment is retained as cancelled, its slot is released and no reminders fire.
+  covers:
+  - BR-2
+  - BR-16
+  - BR-18
+  - BR-20
+  - BR-14
+  - FR-5
+  - FR-4
 - name: Close out an appointment
   trigger: The start time has passed
   actor: Scheduler
@@ -482,6 +513,11 @@ workflows:
   - If a participant did not attend, record a no-show naming the absent participants
   - Emit appointment.completed or appointment.no_show
   outcome: The appointment reaches a terminal state that reflects what happened.
+  covers:
+  - BR-21
+  - BR-8
+  - FR-23
+  - BR-5
 - name: Dispatch a reminder
   trigger: A scheduled reminder's dispatch time is reached
   actor: System
@@ -490,6 +526,11 @@ workflows:
   - Emit appointment.reminder_due
   - Notification delivers it to the participants
   outcome: Participants are reminded ahead of the appointment, and never about a superseded time.
+  covers:
+  - BR-12
+  - BR-9
+  - FR-12
+  - CON-3
 - name: Confirm a pending appointment
   trigger: A Scheduler or the host confirms
   actor: Scheduler
@@ -499,6 +540,10 @@ workflows:
   - Schedule its reminders
   - Emit appointment.confirmed
   outcome: The appointment is booked and its reminders are scheduled.
+  covers:
+  - FR-18
+  - BR-17
+  - BR-14
 - name: Expire an unconfirmed appointment
   trigger: confirm_by passes while the appointment is pending
   actor: System
@@ -507,6 +552,10 @@ workflows:
   - Release its slot
   - Emit appointment.cancelled
   outcome: The slot is free again.
+  covers:
+  - FR-18
+  - BR-17
+  - BR-2
 - name: Update details
   trigger: A participant or Scheduler changes the location, notes, reminders or capacity
   actor: Scheduler
@@ -516,6 +565,11 @@ workflows:
   - Re-derive pending reminders
   - Emit appointment.updated
   outcome: The appointment shows the new details at a new revision.
+  covers:
+  - FR-16
+  - BR-16
+  - BR-14
+  - FR-4
 - name: Add or remove a participant
   trigger: A Scheduler or the host changes who attends
   actor: Scheduler
@@ -526,6 +580,14 @@ workflows:
   - Apply the change and increase revision
   - Emit appointment.participant_added or appointment.participant_removed
   outcome: The participant list changes, and the overlap and capacity rules still hold.
+  covers:
+  - FR-17
+  - BR-23
+  - BR-24
+  - BR-13
+  - BR-4
+  - BR-16
+  - BR-14
 - name: Cancel in bulk
   trigger: 'A Scheduler cancels many appointments at once: one participant in a time window (for example when a provider is ill), or the remaining appointments of a series'
   actor: Scheduler
@@ -534,6 +596,10 @@ workflows:
   - Cancel each one separately with the given reason, as in Cancel an appointment
   - Return the result for each appointment, including any that could not be cancelled
   outcome: Each appointment is cancelled on its own, with its own events and reminders withdrawn.
+  covers:
+  - FR-19
+  - BR-22
+  - BR-16
 - name: Correct a no-show
   trigger: A Scheduler finds a no-show was recorded by mistake
   actor: Scheduler
@@ -543,12 +609,19 @@ workflows:
   - Keep the correction in the history
   - Emit appointment.attendance_corrected
   outcome: The appointment is completed and the mistake is traceable.
+  covers:
+  - FR-22
+  - BR-19
+  - BR-5
 - name: Signal the end
   trigger: end_at passes while the appointment is still booked
   actor: System
   steps:
   - Emit appointment.ended so a Scheduler knows it needs closing out
   outcome: Appointments are not forgotten in booked after they finish.
+  covers:
+  - FR-21
+  - CON-3
 - name: Record a no-show automatically
   trigger: automatic_no_show is on and no_show_grace_period has passed after start_at with no completion
   actor: System
@@ -557,6 +630,10 @@ workflows:
   - Increase revision and add the change to history
   - Emit appointment.no_show
   outcome: Forgotten appointments are closed out. A Scheduler can still correct the record (BR-19).
+  covers:
+  - FR-10
+  - BR-8
+  - BR-21
 - name: Erase personal data
   trigger: A request to erase a person's data, or personal_data_retention passing after an appointment's end
   actor: System
@@ -566,6 +643,9 @@ workflows:
   - Set anonymised_at, increase revision and add the change to history
   - Emit appointment.anonymised for each appointment changed
   outcome: The person is no longer identifiable from their appointments, and the records still add up.
+  covers:
+  - FR-14
+  - BR-11
 - name: Reschedule in bulk
   actor: Scheduler
   trigger: A Scheduler moves many appointments at once, for example when a provider changes the day they work
@@ -575,6 +655,11 @@ workflows:
   - Reschedule each one separately, as in Reschedule an appointment, with its own checks and events
   - Return the result for each appointment, including any that could not be moved
   outcome: Each appointment keeps its id, calendar and history, and none moves into a conflict.
+  covers:
+  - FR-24
+  - BR-22
+  - BR-3
+  - BR-6
 edgeCases:
 - id: EC-1
   situation: Two requests book overlapping slots for the same participant at the same moment.
@@ -2101,6 +2186,11 @@ references:
   url: https://eur-lex.europa.eu/eli/reg/2016/679/oj
   jurisdiction: eu
 changelog:
+- version: 0.12.6
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.12.5
   date: '2026-10-10'
   breaking: false

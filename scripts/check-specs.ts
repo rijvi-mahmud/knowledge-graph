@@ -6,7 +6,7 @@
  * - frontmatter that doesn't parse or doesn't match the schema
  * - a broken inheritance chain (missing parent, cycle, module mismatch)
  * - a duplicate id within one page's own list, or two operations on one endpoint
- * - an id in a `verifies` or `covers` list that doesn't exist
+ * - an id in a `verifies` or `covers` list (criteria, edge cases, workflows) that doesn't exist
  * - an error code returned by an operation or validation but not defined
  * - an id mentioned in the page (outside its changelog) that doesn't exist
  * - an item tagged with a variant the module doesn't declare
@@ -21,6 +21,7 @@
  * Warnings (exit code 0, or 1 with --strict):
  * - rules, requirements and constraints no acceptance criterion verifies
  * - dependencies without a contract (what this module needs from them)
+ * - workflows that don't say which rules or requirements they carry out
  * - an item that opens with "In the United States" or "In the European Union"
  *   but has no jurisdiction tag
  *
@@ -132,6 +133,12 @@ for (const node of all) {
   for (const e of spec.edgeCases ?? [])
     for (const id of e.covers ?? [])
       if (!known.has(id)) errors.push(`${where}: ${e.id} covers ${id}, which doesn't exist`);
+  // A workflow names the rules and requirements it carries out; they must exist.
+  for (const w of spec.workflows ?? []) {
+    for (const id of w.covers ?? [])
+      if (!known.has(id)) errors.push(`${where}: workflow "${w.name}" covers ${id}, which doesn't exist`);
+    if (!w.covers?.length) warnings.push(`${where}: workflow "${w.name}" doesn't say which rules or requirements it carries out (covers)`);
+  }
   // A compliance item says which ids meet it; they must exist.
   for (const c of spec.compliance ?? [])
     for (const id of c.covered_by ?? [])
@@ -307,10 +314,10 @@ function deadEnds(spec: ModuleSpecData, filtered: ModuleSpecData): Set<string> {
   }
   for (const id of keptIds) hidden.delete(id);
   const problems = new Set<string>();
-  for (const list of ['acceptanceCriteria', 'edgeCases', 'compliance'] as const)
-    for (const item of (view[list] ?? []) as { id: string; verifies?: string[]; covers?: string[]; covered_by?: string[] }[])
+  for (const list of ['acceptanceCriteria', 'edgeCases', 'compliance', 'workflows'] as const)
+    for (const item of (view[list] ?? []) as { id?: string; name?: string; verifies?: string[]; covers?: string[]; covered_by?: string[] }[])
       for (const ref of [...(item.verifies ?? []), ...(item.covers ?? []), ...(item.covered_by ?? [])])
-        if (hidden.has(ref)) problems.add(`${item.id} cites ${ref}`);
+        if (hidden.has(ref)) problems.add(`${item.id ?? `workflow "${item.name}"`} cites ${ref}`);
   const viewErrors = new Set(((view.errors ?? []) as { code: string }[]).map((e) => e.code));
   for (const op of (view.operations ?? []) as { name: string; errors?: string[] }[])
     for (const code of op.errors ?? []) if (!viewErrors.has(code)) problems.add(`operation "${op.name}" raises ${code}`);

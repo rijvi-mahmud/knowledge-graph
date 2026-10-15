@@ -2,7 +2,7 @@
 title: Appointments
 description: 'Hospital appointments: appointments for patients in an inpatient or observation stay, which belong to the stay, built on the clinical appointment rules.'
 module: appointment
-version: 0.11.10
+version: 0.11.11
 status: draft
 industry: healthcare
 domain: ehr
@@ -63,6 +63,21 @@ businessRules:
   text: needs_review clears when the appointment is rescheduled, cancelled or changed to outpatient, or when a Scheduler marks it reviewed.
   rationale: A flag nobody can clear stops meaning anything. Each of these is a decision about the appointment.
 workflows:
+- name: Register a walk-in
+  trigger: A patient arrives without an appointment
+  actor: Front desk
+  steps:
+  - Verify the patient with two identifiers
+  - Book an appointment starting now in the department, marked walk_in
+  - Check the patient in, which opens an encounter
+  - Emit appointment.booked and appointment.checked_in
+  outcome: The patient is in the queue like any other, with an encounter to document the visit.
+  covers:
+  - FR-H17
+  - BR-H29
+  - BR-H2
+  - BR-H27
+  variant: outpatient
 - name: Book during a stay
   trigger: A ward or department books a service for a patient in a stay, such as an MRI
   actor: Scheduler
@@ -72,6 +87,11 @@ workflows:
   - Apply the usual overlap, room, equipment and overbooking rules
   - Emit appointment.booked
   outcome: The appointment is part of the patient's stay.
+  covers:
+  - FR-E6
+  - BR-E5
+  - BR-E6
+  - BR-H26
   variant: inpatient
 - name: Review when a stay ends
   trigger: Admission, discharge and transfer announces that a stay ended
@@ -81,6 +101,9 @@ workflows:
   - Flag each one needs_review with review_reason stay_ended, and increase its revision
   - Emit appointment.review_needed for each
   outcome: A Scheduler decides each one, and none is lost or kept by accident.
+  covers:
+  - FR-E7
+  - BR-E7
   variant: inpatient
 edgeCases:
 - id: EC-E6
@@ -279,6 +302,12 @@ references:
   url: https://www.medicare.gov/what-medicare-covers/what-part-a-covers/inpatient-or-outpatient-hospital-status
   jurisdiction: us
 changelog:
+- version: 0.11.11
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
+  - The "Register a walk-in" workflow is overridden to tag it outpatient, like the walk-in rule BR-H29 it carries out.
 - version: 0.11.10
   date: '2026-10-15'
   breaking: false

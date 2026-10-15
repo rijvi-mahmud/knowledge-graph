@@ -2,7 +2,7 @@
 title: Admission, discharge and transfer
 description: Admitting patients to a hospital stay, assigning and moving beds, leave, discharge, and the notices and notifications each step requires.
 module: adt
-version: 0.9.4
+version: 0.9.5
 status: draft
 industry: healthcare
 domain: ehr
@@ -524,6 +524,17 @@ workflows:
   - Ask about the facility directory, and start notice due dates
   - Announce the admission to Encounters, Exchange and Care management
   outcome: The patient is admitted at once, boarding is visible, and the notices and notifications start.
+  covers:
+  - FR-E1
+  - FR-E2
+  - FR-E3
+  - FR-E8
+  - BR-E3
+  - BR-E4
+  - BR-E5
+  - BR-E14
+  - BR-E15
+  - BR-E17
 - name: Admit an elective patient
   trigger: A planned admission, such as surgery next week
   actor: Registrar
@@ -531,6 +542,11 @@ workflows:
   - Record the pending admission with the expected time; Encounters opens a planned encounter
   - On the day, admit with the order and assign the reserved or available bed
   outcome: Pre-admission work attaches to the stay before it starts.
+  covers:
+  - FR-E1
+  - BR-E3
+  - BR-E5
+  - BR-E43
 - name: Transfer a patient
   trigger: A clinician or bed manager requests a move
   actor: Bed manager
@@ -539,6 +555,11 @@ workflows:
   - Move the patient; the old bed becomes housekeeping
   - Announce the transfer to Encounters
   outcome: No one else is placed in the target bed, and the old bed is cleaned before reuse.
+  covers:
+  - FR-E4
+  - BR-E5
+  - BR-E6
+  - BR-E7
 - name: Discharge a patient
   trigger: A discharge order is given
   actor: Registrar
@@ -548,6 +569,11 @@ workflows:
   - Free the bed for housekeeping
   - Announce the discharge to Encounters, Appointments, Exchange and Care management
   outcome: The stay closes, follow-up providers are notified, and the bed is cleaned.
+  covers:
+  - FR-E6
+  - BR-E6
+  - BR-E9
+  - BR-E14
 - name: Clean a bed
   trigger: A bed becomes housekeeping
   actor: Environmental services
@@ -555,6 +581,9 @@ workflows:
   - Clean the bed
   - Mark it unoccupied
   outcome: The bed is ready for the next patient.
+  covers:
+  - FR-E2
+  - BR-E6
 edgeCases:
 - id: EC-E1
   situation: An emergency patient is admitted at 02:00 and no bed is ready until 09:00.
@@ -2678,6 +2707,11 @@ compliance:
   - BR-E47
   jurisdiction: us
 changelog:
+- version: 0.9.5
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - Each workflow now lists the rules and requirements it carries out (covers), so its user stories, tasks and acceptance criteria trace back to them.
 - version: 0.9.4
   date: '2026-10-10'
   breaking: false
