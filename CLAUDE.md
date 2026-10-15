@@ -813,6 +813,10 @@ scaffold's own pages fail validation.
   (`healthcare/appointment` 0.13.3, `healthcare/ehr/appointment` 0.11.11; `core/appointment` 0.12.6). All
   support the US and EU through the `jurisdiction` setting. Next: Organization, then Orders and results.
   Follow [How to bring a module to full SRS depth](#how-to-bring-a-module-to-full-srs-depth).
+- The four ISO/IEC/IEEE 29148 sections added on 2026-10-15 (product
+  functions, user characteristics, limitations `LIM-`, usability
+  requirements `USE-`) are empty in every module. Fill them per module with
+  researched content, the same way as any gap check.
 - Modules that start at the industry level (no `extends`, like
   `healthcare/patient`) use `-H` ids and must be complete on their own: API
   conventions, delivery guarantees and the rest have no core to inherit from.
