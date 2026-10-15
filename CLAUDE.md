@@ -548,7 +548,10 @@ every module and layer, and for every "is there any gap?" request.
 - **Blocked sites** (hhs.gov, ssa.gov, state legislatures): read through
   `https://web.archive.org/web/2025/<url>`.
 - **GDPR article text**: gdpr-info.eu mirrors it; cite EUR-Lex as the
-  reference URL. The EHDS Regulation (EU) 2025/327 text is in the
+  reference URL.
+- **EUR-Lex** returns an empty page to scripts and to WebFetch. The archived
+  ELI page works: `https://web.archive.org/web/2025id_/https://eur-lex.europa.eu/eli/reg/2025/327/oj/eng`
+  (swap in the act's year and number). Cite the EUR-Lex URL itself. The EHDS Regulation (EU) 2025/327 text is in the
   scratchpad as `ehds.txt` when available.
 - **Patient identification**: ONC SAFER Guide 6 (2025) and The Joint
   Commission's 2026 hospital goals (NPG.01.01.01).
@@ -800,7 +803,7 @@ scaffold's own pages fail validation.
 ## Known TODO
 
 - EHR is specified in the order of its overview's build list. Done as
-  drafts: Consent (`healthcare/consent` 0.4.5, healthcare level, and `healthcare/ehr/consent` 0.1.4 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.3, healthcare level, and `healthcare/ehr/identity` 0.2.2 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.6, healthcare level, and `healthcare/ehr/practitioner` 0.1.5 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.3, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.6 and `healthcare/ehr/clinical-documentation` 0.4.9; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.5, EHR-only), Encounters (`healthcare/encounter` 0.3.5 and `healthcare/ehr/encounter` 0.13.17), Patients (`healthcare/patient` 0.13.11, which has no core page by the
+  drafts: Consent (`healthcare/consent` 0.4.6, healthcare level, and `healthcare/ehr/consent` 0.1.4 for hospital consent rules), Identity and access (`healthcare/identity` 0.8.3, healthcare level, and `healthcare/ehr/identity` 0.2.2 for shared clinical workstations and downtime access), Practitioners (`healthcare/practitioner` 0.3.6, healthcare level, and `healthcare/ehr/practitioner` 0.1.5 for medical staff and privileges), Terminology (`healthcare/terminology` 0.3.3, healthcare level, and `healthcare/ehr/terminology` 0.1.4, nothing to add), Clinical documentation (`healthcare/clinical-documentation` 0.4.6 and `healthcare/ehr/clinical-documentation` 0.4.9; its data model prefixes fields with the entity, such as `note.status`), Admission, discharge and transfer (`healthcare/ehr/adt` 0.9.5, EHR-only), Encounters (`healthcare/encounter` 0.3.5 and `healthcare/ehr/encounter` 0.13.17), Patients (`healthcare/patient` 0.13.11, which has no core page by the
   user's choice, and `healthcare/ehr/patient` 0.4.8) and Appointments
   (`healthcare/appointment` 0.13.3, `healthcare/ehr/appointment` 0.11.11; `core/appointment` 0.12.6). All
   support the US and EU through the `jurisdiction` setting. Next: Organization, then Orders and results.

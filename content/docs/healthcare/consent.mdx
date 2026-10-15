@@ -2,7 +2,7 @@
 title: Consent
 description: 'What patients have agreed to, refused or restricted: consent to care, authorizations to share records, restrictions, opt-outs, privacy notices and advance directives, and whether a use or disclosure is allowed.'
 module: consent
-version: 0.4.5
+version: 0.4.6
 status: draft
 industry: healthcare
 purpose: Record every decision a patient, or someone acting for them, makes about their care and their health information, prove it was made validly, and answer every module whether a use or disclosure of a patient's data is allowed, with the obligations that come with it. Works in the United States and the European Union.
@@ -454,6 +454,21 @@ workflows:
   covers:
   - FR-H4
   - BR-H13
+- jurisdiction: eu
+  name: Restrict health professionals' access
+  trigger: A patient, or a representative within their scope, wants to keep some of their data from health professionals
+  actor: Patient
+  steps:
+  - In the portal or the electronic health data access service, choose all or parts of the data to restrict, as ehds_restriction_rules allows
+  - The service tells them that restricting access might affect their care, and records that it did
+  - Record the restriction as an active consent; consent.activated is emitted
+  - From then on, disclosure checks for health professionals leave the restricted data out silently, and nothing shows that a restriction exists
+  - The patient can change or lift the restriction at any time; lifting it revokes the consent and emits consent.revoked
+  outcome: Health professionals see neither the restricted data nor that it was restricted, except when access protects the patient's vital interests, which is logged where the patient can see it.
+  covers:
+  - FR-H6
+  - BR-H20
+  - BR-H11
 - name: Check a disclosure
   trigger: A module is about to use or disclose data
   actor: System
@@ -1803,6 +1818,11 @@ references:
   note: (f), fundraising communications and the opt-out.
   jurisdiction: us
 changelog:
+- version: 0.4.6
+  date: '2026-10-15'
+  breaking: false
+  changes:
+  - 'New EU workflow "Restrict health professionals'' access": a patient restricts all or parts of their data through the portal or the access service, is told it may affect their care, and health professionals then see neither the data nor that it was restricted (EHDS Articles 4(1), 8 and 11(5)). It covers FR-H6, BR-H20 and BR-H11.'
 - version: 0.4.5
   date: '2026-10-15'
   breaking: false
