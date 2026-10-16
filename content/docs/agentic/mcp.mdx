@@ -44,6 +44,9 @@ their ids) in one call, then reads only the sections the task needs.
 | `srs_outline` | One project's sections in document order, each with its id, title, heading level and size. |
 | `srs_read` | One section as Markdown, with its subsections, or the whole SRS. Long answers come in pages. |
 | `srs_search` | Lines that contain every word of a query, in one project or all, with the section each is in. |
+| `srs_list_versions` | Every saved version of one project's SRS: its number, the kind of change, a note on what changed, and when it was saved. |
+
+The read tools return the latest version, or a saved version an agent names, such as the one its code was built against.
 
 The server tells every agent the same rules as the AGENTS.md section: read
 the SRS for this task instead of working from memory, say "the SRS doesn't
