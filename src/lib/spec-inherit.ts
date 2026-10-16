@@ -73,6 +73,16 @@ const KEYS = {
 /** Frontmatter list fields that inherit down the chain. */
 export const INHERITED_FIELDS = Object.keys(KEYS) as (keyof typeof KEYS)[];
 
+/**
+ * The natural key an item is matched on when layers merge (a rule's id, a
+ * field's name, ...). A layer item with the same key overrides the parent's.
+ * Undefined for a field that isn't an inherited list.
+ */
+export function itemKey(field: string, item: Record<string, unknown>): string | undefined {
+  const key = (KEYS as Record<string, (i: Item) => string>)[field];
+  return key ? key(item as Item) : undefined;
+}
+
 /** The label a page carries in provenance pills: its company, domain, industry, or "core". */
 export function layerOf(data: ModuleSpecData): string {
   return data.company ?? data.domain ?? data.industry ?? 'core';
