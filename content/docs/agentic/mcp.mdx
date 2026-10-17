@@ -43,7 +43,7 @@ their ids) in one call, then reads only the sections the task needs.
 | `srs_list_projects` | Your projects with a published SRS: each one's id, name, latest published version and when, its size and its top-level sections. |
 | `srs_outline` | One project's sections in document order, each with its id, title, heading level and size. |
 | `srs_read` | One section as Markdown, with its subsections, or the whole SRS. Long answers come in pages. |
-| `srs_list_items` | One project's items as data: each requirement, rule, constraint, assumption, acceptance criterion and open question, with its id, text, reason and how it's verified. |
+| `srs_list_items` | One project's items as data: user stories, requirements, rules, constraints, data entities and relationships, interfaces, events, errors, edge cases, acceptance criteria, open questions and more, each with its id, text, reason and how it's verified. Technical decisions and notes are marked as guidance, not requirements. |
 | `srs_get_item` | One item by its id, with the acceptance criteria that verify it. |
 | `srs_check_citations` | Whether each id an agent cites exists, with its kind and text. |
 | `srs_search` | Lines that contain every word of a query, in one project or all, with the section each is in. |
